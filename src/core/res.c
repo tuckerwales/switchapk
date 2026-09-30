@@ -506,7 +506,7 @@ static ResType *pkg_type(ResPackage *pkg, uint8_t id, uint32_t count) {
     return t;
 }
 
-static void parse_type_chunk(ResTable *tab, ResPackage *pkg, const uint8_t *c, size_t csize) {
+static void parse_type_chunk(ResStringPool *values, ResPackage *pkg, const uint8_t *c, size_t csize) {
     uint16_t hsize = sa_rd16(c + 2);
     uint8_t id = c[8];
     uint8_t flags = c[9];
@@ -548,7 +548,7 @@ static void parse_type_chunk(ResTable *tab, ResPackage *pkg, const uint8_t *c, s
             key = esize;       /* in compact entries the first u16 is the key index */
             def->value.type = (uint8_t)(eflags >> 8);
             def->value.data = sa_rd32(e + 4);
-            if (def->value.type == RV_STRING) def->value.string = res_pool_get(&tab->values, def->value.data);
+            if (def->value.type == RV_STRING) def->value.string = res_pool_get(values, def->value.data);
         } else {
             key = sa_rd32(e + 4);
             if (eflags & 0x0001) {
@@ -560,10 +560,10 @@ static void parse_type_chunk(ResTable *tab, ResPackage *pkg, const uint8_t *c, s
                 def->items = sa_calloc(def->nitems ? def->nitems : 1, sizeof(ResBagItem));
                 for (uint32_t k = 0; k < def->nitems; k++) {
                     def->items[k].name = sa_rd32(m + k * 12);
-                    read_value(&tab->values, m + k * 12 + 4, &def->items[k].value);
+                    read_value(values, m + k * 12 + 4, &def->items[k].value);
                 }
             } else {
-                read_value(&tab->values, e + esize, &def->value);
+                read_value(values, e + esize, &def->value);
             }
         }
         if (!type->names[idx]) type->names[idx] = res_pool_get(&pkg->key_strings, key);
@@ -572,7 +572,7 @@ static void parse_type_chunk(ResTable *tab, ResPackage *pkg, const uint8_t *c, s
     }
 }
 
-static void parse_package(ResTable *tab, const uint8_t *c, size_t csize) {
+static void parse_package(ResTable *tab, ResStringPool *values, const uint8_t *c, size_t csize) {
     if (tab->npackages >= (int)SA_ARRAY_LEN(tab->packages)) return;
     ResPackage *pkg = sa_calloc(1, sizeof *pkg);
     uint16_t hsize = sa_rd16(c + 2);
@@ -594,22 +594,20 @@ static void parse_package(ResTable *tab, const uint8_t *c, size_t csize) {
         uint16_t type = sa_rd16(ch);
         uint32_t sz = sa_rd32(ch + 4);
         if (sz < 8 || pos + sz > csize) break;
-        if (type == CHUNK_TABLE_TYPE) parse_type_chunk(tab, pkg, ch, sz);
+        if (type == CHUNK_TABLE_TYPE) parse_type_chunk(values, pkg, ch, sz);
         pos += sz;
     }
     tab->packages[tab->npackages++] = pkg;
 }
 
-ResTable *arsc_parse(const uint8_t *data, size_t len) {
+static bool arsc_parse_into(ResTable *t, const uint8_t *data, size_t len, ResStringPool *values, uint8_t **copy) {
     if (len < 12 || sa_rd16(data) != CHUNK_TABLE) {
         LOGE("not a resource table");
-        return NULL;
+        return false;
     }
-    ResTable *t = sa_calloc(1, sizeof *t);
-    t->data = sa_malloc(len);
-    memcpy(t->data, data, len);
-    res_config_default(&t->config);
-    const uint8_t *d = t->data;
+    *copy = sa_malloc(len);
+    memcpy(*copy, data, len);
+    const uint8_t *d = *copy;
     uint32_t total = sa_rd32(d + 4);
     if (total > len) total = (uint32_t)len;
     size_t pos = sa_rd16(d + 2);
@@ -618,11 +616,33 @@ ResTable *arsc_parse(const uint8_t *data, size_t len) {
         uint16_t type = sa_rd16(c);
         uint32_t sz = sa_rd32(c + 4);
         if (sz < 8 || pos + sz > total) break;
-        if (type == CHUNK_STRING_POOL && !t->values.base) res_pool_init(&t->values, c, total - pos);
-        else if (type == CHUNK_TABLE_PACKAGE) parse_package(t, c, sz);
+        if (type == CHUNK_STRING_POOL && !values->base) res_pool_init(values, c, total - pos);
+        else if (type == CHUNK_TABLE_PACKAGE) parse_package(t, values, c, sz);
         pos += sz;
     }
+    return true;
+}
+
+ResTable *arsc_parse(const uint8_t *data, size_t len) {
+    ResTable *t = sa_calloc(1, sizeof *t);
+    res_config_default(&t->config);
+    if (!arsc_parse_into(t, data, len, &t->values, &t->data)) {
+        free(t);
+        return NULL;
+    }
     return t;
+}
+
+bool arsc_add(ResTable *t, const uint8_t *data, size_t len) {
+    if (t->nextra >= (int)SA_ARRAY_LEN(t->extra_values)) return false;
+    int i = t->nextra;
+    t->extra_values[i] = sa_calloc(1, sizeof(ResStringPool));
+    if (!arsc_parse_into(t, data, len, t->extra_values[i], &t->extra_data[i])) {
+        free(t->extra_values[i]);
+        return false;
+    }
+    t->nextra++;
+    return true;
 }
 
 void arsc_free(ResTable *t) {
@@ -651,12 +671,21 @@ void arsc_free(ResTable *t) {
     }
     res_pool_free(&t->values);
     free(t->data);
+    for (int i = 0; i < t->nextra; i++) {
+        res_pool_free(t->extra_values[i]);
+        free(t->extra_values[i]);
+        free(t->extra_data[i]);
+    }
     free(t);
 }
 
 void arsc_set_config(ResTable *t, const ResConfig *c) { t->config = *c; }
 
-const char *arsc_package_name(ResTable *t) { return t->npackages ? t->packages[0]->name : NULL; }
+const char *arsc_package_name(ResTable *t) {
+    for (int i = 0; i < t->npackages; i++)
+        if (t->packages[i]->id != 0x01) return t->packages[i]->name;
+    return t->npackages ? t->packages[0]->name : NULL;
+}
 
 static ResPackage *find_pkg(ResTable *t, uint32_t id) {
     uint32_t pid = id >> 24;
@@ -764,7 +793,7 @@ static void bag_merge(ResTable *t, uint32_t id, ResBag *out, int depth) {
     if (depth > 20) return;
     const ResEntryDef *e = arsc_get_entry(t, id);
     if (!e || !e->complex) return;
-    if (e->parent && (e->parent >> 24) != 0x01) bag_merge(t, e->parent, out, depth + 1);
+    if (e->parent) bag_merge(t, e->parent, out, depth + 1);
     for (uint32_t i = 0; i < e->nitems; i++) {
         uint32_t k;
         for (k = 0; k < out->count; k++)

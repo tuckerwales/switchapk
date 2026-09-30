@@ -153,10 +153,14 @@ typedef struct {
 
 typedef struct {
     ResStringPool values;
-    ResPackage *packages[4];
+    ResPackage *packages[8];
     int npackages;
     uint8_t *data;
     ResConfig config;
+    /* additional tables merged with arsc_add (e.g. the framework's) */
+    ResStringPool *extra_values[4];
+    uint8_t *extra_data[4];
+    int nextra;
 } ResTable;
 
 typedef struct {
@@ -165,6 +169,8 @@ typedef struct {
 } ResBag;
 
 ResTable *arsc_parse(const uint8_t *data, size_t len);
+/* Merges the packages of another resources.arsc into t. */
+bool arsc_add(ResTable *t, const uint8_t *data, size_t len);
 void arsc_free(ResTable *t);
 void arsc_set_config(ResTable *t, const ResConfig *c);
 void res_config_default(ResConfig *c);

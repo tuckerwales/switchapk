@@ -194,12 +194,12 @@ public class DecimalFormat extends NumberFormat {
             ip = g.toString();
         }
         boolean isZero = value.signum() == 0;
-        result.append(neg && !isZero ? negativePrefix : positivePrefix);
+        result.append(neg ? negativePrefix : positivePrefix);
         result.append(ip);
         if (!fp.isEmpty() || decimalSeparatorAlwaysShown) {
             result.append(symbols.getDecimalSeparator()).append(fp);
         }
-        result.append(neg && !isZero ? negativeSuffix : positiveSuffix);
+        result.append(neg ? negativeSuffix : positiveSuffix);
         return result;
     }
 

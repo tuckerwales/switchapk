@@ -164,6 +164,7 @@ struct VMThread {
     bool has_gil;
     bool daemon;
     bool interrupted;
+    bool handling_soe;
     bool attached_native;   /* attached via JNI AttachCurrentThread */
     uint32_t safepoint_counter;
     Method *cur_native; /* native method currently executing (for proxies/JNI) */

@@ -23,6 +23,7 @@ static void usage(void) {
             "  --framework <file>   framework dex (default build/java/framework.dex)\n"
             "  --data <dir>         data directory (default ./build/data)\n"
             "  --trace              trace every instruction\n"
+            "  --raw-stdio          write System.out/err directly to stdout/stderr\n"
             "  -v / -vv             verbose logging\n");
 }
 
@@ -49,6 +50,10 @@ static void *vm_main(void *arg) {
         if (!strcmp(a, "--framework") && i + 1 < ma->argc) framework = ma->argv[++i];
         else if (!strcmp(a, "--data") && i + 1 < ma->argc) data_dir = ma->argv[++i];
         else if (!strcmp(a, "--trace")) g_vm.trace = true;
+        else if (!strcmp(a, "--raw-stdio")) {
+            extern bool g_raw_stdio;
+            g_raw_stdio = true;
+        }
         else if (!strcmp(a, "-v")) sa_log_level = SA_LOG_DEBUG;
         else if (!strcmp(a, "-vv")) sa_log_level = SA_LOG_VERBOSE;
         else {

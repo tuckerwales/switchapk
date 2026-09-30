@@ -115,7 +115,14 @@ NATIVE(Os_open) {
     R_INT(fd);
 }
 
+bool g_raw_stdio;
+
 static void write_std(int fd, const uint8_t *b, size_t n) {
+    if (g_raw_stdio) {
+        fwrite(b, 1, n, fd == 2 ? stderr : stdout);
+        fflush(fd == 2 ? stderr : stdout);
+        return;
+    }
     /* stdout/stderr go to the log, line buffered per stream */
     static SaBuf lines[3];
     SaBuf *lb = &lines[fd];

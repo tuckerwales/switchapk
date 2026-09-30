@@ -824,4 +824,13 @@ static const NativeMethodReg g_regs[] = {
     {"Ljava/lang/ref/Reference;", "get", "()Ljava/lang/Object;", Reference_get},
 };
 
-void natives_java_lang_register(void) { vm_register_natives(g_regs, SA_ARRAY_LEN(g_regs)); }
+void natives_java_lang_register(void) {
+    vm_register_natives(g_regs, SA_ARRAY_LEN(g_regs));
+    /* StrictMath shares Math's implementations */
+    for (size_t i = 0; i < SA_ARRAY_LEN(g_regs); i++) {
+        if (strcmp(g_regs[i].cls, "Ljava/lang/Math;") != 0) continue;
+        NativeMethodReg r = g_regs[i];
+        r.cls = "Ljava/lang/StrictMath;";
+        vm_register_natives(&r, 1);
+    }
+}

@@ -638,6 +638,10 @@ public final class String implements java.io.Serializable, Comparable<String>, C
         return new Formatter().format(format, args).toString();
     }
 
+    public String formatted(Object... args) {
+        return new Formatter().format(this, args).toString();
+    }
+
     public static String format(Locale l, String format, Object... args) {
         return new Formatter(l).format(format, args).toString();
     }

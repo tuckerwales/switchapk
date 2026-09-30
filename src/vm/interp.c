@@ -81,6 +81,16 @@ static inline uint32_t invoke_width(uint16_t inst) {
     return (op == 0xfa || op == 0xfb) ? 4 : 3;
 }
 
+/* Throws StackOverflowError using a reserved stack zone so the error itself can be built. */
+static void throw_soe(VMThread *t) {
+    if (t->handling_soe) {
+        sa_fatal("stack overflow while constructing StackOverflowError");
+    }
+    t->handling_soe = true;
+    vm_throw_new(t, "Ljava/lang/StackOverflowError;", "stack size %d frames", t->depth);
+    t->handling_soe = false;
+}
+
 static void throw_aioobe(VMThread *t, int32_t len, int32_t idx) {
     vm_throw_new(t, "Ljava/lang/ArrayIndexOutOfBoundsException;", "length=%d; index=%d", len, idx);
 }
@@ -157,11 +167,16 @@ JValue vm_invoke(VMThread *t, Method *m, uint64_t *args) {
     return vm_interpret(t, m, args);
 }
 
+#define SOE_RESERVE_SLOTS 16384
+#define SOE_RESERVE_DEPTH 200
+
 static Frame *push_frame(VMThread *t, Method *m) {
     const size_t hdr = (sizeof(Frame) + 7) / 8;
     uint64_t *base = t->rstack_top;
     size_t need = hdr + m->code.registers_size;
-    if (base + need > t->rstack_end || t->depth >= VM_MAX_DEPTH) return NULL;
+    uint64_t *limit = t->handling_soe ? t->rstack_end : t->rstack_end - SOE_RESERVE_SLOTS;
+    int max_depth = t->handling_soe ? VM_MAX_DEPTH + SOE_RESERVE_DEPTH : VM_MAX_DEPTH;
+    if (base + need > limit || t->depth >= max_depth) return NULL;
     Frame *f = (Frame *)base;
     f->regs = base + hdr;
     memset(f->regs, 0, m->code.registers_size * sizeof(uint64_t));
@@ -210,7 +225,7 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
     zero.raw = 0;
     Frame *fr = push_frame(t, entry_m);
     if (!fr) {
-        vm_throw_new(t, "Ljava/lang/StackOverflowError;", "stack depth %d", t->depth);
+        throw_soe(t);
         return zero;
     }
     fr->entry = true;
@@ -810,7 +825,7 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
             }
             Frame *nf = push_frame(t, callee);
             if (!nf) {
-                vm_throw_new(t, "Ljava/lang/StackOverflowError;", "stack depth %d", t->depth);
+                throw_soe(t);
                 goto handle_exception;
             }
             {
@@ -866,7 +881,7 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
             OPERANDS;                                                                       \
             int32_t x = RI(rb), y = RI(rc);                                                 \
             if (y == 0) {                                                                   \
-                vm_throw_new(t, "Ljava/lang/ArithmeticException;", "divide by zero");       \
+                vm_throw_new(t, "Ljava/lang/ArithmeticException;", "/ by zero");       \
                 THROW();                                                                    \
             }                                                                               \
             if (_op == BASE + 3) SETI(rd, (x == INT32_MIN && y == -1) ? x : x / y);         \
@@ -888,7 +903,7 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
             OPERANDS;                                                                                       \
             int64_t x = RJ(rb), y = RJ(rc);                                                                 \
             if (y == 0) {                                                                                   \
-                vm_throw_new(t, "Ljava/lang/ArithmeticException;", "divide by zero");                       \
+                vm_throw_new(t, "Ljava/lang/ArithmeticException;", "/ by zero");                       \
                 THROW();                                                                                    \
             }                                                                                               \
             if (_op == BASE + 3) SETJ(rd, (x == INT64_MIN && y == -1) ? x : x / y);                         \
@@ -951,7 +966,7 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
             case 4:
                 if (lit == 0) {
                     pc -= 2;
-                    vm_throw_new(t, "Ljava/lang/ArithmeticException;", "divide by zero");
+                    vm_throw_new(t, "Ljava/lang/ArithmeticException;", "/ by zero");
                     THROW();
                 }
                 if (which == 3) SETI(rd, (x == INT32_MIN && lit == -1) ? x : x / lit);

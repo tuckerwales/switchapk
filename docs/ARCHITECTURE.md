@@ -346,6 +346,10 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (`android_res_init`), adds `classes.dex`, `classes2.dex`, ... to the app
   dex list, sets the data root and package, boots the VM and calls
   `android.app.ActivityThread.main(String[] {apkPath})`.
+  `framework-res.apk` is the first readable path among
+  `build/toolchains/framework-res.apk`, `build/java/framework-res.apk` and
+  `{platform_framework_path()}/framework-res.apk`. If none is readable the
+  toolchain path is passed anyway and the framework table stays empty.
 - `ActivityThread` parses `AndroidManifest.xml` with `XmlBlock` (package,
   application class, activities with intent filters and themes and
   screenOrientation/configChanges, services, receivers, providers,

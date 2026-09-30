@@ -51,20 +51,20 @@ Useful flags: `-v` / `-vv` (debug/verbose logs), `--trace` (every
 instruction), `--framework path/to/framework.dex`. Look for `STUB:` lines
 to find framework APIs apps call that we do not implement.
 
-## Building test APKs manually (until WS13 adds tools/build_apk.sh)
+## Building test APKs
 
-```
-SDK=build/toolchains/sdk
-aapt2 compile --dir app/res -o build/app/res.zip
-aapt2 link -I $SDK/android.jar --manifest app/AndroidManifest.xml -o build/app/base.apk \
-      --java build/app/gen build/app/res.zip --auto-add-overlay
-javac -source 8 -target 8 -cp $SDK/android.jar -d build/app/classes $(find app/java build/app/gen -name '*.java')
-java -cp build/tools/r8-*.jar com.android.tools.r8.D8 --lib $SDK/android.jar --min-api 24 \
-      --output build/app $(find build/app/classes -name '*.class')
-cd build/app && cp base.apk app.apk && zip -q app.apk classes.dex
-```
-
+An app directory holds `AndroidManifest.xml`, `java/` sources and an
+optional `res/` tree. `tools/build_apk.sh` links with aapt2, compiles
+against `android.jar` at Java 8, dexes with d8 and writes an unsigned APK.
 No signing is required: switchapk ignores signatures.
+
+```
+tools/build_apk.sh tests/apps/hello
+build/host/switchapk-host --data build/data --screen 1280x720@240 \
+    --script tests/apps/hello/hello.script --screenshots build/shots \
+    build/apps/hello/hello.apk
+python3 tests/apps/hello/check_shot.py build/shots/hello.png
+```
 
 ## Inspecting things
 
@@ -85,9 +85,13 @@ No signing is required: switchapk ignores signatures.
 
 ## Where the runtime looks for files
 
-- Host: framework dex from `--framework` (default `build/java/framework.dex`);
-  framework-res.apk next to it or in `build/toolchains/` (WS0 decides the
-  exact search order and documents it here); app data under `--data`.
+- Host: framework dex from `--framework` (default `build/java/framework.dex`).
+  framework-res.apk is the first readable path of
+  `build/toolchains/framework-res.apk`, `build/java/framework-res.apk` and
+  `{platform_framework_path()}/framework-res.apk` (that function returns
+  `build/java` on the host). If none is readable the toolchain path is
+  still passed and the framework resource table stays empty. App data is
+  under `--data`.
 - Switch (WS10): romfs `romfs:/framework.dex`, `romfs:/framework-res.apk`,
   `romfs:/fonts/`; APKs in `sdmc:/switch/switchapk/apks/`; data under
   `sdmc:/switch/switchapk/data/`.

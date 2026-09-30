@@ -23,3 +23,14 @@ what is left in flight.
   `tools/fetch_toolchains.py`.
 - In flight: WS0 (framework does not compile yet; android.view and the
   rest are next).
+
+### Session 3 (2026-09-30, branch ccr-7d62ed8a-m0sd12)
+- WS0 landed. `java/framework` compiles. Activity, PhoneWindow and
+  ViewRootImpl present one full-screen view.
+- Resource, graphics and OS natives are registered. `app_runner` opens an
+  APK, loads its dexes and enters `ActivityThread.main`.
+- `tests/apps/hello` draws a dark background, a gold rectangle and
+  "Hello Switch". The headless screenshot matches.
+  `tools/build_apk.sh` builds unsigned test APKs.
+- WS0 is done. View system, widgets, app model and the other post-WS0
+  packages are not started.

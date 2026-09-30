@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 2, see SESSION_LOG.md)
+## Current state (end of session 3, see SESSION_LOG.md)
 
 Working:
 - VM core, libcore, JNI, reflection, threads; VmTest passes.
@@ -61,17 +61,16 @@ Working:
 - `tools/fetch_toolchains.py` fetches aapt2, android.jar, builds
   framework-res.apk, fetches SQLite; devkitPro fetch implemented (Docker
   Hub may rate-limit: retries built in).
+- `java/framework` compiles to `build/java/framework.dex`. Activity,
+  PhoneWindow and ViewRootImpl present one full-screen view.
+- Resource, graphics and OS natives are registered. `app_runner` opens an
+  APK and enters `ActivityThread.main`.
+- `tests/apps/hello` draws on the headless platform. Its screenshot
+  matches the background, the gold rectangle and the label.
 
-Written, not yet compiling (M1 blocker, WS0):
-- ~300 framework Java files: android.util, org.xmlpull, org.json,
-  android.os, android.content (+res, +pm), android.net.Uri,
-  android.database (+sqlite Java side), android.graphics (+drawable).
-  They reference classes that do not exist yet (android.view, android.text,
-  android.app, android.media.AudioAttributes, android.webkit.MimeTypeMap,
-  android.opengl.Matrix, ...).
-- Graphics/resource natives are not registered yet
-  (`src/native/android_stub.c` still empty); link fails because
-  `g_app_apk_path` has no definition until the app runner exists.
+M1 (WS0) is done. The view system, widgets, app model and the other
+post-WS0 packages are not started. `setContentView(int)` does not inflate
+layouts yet.
 
 ## Checklist
 
@@ -90,12 +89,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - [x] Toolchain fetch script
 
 ### M1 (WS0)
-- [ ] Framework compiles (signature-exact skeletons for all referenced classes)
-- [ ] android_os.c natives (Log, MessageQueue, PlatformInput, present, display info, IME request, vibrate)
-- [ ] Register android natives; remove android_stub.c
-- [ ] app_runner.c (APK open, resources, dex list, data dirs, ActivityThread.main)
-- [ ] Minimal ActivityThread/Activity/ViewRootImpl/WindowManagerGlobal
-- [ ] tests/apps/hello + build script + headless screenshot
+- [x] Framework compiles (signature-exact skeletons for all referenced classes)
+- [x] android_os.c natives (Log, MessageQueue, PlatformInput, present, display info, IME request, vibrate)
+- [x] Register android natives; remove android_stub.c
+- [x] app_runner.c (APK open, resources, dex list, data dirs, ActivityThread.main)
+- [x] Minimal ActivityThread/Activity/ViewRootImpl/WindowManagerGlobal
+- [x] tests/apps/hello + build script + headless screenshot
 
 ### M2
 - [ ] WS1 view system core
@@ -125,11 +124,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS0 (single agent): close the compile gap with signature-exact
-   skeletons, write android_os.c, register natives, app runner, hello APK.
-   Everything else waits for a green build.
-2. Then fan out: WS1 first pushes the public View/ViewGroup API; in
-   parallel WS4 (app model), WS10 (Switch backend), WS13 (test infra),
+1. WS0 is done: the tree compiles, VmTest passes, and the hello APK
+   screenshots.
+2. Fan out: WS1 first pushes the public View/ViewGroup API; in parallel
+   WS4 (app model), WS10 (Switch backend), WS13 (test infra),
    WS6/WS7/WS9/WS11/WS12/WS15 as agents are available.
 3. WS2/WS3/WS5 once View API is in; WS8 once WS10 can present.
 
@@ -153,4 +151,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
-- (none yet)
+- 2026-09-30: the app runner loads `framework-res.apk` from the first
+  readable path of `build/toolchains/framework-res.apk`,
+  `build/java/framework-res.apk`, and
+  `{platform_framework_path()}/framework-res.apk`. If none is readable it
+  still passes the toolchain path and continues with an empty framework
+  table. Host tests and the later Switch romfs layout share this rule.

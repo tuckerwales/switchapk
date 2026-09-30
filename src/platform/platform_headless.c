@@ -45,7 +45,6 @@ static char *g_shot_dir;
 static char *g_pending_text;
 static int g_pending_text_id = -1;
 static bool g_text_requested;
-static char *g_data_root;
 
 bool platform_is_headless(void) { return true; }
 
@@ -380,16 +379,6 @@ bool platform_audio_start(int sample_rate, PlatformAudioCallback cb, void *user)
 void platform_audio_stop(void) { g_audio_run = false; }
 
 void platform_vibrate(int ms) { LOGD("vibrate %d ms", ms); }
-
-const char *platform_data_root(void) {
-    if (!g_data_root) g_data_root = sa_strdup("build/data");
-    return g_data_root;
-}
-
-void platform_set_data_dir(const char *dir) {
-    free(g_data_root);
-    g_data_root = sa_strdup(dir);
-}
 
 const char *platform_framework_path(void) { return "build/java"; }
 

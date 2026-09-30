@@ -1,0 +1,25 @@
+# Session log
+
+Append one entry per session (newest last): date, branch, what was done,
+what is left in flight.
+
+### Session 1
+- Built the VM (interpreter, class linking, GC, threads/GIL, JNI with
+  call trampolines), libcore, core parsers (zip, dex, AXML/ARSC), host
+  driver.
+- JVM-differential conformance test (VmTest) passing; fixed branch
+  dispatch, StackOverflowError handling, several libcore gaps.
+- Obtained devkitA64/libnx/portlibs without a docker daemon.
+
+### Session 2 (2026-09-30, branch ccr-7d62ed8a-m0sd12)
+- Added the software renderer (`src/gfx`), fonts, image codecs, clip masks.
+- Headless platform (`src/platform`) with scripted input and screenshots.
+- Multi-package ResTable; `tools/make_framework_res.py` (framework
+  resources from android.jar); `tools/genr` (android.R).
+- AssetManager and graphics natives (`src/android`).
+- ~300 framework Java files: util, xmlpull, json, os, content(+res, pm),
+  net.Uri, database, graphics, drawables.
+- Documentation set (this docs/ directory, CLAUDE.md) and
+  `tools/fetch_toolchains.py`.
+- In flight: WS0 (framework does not compile yet; android.view and the
+  rest are next).

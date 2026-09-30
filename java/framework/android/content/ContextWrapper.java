@@ -27,6 +27,9 @@ public class ContextWrapper extends Context {
 
     public ContextWrapper(Context base) { mBase = base; }
 
+    /** Used by Activity, which attaches its base context later. */
+    protected ContextWrapper() { this(null); }
+
     protected void attachBaseContext(Context base) {
         if (mBase != null) throw new IllegalStateException("Base context already set");
         mBase = base;

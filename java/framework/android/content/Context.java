@@ -241,7 +241,7 @@ public abstract class Context {
     public abstract Context createDeviceProtectedStorageContext();
     public abstract boolean isDeviceProtectedStorage();
     public boolean isRestricted() { return false; }
-    public Display getDisplay() { return android.view.WindowManagerImpl.getDefaultDisplay(); }
+    public Display getDisplay() { return android.view.WindowManagerImpl.getDefault().getDefaultDisplay(); }
     public int getDisplayId() { return 0; }
     public boolean isUiContext() { return false; }
 

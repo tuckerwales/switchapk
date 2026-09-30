@@ -685,7 +685,7 @@ public class Resources {
     public static int getAttributeSetSourceResId(AttributeSet set) { return ID_NULL; }
 
     public TypedArray obtainAttributes(AttributeSet set, int[] attrs) {
-        return Theme.obtain(this, null, set, attrs, 0, 0);
+        return Resources.obtain(this, null, set, attrs, 0, 0);
     }
 
     public final Theme newTheme() { return new Theme(this); }

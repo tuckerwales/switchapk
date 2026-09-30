@@ -261,7 +261,7 @@ public abstract class Uri implements Parcelable, Comparable<Uri> {
             this.opaque = true;
         }
 
-        static Uri parse(String s) {
+        public static Uri parse(String s) {
             int ssi = -1;
             for (int i = 0; i < s.length(); i++) {
                 char c = s.charAt(i);

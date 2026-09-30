@@ -12,6 +12,8 @@
 extern ResTable *g_res;
 extern ZipArchive *g_fw_res_zip;
 extern ZipArchive *g_app_zip;
+/* Absolute or process-relative path of the running APK. Set by the app runner. */
+extern char *g_app_apk_path;
 
 /* Loads framework-res.apk and the app's resources.arsc. */
 bool android_res_init(const char *framework_res_path, ZipArchive *app);

@@ -467,7 +467,6 @@ NATIVE(AssetManager_nGetLocales) {
 /* static native String nApkPath() */
 NATIVE(AssetManager_nApkPath) {
     UNUSED_ARGS();
-    extern char *g_app_apk_path;
     R_OBJ(g_app_apk_path ? vm_new_string_utf8(t, g_app_apk_path) : NULL);
 }
 

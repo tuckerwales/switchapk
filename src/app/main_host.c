@@ -4,6 +4,7 @@
 #include "../vm/vm.h"
 #include "../core/zip.h"
 #include "../native/natives.h"
+#include "../platform/platform.h"
 
 #include <pthread.h>
 
@@ -22,6 +23,9 @@ static void usage(void) {
             "usage: switchapk-host [options] <program.dex|app.apk> [MainClass] [args...]\n"
             "  --framework <file>   framework dex (default build/java/framework.dex)\n"
             "  --data <dir>         data directory (default ./build/data)\n"
+            "  --script <file>      headless input script (APK runs only)\n"
+            "  --screenshots <dir>  directory for script screenshots\n"
+            "  --screen WxH@dpi     display size (default 1280x720@240)\n"
             "  --trace              trace every instruction\n"
             "  --raw-stdio          write System.out/err directly to stdout/stderr\n"
             "  -v / -vv             verbose logging\n");
@@ -44,11 +48,16 @@ static void *vm_main(void *arg) {
     volatile int stack_marker = 0;
     const char *framework = "build/java/framework.dex";
     const char *data_dir = "build/data";
+    const char *script = NULL;
+    const char *shots = NULL;
     int i = 1;
     for (; i < ma->argc && ma->argv[i][0] == '-'; i++) {
         const char *a = ma->argv[i];
         if (!strcmp(a, "--framework") && i + 1 < ma->argc) framework = ma->argv[++i];
         else if (!strcmp(a, "--data") && i + 1 < ma->argc) data_dir = ma->argv[++i];
+        else if (!strcmp(a, "--script") && i + 1 < ma->argc) script = ma->argv[++i];
+        else if (!strcmp(a, "--screenshots") && i + 1 < ma->argc) shots = ma->argv[++i];
+        else if (!strcmp(a, "--screen") && i + 1 < ma->argc) i++; /* platform_init reads it */
         else if (!strcmp(a, "--trace")) g_vm.trace = true;
         else if (!strcmp(a, "--raw-stdio")) {
             extern bool g_raw_stdio;
@@ -78,6 +87,10 @@ static void *vm_main(void *arg) {
     bool is_apk = plen > 4 && !strcmp(program + plen - 4, ".apk");
     if (is_apk) {
         extern int app_run_apk(const char *path, const char *data_dir, void *stack_hi);
+        if (script) platform_set_headless_script(script);
+        if (shots) platform_set_screenshot_dir(shots);
+        /* Once, and before the app, so --screen applies and the script can race the first frame. */
+        platform_init(ma->argc, ma->argv);
         ma->rc = app_run_apk(program, data_dir, (void *)&stack_marker);
         return NULL;
     }

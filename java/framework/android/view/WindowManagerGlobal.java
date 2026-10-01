@@ -152,6 +152,29 @@ public final class WindowManagerGlobal {
         for (int i = 0; i < mRoots.size(); i++) mRoots.get(i).onDisplayChanged();
     }
 
+    /**
+     * framework-internal. Removes windows still showing for a destroyed activity
+     * (dialogs, popups), logging them as leaked like AOSP's closeAll.
+     */
+    public void closeAll(android.content.Context activity) {
+        for (int i = mRoots.size() - 1; i >= 0; i--) {
+            if (i >= mRoots.size()) continue;
+            View view = mRoots.get(i).getView();
+            if (view == null || !belongsTo(view.getContext(), activity)) continue;
+            Log.e(TAG, "Activity " + activity.getClass().getName() + " has leaked window " + view);
+            removeView(view);
+        }
+    }
+
+    private static boolean belongsTo(android.content.Context context, android.content.Context activity) {
+        for (int depth = 0; context != null && depth < 16; depth++) {
+            if (context == activity) return true;
+            if (!(context instanceof android.content.ContextWrapper)) return false;
+            context = ((android.content.ContextWrapper) context).getBaseContext();
+        }
+        return false;
+    }
+
     /** framework-internal. Kept for ActivityThread: relayout and redraw all windows. */
     public void scheduleAll() { onDisplayChanged(); }
 

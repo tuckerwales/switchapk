@@ -126,10 +126,6 @@ NATIVE(Class_isInterface) {
     R_BOOL((this_class(args)->access & ACC_INTERFACE) != 0);
 }
 
-NATIVE(Class_getModifiers) {
-    UNUSED_ARGS();
-    R_INT(this_class(args)->access & 0xffff);
-}
 
 NATIVE(Class_isInstance) {
     UNUSED_ARGS();
@@ -210,6 +206,22 @@ static void inner_class_ann(DexFile *d, const char *type, uint32_t vis, const ui
             if (k) c->result = vm_class_mirror(c->t, k);
         }
     }
+}
+
+/* Member classes take their modifiers (static, private, ...) from the
+ * InnerClass annotation, as ART does; the class_def flags lack them. */
+NATIVE(Class_getModifiers) {
+    UNUSED_ARGS();
+    Class *c = this_class(args);
+    int32_t flags = (int32_t)(c->access & 0xffff);
+    if (c->dex && !c->is_array && !c->prim) {
+        DexClassDef cd;
+        dex_class_def(c->dex, (uint32_t)c->class_def_idx, &cd);
+        AnnCtx ctx = {"Ldalvik/annotation/InnerClass;", NULL, t, false, -1};
+        dex_class_annotations(c->dex, &cd, inner_class_ann, &ctx);
+        if (ctx.found && ctx.flags != -1) flags = ctx.flags & 0xffff;
+    }
+    R_INT(flags);
 }
 
 /* Returns the InnerClass annotation name; sets *is_inner */

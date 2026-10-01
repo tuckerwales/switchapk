@@ -443,16 +443,45 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `Application` (via `AppComponentFactory` when declared), installs
   content providers **before** `Application.onCreate` (as Android does;
   androidx startup relies on it), then launches the MAIN/LAUNCHER activity.
-- Activities form a single task stack. `startActivity` with an explicit
-  component (or an implicit intent matching one of the app's own
-  intent filters) pushes; `finish` pops and delivers results. Implicit
-  intents for other apps (browser, market, share) are logged and ignored
-  (ActivityNotFoundException only when the app requires a result).
-- Lifecycle: create -> start -> resume on launch; pause/stop on
-  covering or on PEV_FOCUS(0) (HOME / applet suspend); resume on refocus;
-  PEV_QUIT -> pause/stop/destroy all, then exit. Configuration changes
-  (docked/handheld) recreate activities unless `configChanges` covers
-  screenSize/orientation/density, as on Android.
+- Activities form a single task stack (`ActivityThread.ActivityRecord`:
+  caller, requestCode, resultWho, started, saved state, pending results,
+  relaunch pending). `startActivity`, `finish` and `recreate` resolve the
+  intent synchronously and post the work to the main looper, like the
+  binder calls they replace, so they never run inside another activity's
+  callback. Explicit components that do not resolve throw
+  ActivityNotFoundException; implicit intents for other apps (browser,
+  market, share) are logged and ignored. Manifest `launchMode`,
+  `parentActivityName` and `uiOptions` are read; FLAG_ACTIVITY_SINGLE_TOP,
+  CLEAR_TOP, NEW_TASK|CLEAR_TASK, singleTop and singleTask are honoured
+  (onNewIntent with a pause around it). navigateUpTo, finishAffinity,
+  finishActivity(requestCode), getCallingActivity and isTaskRoot work on
+  the stack.
+- Lifecycle, AOSP order: launching pauses the old top, then creates,
+  starts, post-creates and resumes the new activity, then stops the old
+  one and saves its state (API 28+ order: onStop before
+  onSaveInstanceState). Floating or translucent activities leave the one
+  below paused but not stopped. Finishing pauses, then the activity below
+  gets onRestart/onStart, its pending onActivityResult, onResume, then the
+  finished one is stopped and destroyed; windows it leaked are removed
+  (`WindowManagerGlobal.closeAll`). PEV_FOCUS(0) (HOME / applet suspend)
+  pauses the top, refocus resumes it; PEV_QUIT destroys everything top
+  down and exits.
+- Configuration changes: PEV_RESIZE (docked/handheld) recomputes the
+  Configuration and DisplayMetrics, updates the shared Resources, relays
+  out all windows and calls Application.onConfigurationChanged. Each
+  activity whose `configChanges` (plus the AOSP implied bits for old
+  targetSdk) covers the diff gets onConfigurationChanged; the others are
+  relaunched: pause, stop, save, retainNonConfigurationInstances
+  (fragments, loaders, onRetainNonConfigurationInstance), destroy, then a
+  new instance is created with that state and restored
+  (onRestoreInstanceState before onPostCreate). Stopped activities are
+  relaunched lazily when they come back to the top.
+- Fragments: the platform `android.app.Fragment`, `FragmentManager`
+  (FragmentManagerImpl state machine, back stack, BackStackRecord ops,
+  saved and retained state, `<fragment>` inflation), `DialogFragment`,
+  `ListFragment` and `LoaderManager`, hosted by Activity through
+  `FragmentController`/`FragmentHostCallback` as in AOSP (no transitions
+  or animators yet). AndroidX ReportFragment relies on this.
 - Dialogs: `android.app.Dialog` owns a floating `PhoneWindow` themed from
   `android:dialogTheme` (`alertDialogTheme` for AlertDialog) and is added
   to the window manager on `show()`. `AlertDialog` uses a port of
@@ -532,7 +561,9 @@ Single C interface implemented once per target:
 
 Headless implementation: in-memory frame, event queue, script thread
 (`wait`, `idle [ms]`, `tap x y`, `down/move/up x y`, `swipe`, `key NAME`,
-`keydown/keyup`, `text ...`, `screenshot file.png`, `log`, `quit`), audio
+`keydown/keyup`, `text ...`, `screen WxH@dpi` (changes the display and
+posts PEV_RESIZE, to simulate a dock switch), `screenshot file.png`,
+`log`, `quit`), audio
 consumer thread that discards samples in real time. When the script ends
 it posts PEV_QUIT.
 

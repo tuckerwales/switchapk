@@ -87,8 +87,8 @@ Working:
   checks screenshots and in-process logic.
 
 Not started: most widgets (WS3), the rest of the app model (WS4: action
-bar decor, dialogs, menus on screen, fragments), animation (WS5) and the
-other post-WS0 packages.
+bar decor, services and broadcasts), animation (WS5) and the other
+post-WS0 packages.
 
 ## Checklist
 
@@ -147,8 +147,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] options menu (+ button falls back to MENU) as an overflow-style
     popup, context menus and sub menus as dialogs
   - [ ] action bar decor (Theme.Material with title and overflow)
-  - [ ] lifecycle: saved state, recreation on docked/handheld switch
-  - [ ] services, broadcasts, PendingIntent, AlarmManager, legacy fragments
+  - [x] lifecycle in AOSP order, results, launch modes and flags, saved
+    state, recreation on docked/handheld switch (lazy for stopped
+    activities), ActivityLifecycleCallbacks with pre/post;
+    tests/apps/lifecycle (screenshots plus callback order from the log)
+  - [x] platform fragments (FragmentManager, back stack, saved and
+    retained state, DialogFragment, ListFragment, LoaderManager)
+  - [ ] services, broadcasts, PendingIntent, AlarmManager
 - [ ] WS13 app test runner with screenshot goldens
 
 ### M3
@@ -235,3 +240,12 @@ and update ARCHITECTURE.md in the same commit.
   BUTTON_START -> MENU (the + button opens the options menu when the app
   does not handle it). Documented with the controller mapping in
   ARCHITECTURE 6.4.
+- 2026-10-01 (WS4): the headless script gains `screen WxH@dpi` (changes
+  the display, posts PEV_RESIZE). ActivityThread handles PEV_RESIZE as a
+  configuration change (relaunch or onConfigurationChanged per activity)
+  instead of only relaying out windows. `WindowManagerGlobal.closeAll`
+  removes windows a destroyed activity leaked. `Class.getModifiers` now
+  reports member class modifiers from the InnerClass annotation (static,
+  private), as ART does; FragmentManager checks them. ActivityThread start
+  and finish requests are posted to the main looper (asynchronous, as on
+  Android). ARCHITECTURE 6.5 updated.

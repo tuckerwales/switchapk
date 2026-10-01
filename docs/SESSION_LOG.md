@@ -136,3 +136,20 @@ what is left in flight.
   maxLines/singleLine (AOSP getDesiredHeight: whole lines, not ems), which
   clipped descenders of single-line text. tests/apps/appmodel covers the
   options popup, a sub menu and a context menu.
+- WS4 lifecycle and fragments. Activity is rewritten around AOSP's
+  perform* methods (pre/post ActivityLifecycleCallbacks, SuperNotCalled
+  checks, managed dialogs, non-config instances, FragmentController
+  host), Application gains the full callback set, and the platform
+  fragments are ported (Fragment, FragmentManagerImpl with back stack and
+  saved/retained state, BackStackRecord, DialogFragment, ListFragment,
+  LoaderManager). ActivityThread's stack now posts start/finish to the
+  looper and follows AOSP ordering for launch, finish, results, launch
+  modes and intent flags, and treats PEV_RESIZE as a configuration change
+  that relaunches activities (stopped ones lazily). The headless script
+  gained `screen WxH@dpi`; the headless present now reallocates its frame
+  when the size changes (it overflowed). VM fix: Class.getModifiers reads
+  member class flags from the InnerClass annotation (a public static
+  nested Fragment was rejected). tests/apps/lifecycle drives a dock and
+  undock with two activities, results, single-top and a fragment and
+  checks screenshots and the callback order in the log. Open question:
+  two script taps with no idle between them click a button once.

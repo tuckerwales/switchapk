@@ -12,6 +12,7 @@
  *   key <NAME|code>      key press (down + up), e.g. key BACK, key DPAD_DOWN
  *   keydown|keyup <NAME|code>
  *   text <string>        answer to the next soft keyboard request
+ *   screen <W>x<H>@<dpi> change the display and send PEV_RESIZE (docked/handheld switch)
  *   screenshot <file>    write the last frame as PNG
  *   log <message>
  *   quit
@@ -120,6 +121,11 @@ bool platform_wait_event(PlatformEvent *ev, int timeout_ms) {
 
 void platform_present(const uint32_t *argb, int w, int h, int stride) {
     pthread_mutex_lock(&g_lock);
+    if (g_frame && (g_frame_w != g_width || g_frame_h != g_height)) {
+        /* the screen command changed the display size */
+        free(g_frame);
+        g_frame = NULL;
+    }
     if (!g_frame) g_frame = sa_calloc((size_t)g_width * (size_t)g_height, 4);
     g_frame_w = g_width;
     g_frame_h = g_height;
@@ -317,6 +323,23 @@ static void *script_thread(void *arg) {
                     ev.a = id;
                     ev.text = sa_strdup(rest);
                     platform_push_event(&ev);
+                }
+            } else if (!strcmp(cmd, "screen")) {
+                int w, h, dpi;
+                if (sscanf(rest, "%dx%d@%d", &w, &h, &dpi) == 3 && w > 0 && h > 0 && dpi > 0) {
+                    pthread_mutex_lock(&g_lock);
+                    g_width = w;
+                    g_height = h;
+                    g_dpi = dpi;
+                    pthread_mutex_unlock(&g_lock);
+                    PlatformEvent ev = {0};
+                    ev.kind = PEV_RESIZE;
+                    ev.a = w;
+                    ev.b = h;
+                    ev.c = dpi;
+                    platform_push_event(&ev);
+                } else {
+                    LOGW("script line %d: screen wants WxH@dpi", lineno);
                 }
             } else if (!strcmp(cmd, "screenshot")) {
                 char *path = (g_shot_dir && rest[0] != '/') ? sa_sprintf("%s/%s", g_shot_dir, rest) : sa_strdup(rest);

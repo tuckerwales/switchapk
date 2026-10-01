@@ -261,3 +261,17 @@ what is left in flight.
   Switch with one fix. The VM was never run on AArch64 before: the host
   build cross-compiled for aarch64 passes VmTest and every sample under
   qemu-user. Not yet booted on hardware (no device here).
+- WS3 adapters. Filter now works like AOSP (worker thread, results on
+  the caller's looper, a newer request replaces a pending one). Ported
+  SimpleAdapter, CursorAdapter (+CursorFilter, FilterQueryProvider),
+  ResourceCursorAdapter, SimpleCursorAdapter, the expandable list family
+  (ExpandableListView, ExpandableListConnector, ExpandableListPosition,
+  BaseExpandableListAdapter, SimpleExpandableListAdapter,
+  HeterogeneousExpandableList), TwoLineListItem, AutoCompleteTextView and
+  MultiAutoCompleteTextView. Fixed two list bugs found by the drop-down:
+  setSelection(INVALID_POSITION) selected row 0, and leaving touch mode
+  resurrected a drop-down selection that should stay hidden until the
+  first arrow key. tests/apps/adapters covers the adapters, expand and
+  collapse by touch, child clicks, and typing then picking a suggestion
+  with the D-pad and A.
+

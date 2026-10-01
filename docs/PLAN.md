@@ -150,9 +150,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     ActionMenuItemView), DecorToolbar/ToolbarWidgetWrapper; tests/apps/toolbar
   - [x] GridView (AbsListView lays out rows of N items), TableLayout,
     TableRow, AbsoluteLayout; tests/apps/grid
+  - [x] Filter on a worker thread (as AOSP), SimpleAdapter, CursorAdapter,
+    ResourceCursorAdapter, SimpleCursorAdapter, ExpandableListView
+    (connector, indicators, child dividers, saved state),
+    BaseExpandableListAdapter, SimpleExpandableListAdapter,
+    TwoLineListItem, AutoCompleteTextView, MultiAutoCompleteTextView;
+    tests/apps/adapters
   - [ ] the rest (GridLayout, ViewAnimator family, clocks, pickers,
-    SearchView, AutoCompleteTextView, ExpandableListView, cursor and
-    simple adapters, TabHost, VideoView, RemoteViews, ...)
+    SearchView, TabHost, CursorTreeAdapter family, VideoView,
+    RemoteViews, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,
@@ -332,3 +338,10 @@ and update ARCHITECTURE.md in the same commit.
   toasts survive their activity. AdapterView owns `mInLayout` and
   `mBlockLayoutRequests` (moved from AbsListView) and posts selection
   callbacks during layout. ARCHITECTURE 6.4.1 updated.
+- 2026-10-01 (WS3): `android.widget.Filter` runs `performFiltering` on a
+  "Filter" HandlerThread and `publishResults` on the creating looper, as
+  AOSP does; filtering is no longer synchronous (tests/apps/list updated).
+  AbsListView has the AOSP package-private `createContextMenuInfo` hook
+  and ListView `drawDivider(Canvas, Rect, int)`, both overridden by
+  ExpandableListView. `setSelection(INVALID_POSITION)` now clears the
+  selection instead of selecting row 0. ARCHITECTURE 6.4 updated.

@@ -1,0 +1,26 @@
+idle 500
+screenshot adapters_start.png
+log tap the second group
+tap 900 144
+idle 500
+screenshot adapters_expanded.png
+log tap its second child
+tap 900 336
+idle 300
+log tap a cursor row
+tap 200 330
+idle 300
+log type into the auto-complete field
+tap 300 40
+idle 300
+text ca
+idle 800
+key DPAD_DOWN
+idle 300
+screenshot adapters_popup.png
+key DPAD_DOWN
+idle 100
+key BUTTON_A
+idle 500
+screenshot adapters_picked.png
+quit

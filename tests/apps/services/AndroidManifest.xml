@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.services">
+    <application android:label="Services"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".LeakActivity" />
+        <receiver android:name=".ManifestReceiver" android:exported="false">
+            <intent-filter android:priority="5">
+                <action android:name="com.example.services.PING" />
+            </intent-filter>
+        </receiver>
+        <service android:name=".CountService" />
+        <service android:name=".BindService" />
+        <service android:name=".WorkService" />
+    </application>
+</manifest>

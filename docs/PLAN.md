@@ -87,7 +87,7 @@ Working:
   checks screenshots and in-process logic.
 
 Not started: most widgets (WS3), the rest of the app model (WS4: action
-bar decor, services and broadcasts), animation (WS5) and the other
+bar decor, Notification.Builder and channels), animation (WS5) and the other
 post-WS0 packages.
 
 ## Checklist
@@ -153,7 +153,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     tests/apps/lifecycle (screenshots plus callback order from the log)
   - [x] platform fragments (FragmentManager, back stack, saved and
     retained state, DialogFragment, ListFragment, LoaderManager)
-  - [ ] services, broadcasts, PendingIntent, AlarmManager
+  - [x] in-process services (started, bound, IntentService), broadcasts
+    (registered, manifest, ordered, sticky, goAsync), PendingIntent,
+    IntentSender, AlarmManager, createPendingResult, leak cleanup on
+    destroy; tests/apps/services (21 steps checked against AOSP behaviour)
+  - [ ] Notification.Builder, styles, actions and NotificationChannel
+    (NotificationManager only logs posted notifications for now)
 - [ ] WS13 app test runner with screenshot goldens
 
 ### M3
@@ -249,3 +254,12 @@ and update ARCHITECTURE.md in the same commit.
   private), as ART does; FragmentManager checks them. ActivityThread start
   and finish requests are posted to the main looper (asynchronous, as on
   Android). ARCHITECTURE 6.5 updated.
+- 2026-10-01 (WS4): each Activity and Service gets its own `ContextImpl`
+  (`createComponentContext`, sharing package state with the application's)
+  so receivers and service connections are tracked per component and
+  removed with a leak warning after onDestroy, as on Android. Broadcasts
+  (`BroadcastQueue`) and services (`ActiveServices`) are delivered in
+  process on the main looper; `BroadcastReceiver.PendingResult` now
+  carries the ordered result and continues the broadcast on `finish()`.
+  The manifest parser reads `<intent-filter android:priority>`.
+  `IntentSender` wraps a `PendingIntent`. Documented in ARCHITECTURE 6.5.

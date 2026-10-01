@@ -482,6 +482,50 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `ListFragment` and `LoaderManager`, hosted by Activity through
   `FragmentController`/`FragmentHostCallback` as in AOSP (no transitions
   or animators yet). AndroidX ReportFragment relies on this.
+- Contexts: the application's `ContextImpl` holds the package state;
+  each Activity and Service gets its own `ContextImpl` from
+  `createComponentContext(outer)` that shares it. Receivers and service
+  connections are keyed by that outer context, and `scheduleFinalCleanup`
+  (after onDestroy) unregisters and unbinds what the component leaked,
+  logging AOSP's "has leaked IntentReceiver/ServiceConnection" errors.
+- Broadcasts (`BroadcastQueue`, in place of the AMS queue and
+  LoadedApk's receiver dispatchers): always asynchronous. A normal
+  broadcast goes to registered receivers in parallel (each on its
+  scheduler Handler, else the main looper), then to manifest receivers
+  one at a time; an ordered one goes to all of them one at a time by
+  filter priority (registered first at equal priority), carrying result
+  code, data and extras in `BroadcastReceiver.PendingResult`, stopping on
+  abort, then calling the result receiver. `goAsync` holds the broadcast
+  until `PendingResult.finish()` (any thread). An explicit component
+  reaches only that manifest receiver; for targetSdk >= 26 implicit
+  broadcasts skip manifest receivers (logged as on Android). Manifest
+  receivers get a `ReceiverRestrictedContext` (no register or bind).
+  Sticky broadcasts are kept and replayed on register; the system's
+  ACTION_BATTERY_CHANGED is sticky (level 100 until WS15 reads the
+  battery).
+- Services (`ActiveServices`, in place of AMS ActiveServices and
+  LoadedApk's service dispatchers): bookkeeping is synchronous and
+  thread-safe; calls into the service and clients are posted to the main
+  looper in AMS order. One record per component; onCreate, then
+  onStartCommand with increasing start ids or onBind once per
+  filter-equal intent, whose binder is cached and handed to every
+  connection (onRebind when onUnbind returned true). stopSelf(id) acts on
+  the latest id only. A service is destroyed when neither started nor
+  bound with BIND_AUTO_CREATE; remaining connections get onBindingDied.
+  Service intents must be explicit for targetSdk >= 21. Connections are
+  dispatched per (context, ServiceConnection), so a second bind to the
+  same service does not repeat onServiceConnected. Running services get
+  onConfigurationChanged. `IntentService` is the AOSP worker thread one.
+- PendingIntent keeps an in-process record table keyed like AMS (kind,
+  request code, filter-equal intent, flags, activity for
+  createPendingResult) with FLAG_NO_CREATE/CANCEL_CURRENT/UPDATE_CURRENT/
+  ONE_SHOT, the S+ mutability check, fill-in for mutable ones and
+  OnFinished (via an ordered broadcast for broadcasts). `IntentSender`
+  wraps one; `startIntentSenderForResult` starts activity targets from
+  the caller so the result comes back. AlarmManager posts alarms on the
+  main looper (RTC converted to elapsed time; a re-set PendingIntent or
+  listener replaces its alarm; repeating alarms skip missed periods);
+  alarms live only as long as the process. NotificationManager logs.
 - Dialogs: `android.app.Dialog` owns a floating `PhoneWindow` themed from
   `android:dialogTheme` (`alertDialogTheme` for AlertDialog) and is added
   to the window manager on `show()`. `AlertDialog` uses a port of

@@ -320,7 +320,7 @@ public final class ActivityThread {
         rec.started = false;
         rec.relaunchPending = false;
         rec.pendingConfigChanges = 0;
-        a.attach(sContext, info, rec.intent, sApplication, nci, sResources.getConfiguration());
+        a.attach(sContext.createComponentContext(a), info, rec.intent, sApplication, nci, sResources.getConfiguration());
         a.performCreate(state);
         return !a.isFinishing();
     }
@@ -418,6 +418,20 @@ public final class ActivityThread {
         }
     }
 
+    /** A createPendingResult PendingIntent was sent: deliver like a result, on the main thread. */
+    static void sendPendingResult(final Activity activity, final int requestCode, final int resultCode,
+            final Intent data) {
+        post(new Runnable() {
+            public void run() {
+                ActivityRecord rec = findRecord(activity);
+                if (rec != null && !activity.isFinishing()) sendResult(rec, null, requestCode, resultCode, data);
+            }
+        });
+    }
+
+    /** framework-internal. BroadcastReceiver.peekService. */
+    public static android.os.IBinder peekService(Intent service) { return ActiveServices.peekService(service); }
+
     private static void deliverResults(ActivityRecord rec) {
         while (!rec.pendingResults.isEmpty()) {
             ResultInfo r = rec.pendingResults.remove(0);
@@ -460,6 +474,9 @@ public final class ActivityThread {
         a.performDestroy();
         a.removeWindow();
         WindowManagerGlobal.getInstance().closeAll(a);
+        if (a.getBaseContext() instanceof ContextImpl) {
+            ((ContextImpl) a.getBaseContext()).scheduleFinalCleanup(a.getClass().getName(), "Activity");
+        }
     }
 
     private static void show(ActivityRecord rec) {
@@ -539,6 +556,7 @@ public final class ActivityThread {
         if (diff == 0) return;
         Configuration config = new Configuration(sResources.getConfiguration());
         sApplication.onConfigurationChanged(new Configuration(config));
+        ActiveServices.dispatchConfigurationChanged(config);
         ArrayList<ActivityRecord> stack = new ArrayList<ActivityRecord>(sStack);
         for (int i = stack.size() - 1; i >= 0; i--) {
             ActivityRecord rec = stack.get(i);
@@ -571,7 +589,7 @@ public final class ActivityThread {
         return handled;
     }
 
-    private static void post(Runnable r) {
+    static void post(Runnable r) {
         if (sHandler == null) sHandler = new Handler(Looper.getMainLooper());
         sHandler.post(r);
     }
@@ -723,6 +741,7 @@ public final class ActivityThread {
                         provider.authority = attrString(parser, android.R.attr.authorities, "authorities");
                     } else if ("intent-filter".equals(name)) {
                         filter = new IntentFilter();
+                        filter.setPriority(attrInt(parser, android.R.attr.priority, "priority", 0));
                         if (activity != null) activity.filters.add(filter);
                         else if (service != null) service.filters.add(filter);
                         else filter = null;
@@ -864,7 +883,7 @@ public final class ActivityThread {
         return filter.match(action, intent.getType(), intent.getScheme(), intent.getData(), categories, TAG) >= 0;
     }
 
-    private static Object newComponent(String className) {
+    static Object newComponent(String className) {
         try {
             return Class.forName(className).newInstance();
         } catch (Exception e) {

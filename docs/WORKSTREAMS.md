@@ -34,7 +34,7 @@ duplicating work.
 | WS1 | View system core (View, ViewGroup, input dispatch, focus, windows, ViewRootImpl, Choreographer, LayoutInflater, PhoneWindow/DecorView) | WS0 | in progress (core, surfaces, acceptance sample and context menus done; action mode presentation left, needs the WS4 action bar) | ws1 session 4, 2026-10-01 |
 | WS2 | Text: android.text + TextView/EditText + IME bridge | WS0, WS1 (View API) | done | ws2 session 5, 2026-10-01 |
 | WS3 | Widgets: layouts, lists/adapters, scrolling, buttons, progress, Toast, PopupWindow, Spinner, Toolbar | WS1 | in progress (ImageView, compound controls, scrolling and lists landed; progress, popups and Toolbar remain) | ws3 session 5, 2026-10-01 |
-| WS4 | App model: Activity/ActivityThread lifecycle, manifest, intents, dialogs, menus/ActionBar, services, legacy fragments | WS0 | in progress | ws4 session 6, 2026-10-01 |
+| WS4 | App model: Activity/ActivityThread lifecycle, manifest, intents, dialogs, menus/ActionBar, services, legacy fragments | WS0 | in progress (lifecycle, fragments, dialogs, menus, services and broadcasts done; action bar decor, notifications builder, ProgressDialog left) | ws4 session 6, 2026-10-01 |
 | WS5 | Animation: android.animation, view.animation, ViewPropertyAnimator, AVD animation | WS1 | not started | |
 | WS6 | Storage: SQLite natives, database/content provider checks, file APIs, SharedPreferences tests | WS0 | not started | |
 | WS7 | Audio/media: mixer, SoundPool, MediaPlayer, AudioTrack, decoders, platform audio | WS0 | not started | |

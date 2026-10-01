@@ -48,8 +48,11 @@ public class ContextImpl extends Context {
     private final ApplicationInfo mInfo;
     private final String mApkPath;
     private final Resources mResources;
-    private final HashMap<String, SharedPreferences> mPrefs = new HashMap<String, SharedPreferences>();
-    private final ArrayList<ComponentCallbacks> mCallbacks = new ArrayList<ComponentCallbacks>();
+    private final HashMap<String, SharedPreferences> mPrefs;
+    private final ArrayList<ComponentCallbacks> mCallbacks;
+    /** The component this context is the base of (activity, service or application). */
+    private Context mOuterContext;
+    private ReceiverRestrictedContext mReceiverRestrictedContext;
 
     private Application mApplication;
     private PackageManager mPackageManager;
@@ -62,10 +65,51 @@ public class ContextImpl extends Context {
         mInfo = info;
         mApkPath = apkPath;
         mResources = resources;
+        mPrefs = new HashMap<String, SharedPreferences>();
+        mCallbacks = new ArrayList<ComponentCallbacks>();
+    }
+
+    /** A context for one activity or service: same package state, its own registrations. */
+    private ContextImpl(ContextImpl base, Context outer) {
+        mPackageName = base.mPackageName;
+        mInfo = base.mInfo;
+        mApkPath = base.mApkPath;
+        mResources = base.mResources;
+        mPrefs = base.mPrefs;
+        mCallbacks = base.mCallbacks;
+        mApplication = base.mApplication;
+        mPackageManager = base.mPackageManager;
+        mResolver = base.mResolver;
+        mOuterContext = outer;
     }
 
     /** framework-internal. Set before providers and Application.onCreate. */
-    void setApplication(Application application) { mApplication = application; }
+    void setApplication(Application application) {
+        mApplication = application;
+        mOuterContext = application;
+    }
+
+    /** framework-internal. The base context of an activity or service. */
+    ContextImpl createComponentContext(Context outer) { return new ContextImpl(this, outer); }
+
+    final Context getOuterContext() { return mOuterContext != null ? mOuterContext : this; }
+
+    /** framework-internal. The context manifest receivers get: no registering or binding. */
+    Context getReceiverRestrictedContext() {
+        if (mReceiverRestrictedContext == null) mReceiverRestrictedContext = new ReceiverRestrictedContext(getOuterContext());
+        return mReceiverRestrictedContext;
+    }
+
+    /** framework-internal. After onDestroy: drop the receivers and connections the component leaked. */
+    void scheduleFinalCleanup(final String who, final String what) {
+        final Context outer = getOuterContext();
+        ActivityThread.post(new Runnable() {
+            public void run() {
+                BroadcastQueue.removeContextRegistrations(outer, who, what);
+                ActiveServices.removeContextRegistrations(outer, who, what);
+            }
+        });
+    }
 
     @Override public AssetManager getAssets() { return mResources.getAssets(); }
     @Override public Resources getResources() { return mResources; }
@@ -215,48 +259,74 @@ public class ContextImpl extends Context {
     @Override
     public void startActivity(Intent intent, Bundle options) { ActivityThread.startActivity(null, intent, -1); }
 
-    @Override public void sendBroadcast(Intent intent) { logIpc(); }
-    @Override public void sendBroadcast(Intent intent, String receiverPermission) { logIpc(); }
-    @Override public void sendOrderedBroadcast(Intent intent, String receiverPermission) { logIpc(); }
+    @Override public void sendBroadcast(Intent intent) { BroadcastQueue.send(intent, false, null, null, Activity.RESULT_OK, null, null); }
+
+    @Override
+    public void sendBroadcast(Intent intent, String receiverPermission) {
+        BroadcastQueue.send(intent, false, null, null, Activity.RESULT_OK, null, null);
+    }
+
+    @Override
+    public void sendOrderedBroadcast(Intent intent, String receiverPermission) {
+        BroadcastQueue.send(intent, true, null, null, Activity.RESULT_OK, null, null);
+    }
 
     @Override
     public void sendOrderedBroadcast(Intent intent, String receiverPermission, BroadcastReceiver resultReceiver,
             Handler scheduler, int initialCode, String initialData, Bundle initialExtras) {
-        logIpc();
+        BroadcastQueue.send(intent, true, resultReceiver, scheduler, initialCode, initialData, initialExtras);
     }
 
-    @Override public void sendStickyBroadcast(Intent intent) { logIpc(); }
-    @Override public void removeStickyBroadcast(Intent intent) { logIpc(); }
+    @Override public void sendStickyBroadcast(Intent intent) { BroadcastQueue.sendSticky(intent); }
+    @Override public void removeStickyBroadcast(Intent intent) { BroadcastQueue.removeSticky(intent); }
 
-    @Override public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter) { logIpc(); return null; }
+    @Override
+    public void sendStickyOrderedBroadcast(Intent intent, BroadcastReceiver resultReceiver, Handler scheduler,
+            int initialCode, String initialData, Bundle initialExtras) {
+        BroadcastQueue.addSticky(intent);
+        BroadcastQueue.send(intent, true, resultReceiver, scheduler, initialCode, initialData, initialExtras);
+    }
+
+    @Override
+    public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter) {
+        return registerReceiver(receiver, filter, null, null, 0);
+    }
 
     @Override
     public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter, int flags) {
-        logIpc();
-        return null;
+        return registerReceiver(receiver, filter, null, null, flags);
     }
 
     @Override
     public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter, String broadcastPermission,
             Handler scheduler) {
-        logIpc();
-        return null;
+        return registerReceiver(receiver, filter, broadcastPermission, scheduler, 0);
     }
 
     @Override
     public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter, String broadcastPermission,
             Handler scheduler, int flags) {
-        logIpc();
-        return null;
+        return BroadcastQueue.register(getOuterContext(), receiver, filter, scheduler, flags);
     }
 
-    @Override public void unregisterReceiver(BroadcastReceiver receiver) { logIpc(); }
+    @Override public void unregisterReceiver(BroadcastReceiver receiver) { BroadcastQueue.unregister(getOuterContext(), receiver); }
 
-    @Override public ComponentName startService(Intent service) { logIpc(); return null; }
-    @Override public ComponentName startForegroundService(Intent service) { logIpc(); return null; }
-    @Override public boolean stopService(Intent service) { logIpc(); return false; }
-    @Override public boolean bindService(Intent service, ServiceConnection conn, int flags) { logIpc(); return false; }
-    @Override public void unbindService(ServiceConnection conn) { logIpc(); }
+    @Override public ComponentName startService(Intent service) { return ActiveServices.startService(service); }
+    @Override public ComponentName startForegroundService(Intent service) { return ActiveServices.startService(service); }
+    @Override public boolean stopService(Intent service) { return ActiveServices.stopService(service); }
+
+    @Override
+    public boolean bindService(Intent service, ServiceConnection conn, int flags) {
+        return ActiveServices.bindService(getOuterContext(), service, conn, flags, null);
+    }
+
+    @Override
+    public boolean bindService(Intent service, int flags, java.util.concurrent.Executor executor, ServiceConnection conn) {
+        if (executor == null) throw new IllegalArgumentException("executor must not be null");
+        return ActiveServices.bindService(getOuterContext(), service, conn, flags, executor);
+    }
+
+    @Override public void unbindService(ServiceConnection conn) { ActiveServices.unbindService(getOuterContext(), conn); }
 
     @Override
     public boolean startInstrumentation(ComponentName className, String profileFile, Bundle arguments) {
@@ -267,6 +337,8 @@ public class ContextImpl extends Context {
     @Override
     public Object getSystemService(String name) {
         if (WINDOW_SERVICE.equals(name)) return WindowManagerImpl.getDefault();
+        if (ALARM_SERVICE.equals(name)) return AlarmManager.getInstance();
+        if (NOTIFICATION_SERVICE.equals(name)) return NotificationManager.getInstance();
         if (VIBRATOR_SERVICE.equals(name)) return new Vibrator.SystemVibrator();
         if (INPUT_METHOD_SERVICE.equals(name)) return InputMethodManager.systemInstance();
         if (LAYOUT_INFLATER_SERVICE.equals(name)) {
@@ -284,6 +356,8 @@ public class ContextImpl extends Context {
     @Override
     public String getSystemServiceName(Class<?> serviceClass) {
         if (serviceClass == WindowManager.class) return WINDOW_SERVICE;
+        if (serviceClass == AlarmManager.class) return ALARM_SERVICE;
+        if (serviceClass == NotificationManager.class) return NOTIFICATION_SERVICE;
         if (serviceClass == Vibrator.class) return VIBRATOR_SERVICE;
         if (serviceClass == InputMethodManager.class) return INPUT_METHOD_SERVICE;
         if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;
@@ -377,11 +451,11 @@ public class ContextImpl extends Context {
         return new File(base, name);
     }
 
-    /** TODO(WS4) in-process broadcasts and services are not delivered. */
+    /** Instrumentation runs no tests here. */
     private static void logIpc() {
         if (!sLoggedIpc) {
             sLoggedIpc = true;
-            Log.w(TAG, "broadcasts and services are not delivered");
+            Log.w(TAG, "instrumentation is not supported");
         }
     }
 

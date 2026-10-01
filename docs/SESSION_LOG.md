@@ -153,3 +153,17 @@ what is left in flight.
   undock with two activities, results, single-top and a fragment and
   checks screenshots and the callback order in the log. Open question:
   two script taps with no idle between them click a button once.
+- WS4 services and broadcasts. In-process BroadcastQueue (registered,
+  manifest, ordered with priority and abort, sticky, goAsync, the target-O
+  implicit block, restricted receiver context) and ActiveServices
+  (started, bound with cached binders and onRebind, stopSelf ids,
+  BIND_AUTO_CREATE rules, binding death, executor binds), Service,
+  IntentService, PendingIntent (AMS identity and flags, OnFinished,
+  createPendingResult), IntentSender, AlarmManager on the main looper, and
+  a minimal Notification and NotificationManager that logs. Activities and
+  services now get per-component ContextImpls so leaked receivers and
+  connections are dropped after onDestroy with AOSP's leak errors. The
+  manifest parser now reads intent-filter priority. tests/apps/services
+  runs 21 steps, each comparing its event sequence with Android's, and
+  checks a result grid plus the framework's log lines. Next for WS4:
+  Notification.Builder and channels, action bar decor, ProgressDialog.

@@ -656,4 +656,24 @@ public class Intent implements Parcelable, Cloneable {
             public ShortcutIconResource[] newArray(int size) { return new ShortcutIconResource[size]; }
         };
     }
+
+    public static final class FilterComparison {
+        private final Intent mIntent;
+        private final int mHashCode;
+
+        public FilterComparison(Intent intent) {
+            mIntent = intent;
+            mHashCode = intent.filterHashCode();
+        }
+
+        public Intent getIntent() { return mIntent; }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof FilterComparison && mIntent.filterEquals(((FilterComparison) obj).mIntent);
+        }
+
+        @Override
+        public int hashCode() { return mHashCode; }
+    }
 }

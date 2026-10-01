@@ -1,0 +1,5 @@
+idle 500
+wait 10000
+idle 500
+screenshot services.png
+quit

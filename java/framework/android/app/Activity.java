@@ -869,12 +869,27 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void startIntentSenderForResult(IntentSender intent, int requestCode, Intent fillInIntent, int flagsMask,
             int flagsValues, int extraFlags) throws IntentSender.SendIntentException {
-        throw new IntentSender.SendIntentException("Intent senders are not supported");
+        startIntentSenderForResult(intent, requestCode, fillInIntent, flagsMask, flagsValues, extraFlags, null);
     }
 
     public void startIntentSenderForResult(IntentSender intent, int requestCode, Intent fillInIntent, int flagsMask,
             int flagsValues, int extraFlags, Bundle options) throws IntentSender.SendIntentException {
-        throw new IntentSender.SendIntentException("Intent senders are not supported");
+        if (fillInIntent != null) {
+            fillInIntent.setFlags((fillInIntent.getFlags() & ~flagsMask) | (flagsValues & flagsMask));
+        }
+        Intent target;
+        try {
+            target = intent.getTarget().activityIntent(fillInIntent);
+        } catch (PendingIntent.CanceledException e) {
+            throw new IntentSender.SendIntentException(e);
+        }
+        // An activity target starts from here so the result comes back; anything else is just sent.
+        if (target != null) startActivityForResult(target, requestCode, options);
+        else intent.sendIntent(this, 0, fillInIntent, null, null);
+    }
+
+    public PendingIntent createPendingResult(int requestCode, Intent data, int flags) {
+        return PendingIntent.getActivityResult(this, requestCode, data, flags);
     }
 
     public void overridePendingTransition(int enterAnim, int exitAnim) {}

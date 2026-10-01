@@ -49,6 +49,8 @@ what is left in flight.
   FrameLayout and LinearLayout ported for the decor.
 - `tests/apps/views` (WS1 acceptance) and `tests/apps/shotlib.py`;
   `tools/api_check.py`; headless `idle` waits for queued input.
-- Left in WS1: SurfaceView/TextureView, context menu and action mode
-  presentation (needs WS4 dialogs), clipToOutline.
+- SurfaceView, Surface (software buffer queue that paces render threads)
+  and a software TextureView; `tests/apps/surface` checks them.
+- Left in WS1: context menu and action mode presentation (needs WS4
+  dialogs), clipToOutline.
 

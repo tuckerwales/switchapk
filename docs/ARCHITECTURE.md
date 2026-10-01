@@ -411,6 +411,15 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - Drawing is software only: `isHardwareAccelerated()` is false, layer
   types only add a `saveLayer` with the layer paint, elevation and
   outlines draw no shadows, and `clipToOutline` is not applied yet.
+- `Surface` is a software buffer queue (`Surface.BufferQueue`, two ARGB
+  bitmaps). `lockCanvas` copies the last frame into the back buffer;
+  `unlockCanvasAndPost` swaps, notifies the consumer and, on a non-UI
+  thread, waits until the frame was drawn (at most ~34 ms), which paces
+  render threads to the display. `SurfaceView` draws the latest frame in
+  its own draw pass (scaled when `setFixedSize` was used) and runs the
+  `SurfaceHolder.Callback`s on the UI thread when it is attached, visible
+  and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
+  backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
 - `View.animate()`, `startAnimation()` and `StateListAnimator` belong to
   WS5 (android.animation and view.animation do not exist yet); accessibility
   classes are value holders since no accessibility service runs.

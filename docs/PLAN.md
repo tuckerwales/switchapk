@@ -74,7 +74,7 @@ Working:
   (theme window attributes, screen_simple decor), MenuInflater and an
   internal menu model, Activity as Window.Callback. FrameLayout and
   LinearLayout are ported (needed by the decor).
-- `tests/apps/hello` and `tests/apps/views` pass their screenshot checks
+- `tests/apps/hello`, `tests/apps/views` and `tests/apps/surface` pass their screenshot checks
   (views: XML layouts with weights, include, ViewStub, selector states,
   tap, D-pad focus, A/B buttons, long press, dim-behind second window).
 
@@ -112,7 +112,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] ViewRootImpl, Choreographer, WindowManagerGlobal (window stack, routing, compositing)
   - [x] LayoutInflater, ViewStub, PhoneWindow/DecorView, MenuInflater + menu model, Window.Callback
   - [x] tests/apps/views acceptance sample
-  - [ ] SurfaceView/SurfaceHolder (software lockCanvas), TextureView
+  - [x] SurfaceView/SurfaceHolder (software lockCanvas, paced producers), TextureView (software)
   - [ ] context menu and action mode presentation (with WS4 dialogs)
   - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
 - [ ] WS2 text and IME
@@ -143,8 +143,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 1. WS1 has pushed the public View/ViewGroup API: WS2 (text), WS3
    (widgets), WS4 (app model) and WS5 (animation) can start now.
-2. Finish WS1: SurfaceView/TextureView software surfaces, context menu
-   and action mode presentation once WS4 has dialogs.
+2. Finish WS1: context menu and action mode presentation once WS4 has
+   dialogs.
 3. In parallel as agents are available: WS10 (Switch backend), WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
 4. WS8 once WS10 can present.

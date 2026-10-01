@@ -36,7 +36,13 @@ public final class InputMethodManager {
         TextView editor = (TextView) sServedView;
         EditorInfo info = new EditorInfo();
         InputConnection ic = editor.onCreateInputConnection(info);
-        if (ic != null) ic.commitText(text, 1);
+        if (ic == null) return;
+        // The platform keyboard (Switch swkbd) edits the whole field: replace it.
+        CharSequence current = editor.getText();
+        ic.beginBatchEdit();
+        ic.setSelection(0, current != null ? current.length() : 0);
+        ic.commitText(text, 1);
+        ic.endBatchEdit();
     }
 
     public boolean isActive(View view) { return view != null && view == sServedView; }

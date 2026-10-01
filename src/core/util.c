@@ -21,6 +21,22 @@ static pthread_mutex_t g_log_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void sa_log_set_file(FILE *f) { g_log_file = f; }
 
+/* The last lines logged at INFO or above, for on-device error screens. */
+#define RECENT_LINES 48
+static char g_recent[RECENT_LINES][200];
+static int g_recent_next, g_recent_count;
+
+int sa_log_recent(const char **lines, int max) {
+    pthread_mutex_lock(&g_log_lock);
+    int n = g_recent_count < max ? g_recent_count : max;
+    for (int i = 0; i < n; i++) {
+        int idx = (g_recent_next - n + i + RECENT_LINES) % RECENT_LINES;
+        lines[i] = g_recent[idx];
+    }
+    pthread_mutex_unlock(&g_log_lock);
+    return n;
+}
+
 void sa_vlog(int prio, const char *tag, const char *fmt, va_list ap) {
     static const char prio_chars[] = "??VDIWEF";
     if (prio < sa_log_level) return;
@@ -29,9 +45,15 @@ void sa_vlog(int prio, const char *tag, const char *fmt, va_list ap) {
     char pc = (prio >= 0 && prio < 8) ? prio_chars[prio] : '?';
     pthread_mutex_lock(&g_log_lock);
     fprintf(stderr, "%c/%s: %s\n", pc, tag ? tag : "", buf);
+    if (prio >= SA_LOG_INFO) {
+        snprintf(g_recent[g_recent_next], sizeof g_recent[0], "%c/%.24s: %.160s", pc, tag ? tag : "", buf);
+        g_recent_next = (g_recent_next + 1) % RECENT_LINES;
+        if (g_recent_count < RECENT_LINES) g_recent_count++;
+    }
     if (g_log_file) {
         fprintf(g_log_file, "%c/%s: %s\n", pc, tag ? tag : "", buf);
-        fflush(g_log_file);
+        /* Flushing every line is slow on an SD card; warnings and errors are flushed at once. */
+        if (prio >= SA_LOG_WARN) fflush(g_log_file);
     }
     pthread_mutex_unlock(&g_log_lock);
 }

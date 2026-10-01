@@ -28,8 +28,34 @@ and retry, `docker pull devkitpro/devkita64`, or the official installer.
 make                    # host binary + framework.dex
 make java               # only the Java side
 make clean
-make -f Makefile.switch # (todo, WS10) switchapk.nro
+make -f Makefile.switch       # build/switch/switchapk.nro (run `make` first for framework.dex)
+make -f Makefile.switch dist  # build/switch/switchapk-sd.zip: NRO + sample APKs in the SD layout
 ```
+
+## Run on a Switch
+
+Needs a Switch running homebrew (Atmosphere + hbmenu).
+
+1. Unzip `build/switch/switchapk-sd.zip` at the root of the SD card. It
+   creates `switch/switchapk/switchapk.nro` and `switch/switchapk/apks/`
+   with the sample apps. Put other APKs in that `apks` folder.
+2. Start hbmenu in full-memory mode (hold R while starting a game, not
+   from the Album applet: applet mode has far less memory) and open
+   switchapk.
+3. Pick an APK with the D-pad, stick or touch and press A. The app ends
+   with B (back) on its first screen, or HOME and close. switchapk then
+   returns to its list; + exits.
+
+Controls in apps: touch in handheld mode; D-pad or left stick moves
+focus; A clicks; B is back; + opens the options menu.
+
+When an app fails, an error screen shows the last log lines. The full
+log is `sdmc:/switch/switchapk/log.txt`. For live logs, start it with
+nxlink: `$DEVKITPRO/tools/bin/nxlink -s -a <switch-ip> build/switch/switchapk.nro sdmc:/switch/switchapk/apks/hello.apk`
+(the APK path argument skips the launcher).
+
+Only APKs whose code is all Java/Kotlin run for now: apps with native
+`.so` libraries (most games) need WS9.
 
 ## Run
 
@@ -112,6 +138,11 @@ queued input was consumed and the app presented nothing for the quiet time.
   `build/java` on the host). If none is readable the toolchain path is
   still passed and the framework resource table stays empty. App data is
   under `--data`.
-- Switch (WS10): romfs `romfs:/framework.dex`, `romfs:/framework-res.apk`,
-  `romfs:/fonts/`; APKs in `sdmc:/switch/switchapk/apks/`; data under
-  `sdmc:/switch/switchapk/data/`.
+- Switch: romfs `romfs:/framework.dex`, `romfs:/framework-res.apk`,
+  optional `romfs:/fonts/` (else the system shared fonts); APKs in
+  `sdmc:/switch/switchapk/apks/`; data under `sdmc:/switch/switchapk/data/`;
+  log in `sdmc:/switch/switchapk/log.txt`.
+- Checking the VM on AArch64 without a Switch: build the host binary with
+  `make CC=aarch64-linux-gnu-gcc BUILD=build/host-a64 build/host-a64/switchapk-host`
+  and run it under `qemu-aarch64` (`QEMU_LD_PREFIX=/usr/aarch64-linux-gnu`,
+  needs `zlib1g-dev:arm64`).

@@ -17,6 +17,7 @@ Layout produced:
 
 Environment variables for the Switch build: DEVKITPRO=build/toolchains/devkitpro/opt/devkitpro
 """
+import http.client
 import io
 import json
 import os
@@ -57,6 +58,39 @@ def fetch(url, headers=None, attempts=7):
             log("HTTP %d, retrying in %ds" % (e.code, delay))
             time.sleep(delay)
             delay = min(delay * 2, 120)
+
+
+def fetch_to_file(url, path, headers=None, attempts=12):
+    """Streams a large download to path, resuming with Range after a cut connection."""
+    delay = 5
+    for i in range(attempts):
+        have = os.path.getsize(path) if os.path.exists(path) else 0
+        h = dict(headers or {})
+        if have:
+            h["Range"] = "bytes=%d-" % have
+        req = urllib.request.Request(url, headers=h)
+        try:
+            with urllib.request.urlopen(req) as r:
+                mode = "ab" if have and r.status == 206 else "wb"
+                with open(path, mode) as f:
+                    while True:
+                        chunk = r.read(1 << 20)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+            return
+        except urllib.error.HTTPError as e:
+            if e.code == 416:  # already complete
+                return
+            if e.code not in (429, 500, 502, 503, 504) or i == attempts - 1:
+                raise
+            log("HTTP %d, retrying in %ds" % (e.code, delay))
+        except (http.client.IncompleteRead, ConnectionError, TimeoutError, urllib.error.URLError) as e:
+            if i == attempts - 1:
+                raise
+            log("download cut (%s), resuming" % type(e).__name__)
+        time.sleep(delay)
+        delay = min(delay * 2, 120)
 
 
 def fetch_sdk():
@@ -125,8 +159,11 @@ def fetch_devkitpro():
     for i, layer in enumerate(layers):
         d = layer["digest"]
         log("layer %d/%d %s (%d MB)" % (i + 1, len(layers), d[:19], layer.get("size", 0) >> 20))
-        blob = fetch("%s/blobs/%s" % (base, d), {"Authorization": "Bearer " + tok})
-        with tarfile.open(fileobj=io.BytesIO(blob), mode="r:*") as tf:
+        part = os.path.join(dst, "layer.part")
+        if os.path.exists(part):
+            os.remove(part)
+        fetch_to_file("%s/blobs/%s" % (base, d), part, {"Authorization": "Bearer " + tok})
+        with tarfile.open(part, mode="r:*") as tf:
             members = []
             for m in tf.getmembers():
                 name = m.name.lstrip("./")
@@ -137,6 +174,7 @@ def fetch_devkitpro():
                     continue
                 members.append(m)
             tf.extractall(dst, members=members)
+        os.remove(part)
     open(marker, "w").close()
     log("devkitPro ready: export DEVKITPRO=%s" % os.path.join(dst, "opt", "devkitpro"))
 

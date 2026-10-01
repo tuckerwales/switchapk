@@ -7,6 +7,9 @@
  * so every Canvas transform works.
  */
 #include "gfx.h"
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
 
 #include <math.h>
 #include <pthread.h>
@@ -111,6 +114,28 @@ bool gfx_font_init_default(void) {
         NULL,
     };
     GfxFont *r = load_first(regular);
+#ifdef __SWITCH__
+    if (!r) {
+        /* The system's shared fonts (pl service): Standard for Latin, then CJK and symbols. */
+        PlFontData fd;
+        if (R_SUCCEEDED(plGetSharedFontByType(&fd, PlSharedFontType_Standard))) {
+            r = gfx_font_load((const uint8_t *)fd.address, fd.size, false);
+            static const PlSharedFontType extra[] = {
+                PlSharedFontType_ChineseSimplified, PlSharedFontType_ExtChineseSimplified,
+                PlSharedFontType_ChineseTraditional, PlSharedFontType_KO, PlSharedFontType_NintendoExt,
+            };
+            for (size_t i = 0; r && i < sizeof extra / sizeof extra[0]; i++) {
+                if (R_SUCCEEDED(plGetSharedFontByType(&fd, extra[i]))) {
+                    gfx_font_add_fallback(gfx_font_load((const uint8_t *)fd.address, fd.size, false));
+                }
+            }
+            if (r) {
+                gfx_font_register_default(r, load_first(bold));
+                return true;
+            }
+        }
+    }
+#endif
     if (!r) {
         LOGW("no system font found; text will not render");
         return false;

@@ -190,6 +190,17 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ### M3
 - [ ] WS10 Switch platform, NRO, launcher
+  - [x] Makefile.switch (devkitA64, romfs with framework.dex and
+    framework-res.apk), `dist` SD zip with the sample APKs
+  - [x] platform_switch.c: framebuffer present, pad/stick/touch input,
+    applet focus/exit, swkbd, shared fonts
+  - [x] main_switch.c: APK launcher, VM thread, error screen, log file,
+    nxlink, relaunch to the list
+  - [x] VM and samples verified on AArch64 (qemu-user host build)
+  - [ ] first boot on hardware (untested: no device in the dev
+    environment)
+  - [ ] audio (audren/audout), rumble, 1080p docked, APK labels and icons
+    in the launcher
 
 ### M4
 - [ ] WS5 animation
@@ -216,7 +227,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    The remaining WS3 widgets are open. WS5 (animation) can start in
    parallel.
 2. Finish WS1: floating action modes (text selection toolbar).
-3. In parallel as agents are available: WS10 (Switch backend), WS13
+3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
+   launcher labels/icons. In parallel as agents are available: WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
 4. WS8 once WS10 can present.
 
@@ -249,6 +261,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-01 (WS10): Switch backend. `platform_switch_pump()` and
+  `platform_switch_buttons_down()` are Switch-only extras used by
+  main_switch.c. PEV_TEXT results replace the whole edited field
+  (InputMethodManager selects all, then commits), matching swkbd which
+  returns the full text; null means cancelled. `sa_log_recent()` returns
+  the last INFO+ log lines; the log file is flushed only on WARN+.
 - 2026-10-01 (WS3/WS4): `PhoneWindow` picks its decor like AOSP
   generateLayout: the theme's windowActionBarFullscreenDecorLayout
   (screen_toolbar on Material) for FEATURE_ACTION_BAR, the

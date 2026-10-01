@@ -74,4 +74,9 @@ what is left in flight.
   DateUtils/DateFormat/Formatter. autoLink runs Linkify from setText.
   Checked in `tests/apps/text` without moving the screenshot bands.
   Copy and paste still need a clipboard service.
+- WS3 started. ImageView (scale types, adjustViewBounds), Button,
+  ImageButton, CompoundButton, CheckBox, RadioButton, RadioGroup,
+  ToggleButton, Switch and Space. A tap toggles the compound controls.
+  tests/apps/widgets checks measure, exclusive radios and screenshots.
+  Lists, scrolling, progress and popups are still open.
 

@@ -136,6 +136,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     HorizontalScrollView; tests/apps/scroll
   - [x] Adapter, ListAdapter, SpinnerAdapter, BaseAdapter, ArrayAdapter,
     Filter, AdapterView, AbsListView, ListView; tests/apps/list
+  - [x] RelativeLayout (landed from WS4, which needed it); tests/apps/relative
   - [ ] progress, popups, Toolbar and the rest
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and

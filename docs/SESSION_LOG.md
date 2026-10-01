@@ -119,3 +119,9 @@ what is left in flight.
   selector on the selected row when out of touch mode.
   tests/apps/appmodel drives an alert and a choice list with the D-pad.
   ProgressDialog waits for WS3's ProgressBar.
+- RelativeLayout (WS3 scope, written from WS4 because the framework menu
+  item layouts need it): AOSP port with the dependency graph, start/end
+  rule resolution and the API 18+ measure rules. ActivityThread now reads
+  `uses-sdk`, so ApplicationInfo.minSdkVersion/targetSdkVersion are real
+  (they were 0, which selected legacy code paths). tests/apps/relative
+  checks 13 positions and a screenshot.

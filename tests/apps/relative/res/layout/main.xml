@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="10dp">
+    <View android:id="@+id/header" android:layout_width="match_parent" android:layout_height="40dp"
+        android:layout_alignParentTop="true" android:background="#FF1565C0" />
+    <View android:id="@+id/left" android:layout_width="100dp" android:layout_height="60dp"
+        android:layout_below="@id/header" android:layout_marginTop="10dp" android:background="#FFE53935" />
+    <View android:id="@+id/right" android:layout_width="0dp" android:layout_height="60dp"
+        android:layout_toEndOf="@id/left" android:layout_alignTop="@id/left" android:layout_alignParentEnd="true"
+        android:layout_marginStart="10dp" android:background="#FF43A047" />
+    <View android:id="@+id/center" android:layout_width="80dp" android:layout_height="80dp"
+        android:layout_centerInParent="true" android:background="#FFFFB300" />
+    <View android:id="@+id/footer" android:layout_width="match_parent" android:layout_height="30dp"
+        android:layout_alignParentBottom="true" android:background="#FF6D4C41" />
+    <View android:id="@+id/abovefooter" android:layout_width="50dp" android:layout_height="20dp"
+        android:layout_above="@id/footer" android:layout_alignParentRight="true" android:background="#FF8E24AA" />
+    <TextView android:id="@+id/status" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_below="@id/left" android:layout_centerHorizontal="true" android:text="checks" />
+</RelativeLayout>

@@ -245,6 +245,8 @@ public final class ActivityThread {
                     if ("manifest".equals(name)) {
                         sPackageName = parser.getAttributeValue(null, "package");
                         if (sPackageName == null) sPackageName = parser.getAttributeValue("", "package");
+                    } else if ("uses-sdk".equals(name)) {
+                        readUsesSdk(parser);
                     } else if ("application".equals(name)) {
                         readApplication(parser);
                     } else if ("activity".equals(name) || "activity-alias".equals(name) || "receiver".equals(name)) {
@@ -304,6 +306,7 @@ public final class ActivityThread {
             try { parser.close(); } catch (Exception ignored) {}
         }
         if (sPackageName == null || sPackageName.isEmpty()) throw new RuntimeException("Manifest has no package");
+        if (sAppInfo.targetSdkVersion == 0) sAppInfo.targetSdkVersion = Math.max(1, sAppInfo.minSdkVersion);
         sAppInfo.packageName = sPackageName;
         sAppInfo.processName = sPackageName;
         sAppInfo.className = sAppClass;
@@ -316,6 +319,23 @@ public final class ActivityThread {
         sAppInfo.enabled = true;
         sAppInfo.flags |= ApplicationInfo.FLAG_HAS_CODE;
         stamp(sAppInfo);
+    }
+
+    /** android:minSdkVersion / targetSdkVersion; a codename counts as the newest level, as on Android. */
+    private static void readUsesSdk(XmlResourceParser parser) {
+        int min = sdkLevel(attrString(parser, android.R.attr.minSdkVersion, "minSdkVersion"), 1);
+        int target = sdkLevel(attrString(parser, android.R.attr.targetSdkVersion, "targetSdkVersion"), min);
+        sAppInfo.minSdkVersion = min;
+        sAppInfo.targetSdkVersion = target;
+    }
+
+    private static int sdkLevel(String value, int def) {
+        if (value == null || value.isEmpty()) return def;
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return 10000;
+        }
     }
 
     private static void readApplication(XmlResourceParser parser) {

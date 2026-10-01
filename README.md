@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="switchapk — Run Android Apps on Nintendo Switch" width="420">
+  <img src="docs/assets/logo.jpg" alt="switchapk — Run Android Apps on Nintendo Switch" width="420">
 </p>
 
 # switchapk

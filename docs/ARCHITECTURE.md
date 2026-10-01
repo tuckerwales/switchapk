@@ -690,10 +690,37 @@ posts PEV_RESIZE, to simulate a dock switch), `screenshot file.png`,
 consumer thread that discards samples in real time. When the script ends
 it posts PEV_QUIT.
 
-Switch implementation (todo): libnx framebuffer (double buffered, RGBA8888,
-1280x720 or 1920x1080), `padUpdate`/`hidGetTouchScreenStates`, applet
-focus/operation mode hooks, `appletMainLoop`, swkbd, audren, HD rumble,
-`plGetSharedFontByType` for fonts, romfs for bundled files.
+Switch implementation (`platform_switch.c`, `main_switch.c`):
+- Threads: the main thread runs the launcher, then pumps
+  `platform_switch_pump()` every 8 ms (applet loop, pad, touch, swkbd)
+  while the APK runs on a 16 MB-stack VM thread moved to core 1. The
+  event queue is the headless one (mutex + condvar).
+- Display: libnx linear framebuffer, 1280x720 RGBA8888, double buffered;
+  `platform_present` converts ARGB to RGBA and blocks for a free buffer
+  (vsync). Docked output is upscaled by the system, so apps always see
+  1280x720 at 240 dpi. Touch (handheld) is relative to the letterboxed
+  window, as on the host.
+- Input: buttons map to Android gamepad key codes (see 6.x), the D-pad
+  and the left stick (as a D-pad, with key repeat) to DPAD_*; sticks and
+  triggers also go out as PEV_JOYSTICK axes.
+- Applet: focus changes post PEV_FOCUS, exit requests PEV_QUIT;
+  operation mode updates `PlatformDisplay.touch`.
+- Text: `platform_request_text` queues a request the main thread shows
+  with swkbd; the result (or null on cancel) comes back as PEV_TEXT and
+  replaces the whole field (InputMethodManager selects all, then commits).
+- Fonts: `romfs:/fonts/Roboto-*.ttf` if bundled, else the system shared
+  fonts (`plGetSharedFontByType`: Standard, then CJK, Korean and Nintendo
+  extension fonts as fallbacks).
+- Files: `romfs:/framework.dex`, `romfs:/framework-res.apk`; APKs in
+  `sdmc:/switch/switchapk/apks`, app data in `sdmc:/switch/switchapk/data`,
+  log in `sdmc:/switch/switchapk/log.txt` (flushed on warnings and errors).
+- Launcher: a C screen listing the APKs (D-pad, stick or touch, A runs,
+  + exits); `argv[1]` ending in .apk skips it (nxlink). When the app ends
+  the NRO reloads itself through hbloader (`envSetNextLoad`). A non-zero
+  exit shows the last 48 INFO+ log lines (`sa_log_recent`) on an error
+  screen.
+- Not yet: audio (samples are drained like the headless backend), rumble,
+  native .so loading, 1080p docked rendering.
 
 ## 8. Testing strategy
 

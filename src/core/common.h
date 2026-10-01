@@ -29,6 +29,8 @@ extern int sa_log_level;
 void sa_log(int prio, const char *tag, const char *fmt, ...) SA_PRINTF(3, 4);
 void sa_vlog(int prio, const char *tag, const char *fmt, va_list ap);
 void sa_log_set_file(FILE *f);
+/* Fills lines with up to max of the most recent INFO+ log lines, oldest first; returns the count. */
+int sa_log_recent(const char **lines, int max);
 SA_NORETURN void sa_fatal(const char *fmt, ...) SA_PRINTF(1, 2);
 
 #define LOGV(...) sa_log(SA_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)

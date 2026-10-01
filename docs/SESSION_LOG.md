@@ -249,3 +249,15 @@ what is left in flight.
   ported. Fixed a list bug: ACTION_UP started a fling and then reset the
   touch mode, so flings never ran and the next tap only "stopped" the
   dead scroller. tests/apps/grid covers all of it.
+- WS10 Switch backend (claimed by the WS4 session). Toolchain fetch now
+  streams layers to disk with Range resume (a 380 MB layer kept getting
+  cut). Makefile.switch builds build/switch/switchapk.nro with
+  framework.dex and framework-res.apk in romfs; `dist` makes an SD zip
+  with the sample APKs. platform_switch.c (framebuffer, pad, stick as
+  D-pad, touch, applet hooks, swkbd on the main thread) and
+  main_switch.c (launcher, VM thread on core 1, error screen with recent
+  log lines, log file, nxlink, relaunch through hbloader). Fonts fall
+  back to the system shared fonts. The whole tree compiled for the
+  Switch with one fix. The VM was never run on AArch64 before: the host
+  build cross-compiled for aarch64 passes VmTest and every sample under
+  qemu-user. Not yet booted on hardware (no device here).

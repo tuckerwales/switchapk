@@ -53,6 +53,8 @@ final class WidgetChecks {
         compound(ctx);
         editor(ctx);
         markup(ctx);
+        links(ctx);
+        meta();
     }
 
     private static TextView tv(Context ctx) {
@@ -281,5 +283,37 @@ final class WidgetChecks {
                 android.text.format.Formatter.formatFileSize(ctx, 1024));
         SelfTest.check("ip", "1.2.3.4".equals(android.text.format.Formatter.formatIpAddress(0x01020304)),
                 android.text.format.Formatter.formatIpAddress(0x01020304));
+    }
+
+    private static void links(Context ctx) {
+        TextView v = tv(ctx);
+        SpannableString s = new SpannableString("one two three");
+        final int[] clicked = new int[1];
+        s.setSpan(new android.text.style.ClickableSpan() {
+            public void onClick(View w) { clicked[0]++; }
+        }, 0, 3, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        s.setSpan(new URLSpan("http://example.com"), 8, 13, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        v.setText(s);
+        v.setMovementMethod(LinkMovementMethod.getInstance());
+        measure(v, 400, View.MeasureSpec.EXACTLY);
+        CharSequence t = v.getText();
+        KeyEvent down = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN);
+        boolean moved = v.getMovementMethod().onKeyDown(v, (android.text.Spannable) t, KeyEvent.KEYCODE_DPAD_DOWN, down);
+        boolean first = android.text.Selection.getSelectionStart(t) == 0 && android.text.Selection.getSelectionEnd(t) == 3;
+        KeyEvent center = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER);
+        v.getMovementMethod().onKeyDown(v, (android.text.Spannable) t, KeyEvent.KEYCODE_DPAD_CENTER, center);
+        SelfTest.check("linkDpadSelect", moved && first, android.text.Selection.getSelectionStart(t));
+        SelfTest.check("linkDpadClick", clicked[0] == 1, clicked[0]);
+        v.getMovementMethod().onKeyDown(v, (android.text.Spannable) t, KeyEvent.KEYCODE_DPAD_DOWN, down);
+        SelfTest.check("linkDpadNext", android.text.Selection.getSelectionStart(t) == 8, android.text.Selection.getSelectionStart(t));
+    }
+
+    private static void meta() {
+        SpannableStringBuilder b = new SpannableStringBuilder("x");
+        android.text.method.MetaKeyKeyListener.resetMetaState(b);
+        android.text.method.TextKeyListener l = TextKeyListener.getInstance();
+        l.onKeyDown(null, b, KeyEvent.KEYCODE_ALT_LEFT, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ALT_LEFT));
+        int alt = android.text.method.MetaKeyKeyListener.getMetaState(b, android.text.method.MetaKeyKeyListener.META_ALT_ON);
+        SelfTest.check("metaAltPressed", alt == 1, alt);
     }
 }

@@ -254,6 +254,41 @@ public class BaseInputConnection implements InputConnection {
         endBatchEdit();
     }
 
+    public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
+        if (mTargetView instanceof TextView) {
+            ExtractedText et = new ExtractedText();
+            if (((TextView) mTargetView).extractText(request, et)) return et;
+        }
+        return null;
+    }
+
+    public SurroundingText getSurroundingText(int beforeLength, int afterLength, int flags) {
+        return InputConnection.super.getSurroundingText(beforeLength, afterLength, flags);
+    }
+
+    public TextSnapshot takeSnapshot() {
+        Editable content = getEditable();
+        if (content == null) return null;
+        int selStart = Selection.getSelectionStart(content);
+        int selEnd = Selection.getSelectionEnd(content);
+        if (selStart < 0 || selEnd < 0) return null;
+        SurroundingText surrounding = new SurroundingText(content.toString(), Math.min(selStart, selEnd),
+                Math.max(selStart, selEnd), 0);
+        return new TextSnapshot(surrounding, getComposingSpanStart(content), getComposingSpanEnd(content),
+                getCursorCapsMode(TextUtils.CAP_MODE_CHARACTERS | TextUtils.CAP_MODE_WORDS | TextUtils.CAP_MODE_SENTENCES));
+    }
+
+    public boolean commitCompletion(CompletionInfo text) { return false; }
+
+    public boolean commitCorrection(CorrectionInfo correctionInfo) { return false; }
+
+    public boolean commitContent(InputContentInfo inputContentInfo, int flags, Bundle opts) { return false; }
+
+    public boolean replaceText(int start, int end, CharSequence text, int newCursorPosition,
+            TextAttribute textAttribute) {
+        return InputConnection.super.replaceText(start, end, text, newCursorPosition, textAttribute);
+    }
+
     private static int selMin(Editable content) {
         int start = Selection.getSelectionStart(content);
         int end = Selection.getSelectionEnd(content);

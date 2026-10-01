@@ -5,8 +5,8 @@ import android.os.Handler;
 import android.view.KeyEvent;
 
 /**
- * Channel between an input method and an editor. Methods whose parameter types
- * are not implemented yet (CompletionInfo, ExtractedText, ...) are TODO(WS2).
+ * Channel between an input method and an editor. The handwriting gesture and
+ * text bounds methods are omitted (their parameter types do not exist here).
  */
 public interface InputConnection {
     int CURSOR_UPDATE_FILTER_CHARACTER_BOUNDS = 8;
@@ -29,13 +29,38 @@ public interface InputConnection {
     CharSequence getTextBeforeCursor(int n, int flags);
     CharSequence getTextAfterCursor(int n, int flags);
     CharSequence getSelectedText(int flags);
+
+    default SurroundingText getSurroundingText(int beforeLength, int afterLength, int flags) {
+        CharSequence textBeforeCursor = getTextBeforeCursor(beforeLength, flags);
+        if (textBeforeCursor == null) return null;
+        CharSequence textAfterCursor = getTextAfterCursor(afterLength, flags);
+        if (textAfterCursor == null) return null;
+        CharSequence selectedText = getSelectedText(flags);
+        if (selectedText == null) selectedText = "";
+        CharSequence surroundingText = android.text.TextUtils.concat(textBeforeCursor, selectedText, textAfterCursor);
+        return new SurroundingText(surroundingText, textBeforeCursor.length(),
+                textBeforeCursor.length() + selectedText.length(), -1);
+    }
+
     int getCursorCapsMode(int reqModes);
+    ExtractedText getExtractedText(ExtractedTextRequest request, int flags);
     boolean deleteSurroundingText(int beforeLength, int afterLength);
     boolean deleteSurroundingTextInCodePoints(int beforeLength, int afterLength);
     boolean setComposingText(CharSequence text, int newCursorPosition);
+    default boolean setComposingText(CharSequence text, int newCursorPosition, TextAttribute textAttribute) {
+        return setComposingText(text, newCursorPosition);
+    }
     boolean setComposingRegion(int start, int end);
+    default boolean setComposingRegion(int start, int end, TextAttribute textAttribute) {
+        return setComposingRegion(start, end);
+    }
     boolean finishComposingText();
     boolean commitText(CharSequence text, int newCursorPosition);
+    default boolean commitText(CharSequence text, int newCursorPosition, TextAttribute textAttribute) {
+        return commitText(text, newCursorPosition);
+    }
+    boolean commitCompletion(CompletionInfo text);
+    boolean commitCorrection(CorrectionInfo correctionInfo);
     boolean setSelection(int start, int end);
     boolean performEditorAction(int editorAction);
     boolean performContextMenuAction(int id);
@@ -50,5 +75,16 @@ public interface InputConnection {
     default boolean requestCursorUpdates(int cursorUpdateMode, int cursorUpdateFilter) { return false; }
     Handler getHandler();
     void closeConnection();
+    boolean commitContent(InputContentInfo inputContentInfo, int flags, Bundle opts);
     default boolean setImeConsumesInput(boolean imeConsumesInput) { return false; }
+    default TextSnapshot takeSnapshot() { return null; }
+    default boolean replaceText(int start, int end, CharSequence text, int newCursorPosition,
+            TextAttribute textAttribute) {
+        beginBatchEdit();
+        finishComposingText();
+        setSelection(start, end);
+        commitText(text, newCursorPosition, textAttribute);
+        endBatchEdit();
+        return true;
+    }
 }

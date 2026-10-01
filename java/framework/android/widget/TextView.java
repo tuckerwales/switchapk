@@ -27,11 +27,11 @@ import android.text.TextDirectionHeuristics;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.TextWatcher;
-import android.text.util.Linkify;
 import android.text.method.AllCapsTransformationMethod;
 import android.text.method.DigitsKeyListener;
 import android.text.method.KeyListener;
 import android.text.method.LinkMovementMethod;
+import android.text.method.MetaKeyKeyListener;
 import android.text.method.MovementMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.text.method.SingleLineTransformationMethod;
@@ -41,6 +41,7 @@ import android.text.style.ClickableSpan;
 import android.text.style.URLSpan;
 import android.text.style.UpdateAppearance;
 import android.text.style.UpdateLayout;
+import android.text.util.Linkify;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -49,7 +50,11 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.inputmethod.BaseInputConnection;
+import android.view.inputmethod.CompletionInfo;
+import android.view.inputmethod.CorrectionInfo;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 import java.util.ArrayList;
@@ -1034,6 +1039,8 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
 
     public final boolean isHorizontallyScrollable() { return mHorizontallyScrolling; }
 
+    public final boolean getHorizontallyScrolling() { return mHorizontallyScrolling; }
+
     public void setAllCaps(boolean allCaps) {
         mAllCaps = allCaps;
         if (allCaps) setTransformationMethod(new AllCapsTransformationMethod(getContext()));
@@ -1351,6 +1358,51 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         if (!(mText instanceof Editable)) return null;
         return new EditableInputConnection(this);
     }
+
+    public boolean extractText(ExtractedTextRequest request, ExtractedText outText) {
+        if (mText == null || outText == null) return false;
+        outText.text = (request != null && (request.flags & InputConnection.GET_TEXT_WITH_STYLES) != 0)
+                ? new android.text.SpannableString(mText) : mText.toString();
+        outText.startOffset = 0;
+        outText.partialStartOffset = -1;
+        outText.partialEndOffset = -1;
+        outText.selectionStart = getSelectionStart();
+        outText.selectionEnd = getSelectionEnd();
+        outText.flags = 0;
+        if (MetaKeyKeyListener.getMetaState(mText, MetaKeyKeyListener.META_SELECTING) != 0) {
+            outText.flags |= ExtractedText.FLAG_SELECTING;
+        }
+        if (mSingleLine) outText.flags |= ExtractedText.FLAG_SINGLE_LINE;
+        outText.hint = mHint;
+        return true;
+    }
+
+    public void setExtractedText(ExtractedText text) {
+        if (text == null || text.text == null) return;
+        if (!(mText instanceof Editable)) return;
+        Editable content = (Editable) mText;
+        if (text.partialStartOffset < 0) {
+            content.replace(0, content.length(), text.text);
+        } else {
+            final int n = content.length();
+            int start = Math.min(Math.max(text.partialStartOffset, 0), n);
+            int end = Math.min(Math.max(text.partialEndOffset, start), n);
+            content.replace(start, end, text.text);
+        }
+        int len = content.length();
+        int selStart = Math.min(Math.max(text.selectionStart, 0), len);
+        int selEnd = Math.min(Math.max(text.selectionEnd, 0), len);
+        android.text.Selection.setSelection(content, selStart, selEnd);
+        if ((text.flags & ExtractedText.FLAG_SELECTING) != 0) {
+            MetaKeyKeyListener.startSelecting(this, content);
+        } else {
+            MetaKeyKeyListener.stopSelecting(this, content);
+        }
+    }
+
+    public void onCommitCompletion(CompletionInfo text) {}
+
+    public void onCommitCorrection(CorrectionInfo info) {}
 
     public boolean isInputMethodTarget() { return onCheckIsTextEditor() && isFocused(); }
 

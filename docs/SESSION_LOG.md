@@ -93,3 +93,17 @@ what is left in flight.
   stackFromBottom.
   Progress, popups and Toolbar are still open.
 
+- WS2 follow-up (merged with the parallel ws2/ws3 work). MetaKeyKeyListener,
+  BaseMovementMethod, ArrowKeyMovementMethod, ScrollingMovementMethod and
+  LinkMovementMethod are now straight AOSP ports: meta states report
+  pressed (1) or locked (2) as on Android, META_SELECTING exists (hidden
+  KeyEvent constant), modifiers pick word/line/paragraph moves, and
+  LinkMovementMethod moves between links with the D-pad and clicks the
+  selected one with A/center. Added Touch, Dialer/Date/Time/DateTime key
+  listeners, HideReturnsTransformationMethod, TransformationMethod2, and
+  the inputmethod value types (ExtractedText, ExtractedTextRequest,
+  CompletionInfo, CorrectionInfo, SurroundingText, TextAttribute,
+  InputContentInfo, TextSnapshot) with the matching InputConnection,
+  BaseInputConnection and TextView methods (extractText, setExtractedText,
+  onCommitCompletion, getHorizontallyScrolling). tests/apps/text checks
+  D-pad link selection and click and the alt meta state.

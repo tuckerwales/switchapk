@@ -361,6 +361,8 @@ public class KeyEvent extends InputEvent implements Parcelable {
     public static final int META_SHIFT_ON = 1;
     public static final int META_SHIFT_RIGHT_ON = 128;
     public static final int META_SYM_ON = 4;
+    /** Hidden AOSP constant used by MetaKeyKeyListener while selecting. */
+    public static final int META_SELECTING = 0x800;
 
     static final int META_MODIFIER_MASK = META_SHIFT_ON | META_SHIFT_LEFT_ON | META_SHIFT_RIGHT_ON | META_ALT_ON
             | META_ALT_LEFT_ON | META_ALT_RIGHT_ON | META_CTRL_ON | META_CTRL_LEFT_ON | META_CTRL_RIGHT_ON

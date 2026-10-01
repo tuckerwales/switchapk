@@ -87,7 +87,7 @@ Working:
   checks screenshots and in-process logic.
 
 Not started: most widgets (WS3), the rest of the app model (WS4: action
-bar decor, Notification.Builder and channels), animation (WS5) and the other
+bar decor, ProgressDialog), animation (WS5) and the other
 post-WS0 packages.
 
 ## Checklist
@@ -157,8 +157,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     (registered, manifest, ordered, sticky, goAsync), PendingIntent,
     IntentSender, AlarmManager, createPendingResult, leak cleanup on
     destroy; tests/apps/services (21 steps checked against AOSP behaviour)
-  - [ ] Notification.Builder, styles, actions and NotificationChannel
-    (NotificationManager only logs posted notifications for now)
+  - [x] Notification.Builder (AOSP extras layout), Action with
+    RemoteInput, BigText/BigPicture/Inbox/Messaging/Media styles,
+    BubbleMetadata, Person, recoverBuilder, NotificationChannel and groups,
+    StatusBarNotification; NotificationManager enforces channels for
+    target O+ and logs what is posted (no RemoteViews content yet)
 - [ ] WS13 app test runner with screenshot goldens
 
 ### M3

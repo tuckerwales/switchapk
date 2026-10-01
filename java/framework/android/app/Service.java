@@ -76,6 +76,7 @@ public abstract class Service extends ContextWrapper implements ComponentCallbac
         if (id == 0) throw new IllegalArgumentException("Notification id must not be 0");
         mForegroundId = id;
         mForegroundServiceType = foregroundServiceType;
+        notification.flags |= Notification.FLAG_FOREGROUND_SERVICE | Notification.FLAG_NO_CLEAR;
         NotificationManager.getInstance().notify(null, id, notification);
     }
 

@@ -167,3 +167,17 @@ what is left in flight.
   runs 21 steps, each comparing its event sequence with Android's, and
   checks a result grid plus the framework's log lines. Next for WS4:
   Notification.Builder and channels, action bar decor, ProgressDialog.
+- WS4 notifications. Notification rewritten on AOSP's data model:
+  Builder with every non-RemoteViews setter, Action (+Builder, RemoteInput,
+  data-only inputs), BigText/BigPicture/Inbox/Messaging/Media/
+  DecoratedCustomView styles with restore for recoverBuilder,
+  BubbleMetadata; Person, RemoteInput (results via ClipData), LocusId,
+  NotificationChannel, NotificationChannelGroup, StatusBarNotification and
+  NotificationManager.Policy. NotificationManager enforces channels for
+  target O+, blocks IMPORTANCE_NONE, follows the channel update rules and
+  tracks active notifications. Intent.fillIn now carries ClipData.
+  startForeground marks its notification FLAG_FOREGROUND_SERVICE. Note:
+  framework code cannot use lambdas or method references (libcore has no
+  java.lang.invoke; javac crashes), and `make` failures print "Error",
+  so grep case-insensitively. tests/apps/services gains a notifications
+  step (replacing the plain notify step).

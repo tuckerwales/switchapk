@@ -3,7 +3,13 @@ package com.example.services;
 import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationChannelGroup;
 import android.app.NotificationManager;
+import android.app.Person;
+import android.app.RemoteInput;
+import android.graphics.drawable.Icon;
+import android.service.notification.StatusBarNotification;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -336,12 +342,69 @@ public class MainActivity extends Activity {
 
         step("after leak", 300, () -> sendBroadcast(ping("afterleak")), expect());
 
-        step("notify", 100, () -> {
-            Notification n = new Notification();
-            n.extras.putCharSequence(Notification.EXTRA_TITLE, "Hello");
-            n.extras.putCharSequence(Notification.EXTRA_TEXT, "World");
-            getSystemService(NotificationManager.class).notify(3, n);
-        }, expect());
+        step("notifications", 100, () -> {
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            // Target 29: a notification without a channel is dropped.
+            nm.notify(1, new Notification.Builder(this).setContentTitle("No channel").build());
+            nm.createNotificationChannelGroup(new NotificationChannelGroup("g1", "Group"));
+            NotificationChannel c1 = new NotificationChannel("c1", "Chat", NotificationManager.IMPORTANCE_DEFAULT);
+            c1.setGroup("g1");
+            nm.createNotificationChannel(c1);
+            nm.createNotificationChannel(new NotificationChannel("off", "Off", NotificationManager.IMPORTANCE_NONE));
+            PendingIntent reply = PendingIntent.getBroadcast(this, 6, explicitPing("reply"), PendingIntent.FLAG_MUTABLE);
+            Notification n = new Notification.Builder(this, "c1")
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("Hello")
+                    .setContentText("World")
+                    .setProgress(10, 3, false)
+                    .setAutoCancel(true)
+                    .setStyle(new Notification.BigTextStyle().bigText("Long text"))
+                    .addAction(new Notification.Action.Builder(
+                            Icon.createWithResource(this, android.R.drawable.ic_menu_send), "Reply", reply)
+                            .addRemoteInput(new RemoteInput.Builder("reply").setLabel("Reply").build()).build())
+                    .build();
+            T.ev("extras " + n.extras.getCharSequence(Notification.EXTRA_TITLE) + "/"
+                    + n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT) + "/"
+                    + n.extras.getInt(Notification.EXTRA_PROGRESS) + " template="
+                    + n.extras.getString(Notification.EXTRA_TEMPLATE));
+            T.ev("autocancel " + ((n.flags & Notification.FLAG_AUTO_CANCEL) != 0) + " icon "
+                    + (n.getSmallIcon() != null) + " remote input " + (n.findRemoteInputActionPair(true) != null));
+            nm.notify(3, n);
+            nm.notify(4, new Notification.Builder(this, "off").setContentTitle("Blocked").build());
+            StatusBarNotification[] active = nm.getActiveNotifications();
+            T.ev("active " + active.length + " id=" + (active.length > 0 ? active[0].getId() : -1));
+            Notification.Builder recovered = Notification.Builder.recoverBuilder(this, n);
+            T.ev("recovered " + (recovered.getStyle() instanceof Notification.BigTextStyle));
+
+            NotificationChannel up = new NotificationChannel("c1", "Chat 2", NotificationManager.IMPORTANCE_HIGH);
+            nm.createNotificationChannel(up);
+            NotificationChannel stored = nm.getNotificationChannel("c1");
+            T.ev("raise refused " + stored.getName() + " " + stored.getImportance());
+            nm.createNotificationChannel(new NotificationChannel("c1", "Chat 2", NotificationManager.IMPORTANCE_LOW));
+            T.ev("lowered " + nm.getNotificationChannel("c1").getImportance() + " group channels "
+                    + nm.getNotificationChannelGroup("g1").getChannels().size());
+
+            Notification.MessagingStyle style = new Notification.MessagingStyle(
+                    new Person.Builder().setName("Me").build())
+                    .addMessage("hi", 1, new Person.Builder().setName("Ann").build())
+                    .addMessage("yo", 2, (Person) null);
+            Notification m = new Notification.Builder(this, "c1").setStyle(style).build();
+            List<Notification.MessagingStyle.Message> msgs = Notification.MessagingStyle.Message
+                    .getMessagesFromBundleArray(m.extras.getParcelableArray(Notification.EXTRA_MESSAGES));
+            T.ev("messages " + msgs.size() + " " + msgs.get(0).getSenderPerson().getName() + ":" + msgs.get(0).getText());
+
+            Intent replyIntent = new Intent();
+            Bundle results = new Bundle();
+            results.putCharSequence("reply", "typed");
+            RemoteInput.addResultsToIntent(n.actions[0].getRemoteInputs(), replyIntent, results);
+            T.ev("reply " + RemoteInput.getResultsFromIntent(replyIntent).getCharSequence("reply"));
+
+            nm.deleteNotificationChannel("c1");
+            T.ev("after delete " + nm.getActiveNotifications().length);
+        }, expect("extras Hello/Long text/3 template=android.app.Notification$BigTextStyle",
+                "autocancel true icon true remote input true", "active 1 id=3", "recovered true",
+                "raise refused Chat 2 3", "lowered 2 group channels 1", "messages 2 Ann:hi", "reply typed",
+                "after delete 0"));
     }
 
     @Override

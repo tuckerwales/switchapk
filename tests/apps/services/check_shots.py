@@ -11,7 +11,8 @@ the events each produced with what Android delivers, adding a green (match) or
 red cell per step; the band turns green when all passed. With the log, the
 framework's own lines are checked too: leak warnings for the receiver and
 connection LeakActivity left behind, the target-O block on implicit broadcasts
-to manifest receivers, and the logged notification.
+to manifest receivers, the logged notification, the dropped channel-less
+notification and the one a blocked channel swallowed.
 """
 import os
 import sys
@@ -27,7 +28,9 @@ LOG_LINES = [
     "has leaked IntentReceiver com.example.services.LeakActivity$1",
     "has leaked ServiceConnection com.example.services.LeakActivity$2",
     "Background execution not allowed: receiving Intent { act=com.example.services.PING",
-    "notify 3 [Hello] World",
+    "notify 3 [Hello] World channel=c1",
+    "No Channel found for pkg=com.example.services, channelId=null, id=1",
+    "blocked by channel off: 4",
     "SVC: done steps=%d failed=0" % STEPS,
 ]
 

@@ -528,6 +528,10 @@ public class Intent implements Parcelable, Cloneable {
             mComponent = other.mComponent;
             changes |= FILL_IN_COMPONENT;
         }
+        if (other.mClipData != null && (mClipData == null || (flags & FILL_IN_CLIP_DATA) != 0)) {
+            mClipData = other.mClipData;
+            changes |= FILL_IN_CLIP_DATA;
+        }
         mFlags |= other.mFlags;
         if (other.mExtras != null) {
             if (mExtras == null) mExtras = new Bundle(other.mExtras);

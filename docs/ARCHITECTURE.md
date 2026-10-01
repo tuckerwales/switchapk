@@ -525,7 +525,18 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   the caller so the result comes back. AlarmManager posts alarms on the
   main looper (RTC converted to elapsed time; a re-set PendingIntent or
   listener replaces its alarm; repeating alarms skip missed periods);
-  alarms live only as long as the process. NotificationManager logs.
+  alarms live only as long as the process.
+- Notifications: `Notification.Builder` and the styles write the AOSP
+  extras keys (EXTRA_TITLE, EXTRA_BIG_TEXT, EXTRA_TEMPLATE, EXTRA_MESSAGES
+  bundles, ...), so NotificationCompat and recoverBuilder read back what
+  they expect; RemoteViews content is not supported. NotificationManager
+  keeps channels, groups and the active list per process (as
+  NotificationManagerService does per package): target O+ notifications
+  without an existing channel are dropped with the AOSP "No Channel found"
+  error, IMPORTANCE_NONE channels block, re-creating a channel may only
+  rename it, lower its importance or set its group once. Posted
+  notifications are logged (`notify <id> [title] text channel=<id>`);
+  there is no shade on the Switch.
 - Dialogs: `android.app.Dialog` owns a floating `PhoneWindow` themed from
   `android:dialogTheme` (`alertDialogTheme` for AlertDialog) and is added
   to the window manager on `show()`. `AlertDialog` uses a port of

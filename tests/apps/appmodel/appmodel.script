@@ -1,0 +1,21 @@
+idle 500
+screenshot appmodel_alert.png
+key DPAD_RIGHT
+key DPAD_RIGHT
+idle 300
+screenshot appmodel_alert_focus.png
+key BUTTON_A
+idle 500
+screenshot appmodel_list.png
+key DPAD_DOWN
+key DPAD_DOWN
+idle 300
+screenshot appmodel_list_sel.png
+key BUTTON_A
+idle 300
+screenshot appmodel_list_picked.png
+key DPAD_DOWN
+key BUTTON_A
+idle 500
+screenshot appmodel_done.png
+quit

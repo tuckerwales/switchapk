@@ -395,7 +395,8 @@ public class ListView extends AbsListView {
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (event.isTracking() && !event.isCanceled()
-                && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
+                && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER
+                        || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
             if (mSelectedPosition >= 0 && mAdapter != null && mSelectedPosition < mAdapter.getCount()) {
                 View child = getChildAt(mSelectedPosition - mFirstPosition);
                 performItemClick(child, mSelectedPosition, mAdapter.getItemId(mSelectedPosition));
@@ -431,6 +432,16 @@ public class ListView extends AbsListView {
                 case KeyEvent.KEYCODE_MOVE_END:
                     setSelection(Math.max(0, mItemCount - 1));
                     handled = true;
+                    break;
+                case KeyEvent.KEYCODE_DPAD_CENTER:
+                case KeyEvent.KEYCODE_ENTER:
+                case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                    // AOSP keyPressed(): track the confirm key so onKeyUp clicks the selected row.
+                    if (event.hasNoModifiers() && event.getRepeatCount() == 0 && getChildCount() > 0
+                            && mSelectedPosition >= 0) {
+                        event.startTracking();
+                        handled = true;
+                    }
                     break;
                 default:
                     break;

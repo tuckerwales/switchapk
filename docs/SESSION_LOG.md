@@ -107,3 +107,15 @@ what is left in flight.
   BaseInputConnection and TextView methods (extractText, setExtractedText,
   onCommitCompletion, getHorizontallyScrolling). tests/apps/text checks
   D-pad link selection and click and the alt meta state.
+- WS4 started (dialogs). Dialog, AlertDialog and its Builder are ports of
+  AOSP on top of the real framework-res alert layouts (title, message,
+  up to three buttons, item lists, single and multi choice, custom
+  view), with AlertController and the internal AlertDialogLayout,
+  ButtonBarLayout and DialogTitle. Added CheckedTextView (choice rows),
+  the ActionBar API (abstract; no decor yet), a FragmentTransaction
+  placeholder and InternalRes for internal resource ids. Two fixes in
+  the WS3 list code for D-pad use: ListView tracks DPAD_CENTER/ENTER so a
+  confirm key clicks the selected row, and AbsListView draws the
+  selector on the selected row when out of touch mode.
+  tests/apps/appmodel drives an alert and a choice list with the D-pad.
+  ProgressDialog waits for WS3's ProgressBar.

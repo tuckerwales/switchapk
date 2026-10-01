@@ -452,6 +452,16 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   PEV_QUIT -> pause/stop/destroy all, then exit. Configuration changes
   (docked/handheld) recreate activities unless `configChanges` covers
   screenSize/orientation/density, as on Android.
+- Dialogs: `android.app.Dialog` owns a floating `PhoneWindow` themed from
+  `android:dialogTheme` (`alertDialogTheme` for AlertDialog) and is added
+  to the window manager on `show()`. `AlertDialog` uses a port of
+  `com.android.internal.app.AlertController` with the framework-res
+  layouts (`alert_dialog_material`, `select_dialog_*_material`) and the
+  internal widgets `AlertDialogLayout`, `ButtonBarLayout`, `DialogTitle`.
+- Framework resources that are not in the public `android.R`
+  (`com.android.internal.R` on AOSP) are looked up by name with
+  `com.android.internal.util.InternalRes` (`attr`, `layout`, `viewId`,
+  `style`, `attrs(...)`), which caches `Resources.getIdentifier`.
 
 ### 6.6 Storage, media, GL (design)
 - SQLite: bundled amalgamation compiled into the binary

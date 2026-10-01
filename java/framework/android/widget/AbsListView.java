@@ -625,6 +625,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
             mLayoutMode = LAYOUT_NORMAL;
             mDataChanged = false;
             positionSelectorIfNeeded();
+            positionKeyboardSelector();
             invokeOnItemScrollListener();
             checkSelectionChanged();
         } finally {
@@ -1262,6 +1263,13 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         mSelector.setBounds(left, top, right, bottom);
     }
 
+    /** AOSP keeps the selector on the selected row while navigating with keys (out of touch mode). */
+    private void positionKeyboardSelector() {
+        if (isInTouchMode() || mSelectedPosition < 0) return;
+        View sel = getChildAt(mSelectedPosition - mFirstPosition);
+        if (sel != null) positionSelector(mSelectedPosition, sel);
+    }
+
     private void positionSelectorIfNeeded() {
         if (mSelectorPosition == INVALID_POSITION) return;
         View child = getChildAt(mSelectorPosition - mFirstPosition);
@@ -1478,11 +1486,14 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
             int pos = lookForSelectablePosition(mFirstPosition, true);
             if (pos >= 0) setSelection(pos);
         }
+        positionKeyboardSelector();
+        invalidate();
     }
 
     // ---------------------------------------------------------------- listeners the class implements
 
     public void onTouchModeChanged(boolean isInTouchMode) {
+        invalidate();
         if (isInTouchMode) {
             if (mTouchMode == TOUCH_MODE_FLING && mFlingRunnable != null) mFlingRunnable.endFling();
         } else if (mSelectedPosition == INVALID_POSITION && mAdapter != null && getChildCount() > 0) {

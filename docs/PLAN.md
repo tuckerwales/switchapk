@@ -138,6 +138,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     Filter, AdapterView, AbsListView, ListView; tests/apps/list
   - [ ] progress, popups, Toolbar and the rest
 - [ ] WS4 app model
+  - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
+    multi choice, custom view) on the framework's material alert layouts,
+    CheckedTextView, ActionBar API; tests/apps/appmodel
+  - [ ] ProgressDialog (needs WS3 ProgressBar), DatePicker/TimePicker dialogs
+  - [ ] options menu (BUTTON_START) and context menu presentation
+  - [ ] lifecycle: saved state, recreation on docked/handheld switch
+  - [ ] services, broadcasts, PendingIntent, AlarmManager, legacy fragments
 - [ ] WS13 app test runner with screenshot goldens
 
 ### M3

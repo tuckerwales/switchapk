@@ -156,12 +156,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] in-process services (started, bound, IntentService), broadcasts
     (registered, manifest, ordered, sticky, goAsync), PendingIntent,
     IntentSender, AlarmManager, createPendingResult, leak cleanup on
-    destroy; tests/apps/services (21 steps checked against AOSP behaviour)
+    destroy; tests/apps/services (25 steps checked against AOSP behaviour)
   - [x] Notification.Builder (AOSP extras layout), Action with
     RemoteInput, BigText/BigPicture/Inbox/Messaging/Media styles,
     BubbleMetadata, Person, recoverBuilder, NotificationChannel and groups,
     StatusBarNotification; NotificationManager enforces channels for
     target O+ and logs what is posted (no RemoteViews content yet)
+  - [x] JobScheduler in process (android.app.job: JobInfo validation,
+    latency, deadlines, constraints, periodic, backoff, enqueue/dequeue
+    work, JobServiceEngine binder for AndroidX JobIntentService)
 - [ ] WS13 app test runner with screenshot goldens
 
 ### M3
@@ -266,3 +269,7 @@ and update ARCHITECTURE.md in the same commit.
   carries the ordered result and continues the broadcast on `finish()`.
   The manifest parser reads `<intent-filter android:priority>`.
   `IntentSender` wraps a `PendingIntent`. Documented in ARCHITECTURE 6.5.
+- 2026-10-01 (WS4): `ServiceInfo.permission` is now read from the
+  manifest (`android:permission` on `<service>`); JobScheduler requires
+  BIND_JOB_SERVICE there. `Context.getSystemService(JOB_SCHEDULER_SERVICE)`
+  returns `android.app.job.JobSchedulerImpl`. ARCHITECTURE 6.5 updated.

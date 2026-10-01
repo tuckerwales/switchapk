@@ -22,7 +22,7 @@ from shotlib import close, pixel, read_png  # noqa: E402
 
 GREEN = 0xFF43A047
 WHITE = 0xFFFFFFFF
-STEPS = 21
+STEPS = 25
 
 LOG_LINES = [
     "has leaked IntentReceiver com.example.services.LeakActivity$1",

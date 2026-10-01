@@ -733,6 +733,7 @@ public final class ActivityThread {
                     } else if ("service".equals(name)) {
                         ServiceInfo info = new ServiceInfo();
                         fillComponent(info, parser);
+                        info.permission = attrString(parser, android.R.attr.permission, "permission");
                         service = new ParsedService(info);
                         filter = null;
                     } else if ("provider".equals(name)) {

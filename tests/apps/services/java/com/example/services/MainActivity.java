@@ -8,6 +8,10 @@ import android.app.NotificationChannelGroup;
 import android.app.NotificationManager;
 import android.app.Person;
 import android.app.RemoteInput;
+import android.app.job.JobInfo;
+import android.app.job.JobScheduler;
+import android.app.job.JobWorkItem;
+import android.os.PersistableBundle;
 import android.graphics.drawable.Icon;
 import android.service.notification.StatusBarNotification;
 import android.app.PendingIntent;
@@ -341,6 +345,54 @@ public class MainActivity extends Activity {
                 expect("bind onCreate", "bind onBind", "leak connected", "bind onUnbind", "bind onDestroy"));
 
         step("after leak", 300, () -> sendBroadcast(ping("afterleak")), expect());
+
+        step("jobs", 500, () -> {
+            JobScheduler js = getSystemService(JobScheduler.class);
+            ComponentName svc = new ComponentName(this, TestJobService.class);
+            try {
+                new JobInfo.Builder(9, svc).build();
+                T.ev("no constraints allowed");
+            } catch (IllegalArgumentException e) {
+                T.ev("no constraints throws");
+            }
+            try {
+                js.schedule(new JobInfo.Builder(9, new ComponentName(this, CountService.class))
+                        .setMinimumLatency(10).build());
+                T.ev("no permission allowed");
+            } catch (IllegalArgumentException e) {
+                T.ev("no permission throws");
+            }
+            PersistableBundle extras = new PersistableBundle();
+            extras.putInt("n", 7);
+            js.schedule(new JobInfo.Builder(1, svc).setMinimumLatency(100).setExtras(extras).build());
+            T.ev("pending " + (js.getPendingJob(1) != null) + " reason " + js.getPendingJobReason(1));
+        }, expect("no constraints throws", "no permission throws", "pending true reason 9", "jobsvc onCreate",
+                "job start 1 n=7 deadline=false", "jobsvc onDestroy"));
+
+        step("job deadline", 500, () -> {
+            JobScheduler js = getSystemService(JobScheduler.class);
+            T.ev("finished job gone " + (js.getPendingJob(1) == null));
+            js.schedule(new JobInfo.Builder(3, new ComponentName(this, TestJobService.class))
+                    .setRequiresCharging(true).setOverrideDeadline(200).build());
+            T.ev("reason " + js.getPendingJobReason(3));
+        }, expect("finished job gone true", "reason 5", "jobsvc onCreate", "job start 3 n=-1 deadline=true",
+                "jobsvc onDestroy"));
+
+        step("job work", 400, () -> {
+            JobScheduler js = getSystemService(JobScheduler.class);
+            JobInfo job = new JobInfo.Builder(4, new ComponentName(this, TestJobService.class))
+                    .setOverrideDeadline(0).build();
+            js.enqueue(job, new JobWorkItem(new Intent().putExtra("w", "a")));
+            js.enqueue(job, new JobWorkItem(new Intent().putExtra("w", "b")));
+        }, expect("jobsvc onCreate", "job start 4 n=-1 deadline=true", "work a delivery=1", "work b delivery=1",
+                "jobsvc onDestroy"));
+
+        step("job cancel", 400, () -> {
+            JobScheduler js = getSystemService(JobScheduler.class);
+            js.schedule(new JobInfo.Builder(5, new ComponentName(this, TestJobService.class))
+                    .setOverrideDeadline(0).build());
+            mHandler.postDelayed(() -> js.cancel(5), 150);
+        }, expect("jobsvc onCreate", "job start 5 n=-1 deadline=true", "job stop 5 reason=1", "jobsvc onDestroy"));
 
         step("notifications", 100, () -> {
             NotificationManager nm = getSystemService(NotificationManager.class);

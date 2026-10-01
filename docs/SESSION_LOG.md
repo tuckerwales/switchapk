@@ -181,3 +181,13 @@ what is left in flight.
   java.lang.invoke; javac crashes), and `make` failures print "Error",
   so grep case-insensitively. tests/apps/services gains a notifications
   step (replacing the plain notify step).
+- WS4 JobScheduler. android.app.job ported: JobInfo (+Builder validation,
+  period and flex clamping), JobParameters (dequeueWork/completeWork),
+  JobWorkItem, JobService, JobServiceEngine (binder the scheduler drives,
+  as AndroidX JobIntentService expects) and JobSchedulerImpl (latency,
+  deadline, constraints, periodic windows, backoff, enqueue to a running
+  job, stop on cancel/timeout). The manifest parser reads a service's
+  android:permission. tests/apps/services gains four job steps (25).
+  The WS3 session has pushed nothing since its ListView commit and could
+  not be reached; the action bar decor and ProgressDialog wait on its
+  Toolbar, ActionMenuView and ProgressBar, so they were left alone.

@@ -339,6 +339,9 @@ public class ContextImpl extends Context {
         if (WINDOW_SERVICE.equals(name)) return WindowManagerImpl.getDefault();
         if (ALARM_SERVICE.equals(name)) return AlarmManager.getInstance();
         if (NOTIFICATION_SERVICE.equals(name)) return NotificationManager.getInstance();
+        if (JOB_SCHEDULER_SERVICE.equals(name)) {
+            return android.app.job.JobSchedulerImpl.getInstance(mApplication != null ? mApplication : this);
+        }
         if (VIBRATOR_SERVICE.equals(name)) return new Vibrator.SystemVibrator();
         if (INPUT_METHOD_SERVICE.equals(name)) return InputMethodManager.systemInstance();
         if (LAYOUT_INFLATER_SERVICE.equals(name)) {
@@ -358,6 +361,7 @@ public class ContextImpl extends Context {
         if (serviceClass == WindowManager.class) return WINDOW_SERVICE;
         if (serviceClass == AlarmManager.class) return ALARM_SERVICE;
         if (serviceClass == NotificationManager.class) return NOTIFICATION_SERVICE;
+        if (serviceClass == android.app.job.JobScheduler.class) return JOB_SCHEDULER_SERVICE;
         if (serviceClass == Vibrator.class) return VIBRATOR_SERVICE;
         if (serviceClass == InputMethodManager.class) return INPUT_METHOD_SERVICE;
         if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;

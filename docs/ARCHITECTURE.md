@@ -537,6 +537,21 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   rename it, lower its importance or set its group once. Posted
   notifications are logged (`notify <id> [title] text channel=<id>`);
   there is no shade on the Switch.
+- Jobs (`android.app.job.JobSchedulerImpl`, in place of
+  JobSchedulerService): schedule/enqueue validate the service (declared,
+  requires BIND_JOB_SERVICE). A job is ready when its minimum latency has
+  passed and constraints hold, or its override deadline has passed. The
+  service is bound with BIND_AUTO_CREATE and driven through the
+  `JobServiceEngine` binder (so AndroidX JobIntentService works):
+  onStartJob, then jobFinished, a false return, or dequeueWork returning
+  null with no work in progress ends the run and unbinds. cancel,
+  re-schedule and a 10 minute timeout call onStopJob. Reschedules back
+  off (linear/exponential, 5 h cap); periodic jobs run once per interval
+  in their flex window. Constraint sources: network is taken as unmetered
+  Wi-Fi, charging and battery come from the sticky ACTION_BATTERY_CHANGED
+  (polled every minute while a job waits), the device is never idle,
+  content-URI triggers never fire. Jobs do not outlive the process
+  (WorkManager reschedules its work at app start).
 - Dialogs: `android.app.Dialog` owns a floating `PhoneWindow` themed from
   `android:dialogTheme` (`alertDialogTheme` for AlertDialog) and is added
   to the window manager on `show()`. `AlertDialog` uses a port of

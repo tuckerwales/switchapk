@@ -134,7 +134,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     tests/apps/widgets
   - [x] Scroller, OverScroller, EdgeEffect, ScrollView,
     HorizontalScrollView; tests/apps/scroll
-  - [ ] lists, progress, popups, Toolbar and the rest
+  - [x] Adapter, ListAdapter, SpinnerAdapter, BaseAdapter, ArrayAdapter,
+    Filter, AdapterView, AbsListView, ListView; tests/apps/list
+  - [ ] progress, popups, Toolbar and the rest
 - [ ] WS4 app model
 - [ ] WS13 app test runner with screenshot goldens
 
@@ -159,10 +161,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS2 is done. WS3 is in progress: ImageView, the compound controls and
+1. WS2 is done. WS3 is in progress: ImageView, the compound controls,
    scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
-   EdgeEffect) have landed. Lists, progress, popups and Toolbar are still
-   open. WS4 (app model) and WS5 (animation) can start in parallel.
+   EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
+   landed. Progress, popups and Toolbar are still open. WS4 (app model)
+   and WS5 (animation) can start in parallel.
 2. Finish WS1: context menu and action mode presentation once WS4 has
    dialogs.
 3. In parallel as agents are available: WS10 (Switch backend), WS13

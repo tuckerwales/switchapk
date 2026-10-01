@@ -85,5 +85,11 @@ what is left in flight.
   tests/apps/scroll swipes a tall column and a wide row; the sample pixel
   leaves the red band for blue. In-process checks cover clamp, fling
   distance, spring-back and the edge glow.
-  Lists, progress, popups and Toolbar are still open.
+- WS3 lists. Adapter, ListAdapter, SpinnerAdapter, BaseAdapter,
+  ArrayAdapter, Filter and ListView. AbsListView recycles visible rows,
+  and headers, choice mode and dividers work. tests/apps/list swipes the
+  list; the sample pixel leaves the red row for blue. In-process checks
+  cover recycling, the end clamp, selection, headers, filtering and
+  stackFromBottom.
+  Progress, popups and Toolbar are still open.
 

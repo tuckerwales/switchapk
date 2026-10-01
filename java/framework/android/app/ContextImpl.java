@@ -269,14 +269,25 @@ public class ContextImpl extends Context {
         if (WINDOW_SERVICE.equals(name)) return WindowManagerImpl.getDefault();
         if (VIBRATOR_SERVICE.equals(name)) return new Vibrator.SystemVibrator();
         if (INPUT_METHOD_SERVICE.equals(name)) return InputMethodManager.systemInstance();
+        if (LAYOUT_INFLATER_SERVICE.equals(name)) {
+            if (mLayoutInflater == null) mLayoutInflater = new com.android.internal.policy.PhoneLayoutInflater(this);
+            return mLayoutInflater;
+        }
+        if (ACCESSIBILITY_SERVICE.equals(name)) {
+            return android.view.accessibility.AccessibilityManager.getInstance(this);
+        }
         return null;
     }
+
+    private android.view.LayoutInflater mLayoutInflater;
 
     @Override
     public String getSystemServiceName(Class<?> serviceClass) {
         if (serviceClass == WindowManager.class) return WINDOW_SERVICE;
         if (serviceClass == Vibrator.class) return VIBRATOR_SERVICE;
         if (serviceClass == InputMethodManager.class) return INPUT_METHOD_SERVICE;
+        if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;
+        if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;
         return null;
     }
 

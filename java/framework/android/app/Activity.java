@@ -12,9 +12,22 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.content.res.Configuration;
+import android.util.AttributeSet;
+import android.view.ActionMode;
+import android.view.ContextMenu;
+import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.view.MotionEvent;
+import android.view.SearchEvent;
+import android.view.WindowManagerImpl;
+import android.view.accessibility.AccessibilityEvent;
 import com.android.internal.policy.PhoneWindow;
 
-public class Activity extends ContextThemeWrapper {
+public class Activity extends ContextThemeWrapper implements LayoutInflater.Factory2, Window.Callback,
+        KeyEvent.Callback, View.OnCreateContextMenuListener {
     public static final int RESULT_CANCELED = 0;
     public static final int RESULT_OK = -1;
     public static final int RESULT_FIRST_USER = 1;
@@ -43,26 +56,24 @@ public class Activity extends ContextThemeWrapper {
         mApplication = application;
         mInfo = info;
         mIntent = intent != null ? intent : new Intent();
-        mWindow = new PhoneWindow(this);
         if (info != null) {
             int theme = info.getThemeResource();
             if (theme != 0) setTheme(theme);
         }
-        getWindow().getDecorView().setOnKeyListener(new View.OnKeyListener() {
-            public boolean onKey(View v, int keyCode, KeyEvent event) {
-                if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                    onBackPressed();
-                    return true;
-                }
-                return false;
-            }
-        });
+        mWindow = new PhoneWindow(this);
+        mWindow.setWindowManager(WindowManagerImpl.getDefault(), null, info != null ? info.name : null);
+        mWindow.setCallback(this);
+        mWindow.getLayoutInflater().setPrivateFactory(this);
+        if (info != null && info.softInputMode != 0) mWindow.setSoftInputMode(info.softInputMode);
     }
 
     public final Application getApplication() { return mApplication; }
     public Intent getIntent() { return mIntent; }
     public Window getWindow() {
-        if (mWindow == null) mWindow = new PhoneWindow(this);
+        if (mWindow == null) {
+            mWindow = new PhoneWindow(this);
+            mWindow.setCallback(this);
+        }
         return mWindow;
     }
     public WindowManager getWindowManager() { return getWindow().getWindowManager(); }
@@ -123,11 +134,6 @@ public class Activity extends ContextThemeWrapper {
     protected void onNewIntent(Intent intent) { mIntent = intent; }
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {}
 
-    @Override
-    public Object getSystemService(String name) {
-        if (WINDOW_SERVICE.equals(name)) return getWindowManager();
-        return super.getSystemService(name);
-    }
 
     void performCreate() {
         if (mState != ST_NONE) return;
@@ -203,5 +209,196 @@ public class Activity extends ContextThemeWrapper {
         if (!mWindowAdded) return;
         mWindowAdded = false;
         getWindowManager().removeView(getWindow().getDecorView());
+    }
+
+    // ---------------------------------------------------------------- Window.Callback / KeyEvent.Callback (WS1)
+
+    private CharSequence mTitle;
+    private MenuInflater mMenuInflater;
+
+    public void onUserInteraction() {}
+
+    protected void onUserLeaveHint() {}
+
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        onUserInteraction();
+        Window win = getWindow();
+        if (win.superDispatchKeyEvent(event)) return true;
+        View decor = win.peekDecorView();
+        return event.dispatch(this, decor != null ? decor.getKeyDispatcherState() : null, this);
+    }
+
+    public boolean dispatchKeyShortcutEvent(KeyEvent event) {
+        onUserInteraction();
+        if (getWindow().superDispatchKeyShortcutEvent(event)) return true;
+        return onKeyShortcut(event.getKeyCode(), event);
+    }
+
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (ev.getAction() == MotionEvent.ACTION_DOWN) onUserInteraction();
+        if (getWindow().superDispatchTouchEvent(ev)) return true;
+        return onTouchEvent(ev);
+    }
+
+    public boolean dispatchTrackballEvent(MotionEvent ev) {
+        onUserInteraction();
+        if (getWindow().superDispatchTrackballEvent(ev)) return true;
+        return onTrackballEvent(ev);
+    }
+
+    public boolean dispatchGenericMotionEvent(MotionEvent ev) {
+        onUserInteraction();
+        if (getWindow().superDispatchGenericMotionEvent(ev)) return true;
+        return onGenericMotionEvent(ev);
+    }
+
+    public boolean dispatchPopulateAccessibilityEvent(AccessibilityEvent event) { return false; }
+
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            event.startTracking();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean onKeyLongPress(int keyCode, KeyEvent event) { return false; }
+
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && event.isTracking() && !event.isCanceled()) {
+            onBackPressed();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) { return false; }
+
+    public boolean onKeyShortcut(int keyCode, KeyEvent event) { return false; }
+
+    public boolean onTouchEvent(MotionEvent event) {
+        if (mWindow != null && mWindow.shouldCloseOnTouch(this, event)) {
+            finish();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean onTrackballEvent(MotionEvent event) { return false; }
+
+    public boolean onGenericMotionEvent(MotionEvent event) { return false; }
+
+    public View onCreatePanelView(int featureId) { return null; }
+
+    public boolean onCreatePanelMenu(int featureId, Menu menu) {
+        if (featureId == Window.FEATURE_OPTIONS_PANEL) return onCreateOptionsMenu(menu);
+        return false;
+    }
+
+    public boolean onPreparePanel(int featureId, View view, Menu menu) {
+        if (featureId == Window.FEATURE_OPTIONS_PANEL) return onPrepareOptionsMenu(menu) && menu.hasVisibleItems();
+        return true;
+    }
+
+    public boolean onMenuOpened(int featureId, Menu menu) { return true; }
+
+    public boolean onMenuItemSelected(int featureId, MenuItem item) {
+        switch (featureId) {
+            case Window.FEATURE_OPTIONS_PANEL:
+                return onOptionsItemSelected(item);
+            case Window.FEATURE_CONTEXT_MENU:
+                return onContextItemSelected(item);
+            default:
+                return false;
+        }
+    }
+
+    public void onPanelClosed(int featureId, Menu menu) {}
+
+    public boolean onCreateOptionsMenu(Menu menu) { return true; }
+
+    public boolean onPrepareOptionsMenu(Menu menu) { return true; }
+
+    public boolean onOptionsItemSelected(MenuItem item) { return false; }
+
+    public void onOptionsMenuClosed(Menu menu) {}
+
+    public void invalidateOptionsMenu() {}
+
+    public void openOptionsMenu() {}
+
+    public void closeOptionsMenu() {}
+
+    public boolean onContextItemSelected(MenuItem item) { return false; }
+
+    public void onContextMenuClosed(Menu menu) {}
+
+    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {}
+
+    public void registerForContextMenu(View view) { view.setOnCreateContextMenuListener(this); }
+
+    public void unregisterForContextMenu(View view) { view.setOnCreateContextMenuListener(null); }
+
+    public void openContextMenu(View view) { view.showContextMenu(); }
+
+    public void closeContextMenu() {}
+
+    public MenuInflater getMenuInflater() {
+        if (mMenuInflater == null) mMenuInflater = new MenuInflater(this);
+        return mMenuInflater;
+    }
+
+    public void onWindowAttributesChanged(WindowManager.LayoutParams params) {}
+
+    public void onContentChanged() {}
+
+    public void onWindowFocusChanged(boolean hasFocus) {}
+
+    public void onAttachedToWindow() {}
+
+    public void onDetachedFromWindow() {}
+
+    public boolean hasWindowFocus() {
+        View d = mWindow != null ? mWindow.peekDecorView() : null;
+        return d != null && d.hasWindowFocus();
+    }
+
+    public boolean onSearchRequested() { return false; }
+
+    public boolean onSearchRequested(SearchEvent searchEvent) { return onSearchRequested(); }
+
+    public ActionMode onWindowStartingActionMode(ActionMode.Callback callback) { return null; }
+
+    public ActionMode onWindowStartingActionMode(ActionMode.Callback callback, int type) { return null; }
+
+    public void onActionModeStarted(ActionMode mode) {}
+
+    public void onActionModeFinished(ActionMode mode) {}
+
+    public View onCreateView(String name, Context context, AttributeSet attrs) { return null; }
+
+    public View onCreateView(View parent, String name, Context context, AttributeSet attrs) {
+        if (!"fragment".equals(name)) return onCreateView(name, context, attrs);
+        // TODO(WS4): legacy framework fragments inflated from <fragment>.
+        return null;
+    }
+
+    public View getCurrentFocus() { return mWindow != null ? mWindow.getCurrentFocus() : null; }
+
+    public LayoutInflater getLayoutInflater() { return getWindow().getLayoutInflater(); }
+
+    public void setTitle(CharSequence title) {
+        mTitle = title;
+        getWindow().setTitle(title);
+    }
+
+    public void setTitle(int titleId) { setTitle(getText(titleId)); }
+
+    public final CharSequence getTitle() { return mTitle; }
+
+    @Override
+    public Object getSystemService(String name) {
+        if (WINDOW_SERVICE.equals(name)) return getWindowManager();
+        return super.getSystemService(name);
     }
 }

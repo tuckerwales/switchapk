@@ -78,5 +78,12 @@ what is left in flight.
   ImageButton, CompoundButton, CheckBox, RadioButton, RadioGroup,
   ToggleButton, Switch and Space. A tap toggles the compound controls.
   tests/apps/widgets checks measure, exclusive radios and screenshots.
-  Lists, scrolling, progress and popups are still open.
+- WS3 scrolling. Scroller and OverScroller (viscous scroll, spline fling).
+  Constructors that take an Interpolator stay unimplemented because that
+  type is not in the tree. EdgeEffect draws a glow. ScrollView and
+  HorizontalScrollView drag, fling and clamp to the child.
+  tests/apps/scroll swipes a tall column and a wide row; the sample pixel
+  leaves the red band for blue. In-process checks cover clamp, fling
+  distance, spring-back and the edge glow.
+  Lists, progress, popups and Toolbar are still open.
 

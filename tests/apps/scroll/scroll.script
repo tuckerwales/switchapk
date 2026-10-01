@@ -1,0 +1,9 @@
+idle 500
+screenshot scroll_before.png
+swipe 200 680 200 80 12000
+idle 800
+screenshot scroll_vert.png
+swipe 1200 360 400 360 14000
+idle 800
+screenshot scroll_horiz.png
+quit

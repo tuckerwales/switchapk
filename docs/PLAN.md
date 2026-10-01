@@ -132,7 +132,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] ImageView (scale types), Button, ImageButton, CompoundButton,
     CheckBox, RadioButton, RadioGroup, ToggleButton, Switch, Space;
     tests/apps/widgets
-  - [ ] lists, scrolling, progress, popups, Toolbar and the rest
+  - [x] Scroller, OverScroller, EdgeEffect, ScrollView,
+    HorizontalScrollView; tests/apps/scroll
+  - [ ] lists, progress, popups, Toolbar and the rest
 - [ ] WS4 app model
 - [ ] WS13 app test runner with screenshot goldens
 
@@ -157,10 +159,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS2 is done. WS3 is in progress: ImageView and the compound controls
-   (buttons, check box, radio group, switch, toggle, space) render in
-   tests/apps/widgets. Lists, scrolling and the rest of the widgets are
-   still open. WS4 (app model) and WS5 (animation) can start in parallel.
+1. WS2 is done. WS3 is in progress: ImageView, the compound controls and
+   scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
+   EdgeEffect) have landed. Lists, progress, popups and Toolbar are still
+   open. WS4 (app model) and WS5 (animation) can start in parallel.
 2. Finish WS1: context menu and action mode presentation once WS4 has
    dialogs.
 3. In parallel as agents are available: WS10 (Switch backend), WS13

@@ -207,7 +207,14 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
             mSelectedPosition = INVALID_POSITION;
             return;
         }
-        position = Math.max(0, Math.min(position, mAdapter.getCount() - 1));
+        if (position < 0) {
+            // AOSP lookForSelectablePosition(-1) finds nothing: an invalid position clears the selection.
+            mSelectedPosition = INVALID_POSITION;
+            mSelectedRowId = INVALID_ROW_ID;
+            invalidate();
+            return;
+        }
+        position = Math.min(position, mAdapter.getCount() - 1);
         mSpecificPosition = position;
         mSpecificTop = y;
         mLayoutMode = LAYOUT_SPECIFIC;
@@ -1453,6 +1460,11 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
     @Override
     protected ContextMenu.ContextMenuInfo getContextMenuInfo() { return mContextMenuInfo; }
 
+    /** framework-internal (AOSP). The menu info for a long press on {@code view}. */
+    ContextMenu.ContextMenuInfo createContextMenuInfo(View view, int position, long id) {
+        return new AdapterContextMenuInfo(view, position, id);
+    }
+
     @Override
     public boolean showContextMenu() { return showContextMenuForChild(this); }
 
@@ -1462,7 +1474,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         if (position >= 0) {
             View child = getChildAt(position - mFirstPosition);
             long id = mAdapter == null ? INVALID_ROW_ID : mAdapter.getItemId(position);
-            mContextMenuInfo = new AdapterContextMenuInfo(child, position, id);
+            mContextMenuInfo = createContextMenuInfo(child, position, id);
         }
         return super.showContextMenu(x, y);
     }
@@ -1472,7 +1484,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         int position = getPositionForView(originalView);
         if (position >= 0) {
             long id = mAdapter == null ? INVALID_ROW_ID : mAdapter.getItemId(position);
-            mContextMenuInfo = new AdapterContextMenuInfo(originalView, position, id);
+            mContextMenuInfo = createContextMenuInfo(originalView, position, id);
         }
         return super.showContextMenuForChild(originalView);
     }
@@ -1482,7 +1494,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         int position = getPositionForView(originalView);
         if (position >= 0) {
             long id = mAdapter == null ? INVALID_ROW_ID : mAdapter.getItemId(position);
-            mContextMenuInfo = new AdapterContextMenuInfo(originalView, position, id);
+            mContextMenuInfo = createContextMenuInfo(originalView, position, id);
         }
         return super.showContextMenuForChild(originalView, x, y);
     }
@@ -1559,7 +1571,10 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         invalidate();
         if (isInTouchMode) {
             if (mTouchMode == TOUCH_MODE_FLING && mFlingRunnable != null) mFlingRunnable.endFling();
-        } else if (mSelectedPosition == INVALID_POSITION && mAdapter != null && getChildCount() > 0) {
+        } else if (mSelectedPosition == INVALID_POSITION && mAdapter != null && getChildCount() > 0
+                && !isInTouchMode()) {
+            // isInTouchMode(), not the argument: a drop-down with a hidden selection (DropDownListView)
+            // stays in touch mode until the first arrow key resurrects the selection.
             int pos = lookForSelectablePosition(mFirstPosition, true);
             if (pos >= 0) {
                 mSelectedPosition = pos;

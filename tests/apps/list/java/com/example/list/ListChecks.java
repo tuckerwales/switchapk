@@ -139,14 +139,18 @@ final class ListChecks {
         View row = adapter.getView(0, null, null);
         boolean rowOk = row instanceof TextView && "beta".equals(((TextView) row).getText().toString());
         check("row text", rowOk, row);
-        adapter.getFilter().filter("b");
-        boolean kept = adapter.getCount() == 2
-                && "beta".equals(adapter.getItem(0)) && "banana".equals(adapter.getItem(1));
-        check("filter b", kept, adapter.getCount() + " " + adapter.getItem(0));
-        adapter.getFilter().filter("z");
-        check("filter z", adapter.getCount() == 0, adapter.getCount());
-        adapter.getFilter().filter(null);
-        check("filter clear", adapter.getCount() == 2, adapter.getCount());
+        // Filtering runs on a worker thread and publishes on this looper, as on Android.
+        final android.widget.Filter filter = adapter.getFilter();
+        filter.filter("b", count -> {
+            boolean kept = adapter.getCount() == 2
+                    && "beta".equals(adapter.getItem(0)) && "banana".equals(adapter.getItem(1));
+            check("filter b", kept && count == 2, adapter.getCount() + " " + adapter.getItem(0));
+            filter.filter("z", c2 -> {
+                check("filter z", adapter.getCount() == 0, adapter.getCount());
+                filter.filter(null, c3 -> check("filter clear", adapter.getCount() == 2, adapter.getCount()));
+            });
+        });
+        check("filter is async", adapter.getCount() == 2 && "beta".equals(adapter.getItem(0)), adapter.getCount());
 
         final int[] notes = new int[] {0};
         ArrayAdapter<String> quiet = new ArrayAdapter<String>(activity, R.layout.row);

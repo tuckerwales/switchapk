@@ -398,6 +398,14 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `itemsPerRow()` items (1 for ListView, the column count for GridView),
   with `childWidthMeasureSpec`/`childLeft` per column and `childGap()`
   between rows; the first position is always a row start.
+  Subclass hooks (AOSP names): `createContextMenuInfo(view, position, id)`
+  and ListView `drawDivider(canvas, bounds, childIndex)`;
+  ExpandableListView overrides both and flattens its adapter through
+  ExpandableListConnector (only expanded groups are recorded).
+  `setSelection(INVALID_POSITION)` clears the selection.
+- Filtering: `Filter.filter` posts to a "Filter" HandlerThread (quits
+  after 3 s idle) and publishes on the looper of the thread that created
+  the Filter, so results arrive asynchronously, as on Android.
 - Private framework resources: `InternalRes` resolves
   com.android.internal ids by name; private attrs live under the
   "^attr-private" type in framework-res and are found there.

@@ -321,8 +321,7 @@ public class ListView extends AbsListView {
                 if (bottom < listBottom && !(overscrollFooter != null && last)) {
                     mTempRect.top = bottom;
                     mTempRect.bottom = bottom + mDividerHeight;
-                    mDivider.setBounds(mTempRect);
-                    mDivider.draw(canvas);
+                    drawDivider(canvas, mTempRect, i);
                 }
             }
         }
@@ -332,6 +331,13 @@ public class ListView extends AbsListView {
             overscrollFooter.setBounds(mTempRect);
             overscrollFooter.draw(canvas);
         }
+    }
+
+    /** framework-internal (AOSP). Draws the divider below child {@code childIndex}. */
+    void drawDivider(Canvas canvas, Rect bounds, int childIndex) {
+        final Drawable divider = mDivider;
+        divider.setBounds(bounds);
+        divider.draw(canvas);
     }
 
     public Drawable getDivider() { return mDivider; }

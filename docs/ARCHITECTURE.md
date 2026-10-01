@@ -423,8 +423,23 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
   backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
 - `View.animate()`, `startAnimation()` and `StateListAnimator` belong to
-  WS5 (android.animation and view.animation do not exist yet); accessibility
-  classes are value holders since no accessibility service runs.
+  WS5. Only the tween core ProgressBar needs exists so far
+  (`TimeInterpolator`, `Interpolator`, linear/accelerate/decelerate
+  interpolators, `Animation`, `AlphaAnimation`, `Transformation`,
+  `AnimationUtils.loadInterpolator`); views do not apply tween animations
+  and AnimatedVectorDrawables do not animate. Accessibility classes are
+  value holders since no accessibility service runs.
+- ProgressBar family (AOSP ports): determinate progress sets drawable
+  levels per layer id (`android:id/progress`, `secondaryProgress`,
+  `background`), indeterminate starts an Animatable drawable or cycles
+  levels with an AlphaAnimation. Bitmap layers are tiled with a repeating
+  BitmapDrawable clone (keeps the tint; RatingBar stars). The Material
+  spinners are `com.android.internal.graphics.drawable.
+  AnimationScaleListDrawable`, which shows its static child until WS5
+  (what Android shows with animations off). AbsSeekBar adds the thumb,
+  split track, tick marks, touch drag (slop in scrolling containers) and
+  D-pad/plus/minus steps (`keyProgressIncrement`, about 1/20 of the
+  range); RatingBar steps by stepSize and reports user changes on release.
 
 ### 6.5 Application model (design)
 - The app runner (C, `app_run_apk`) opens the APK, sets `g_app_zip` and

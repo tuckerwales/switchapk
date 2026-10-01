@@ -191,3 +191,15 @@ what is left in flight.
   The WS3 session has pushed nothing since its ListView commit and could
   not be reached; the action bar decor and ProgressDialog wait on its
   Toolbar, ActionMenuView and ProgressBar, so they were left alone.
+- WS3 taken over by the WS4 session (the WS3 session stopped; the user
+  confirmed). ProgressBar, AbsSeekBar, SeekBar and RatingBar ported from
+  AOSP with the Material styles; ProgressDialog (WS4) on the framework
+  progress layouts. The WS5 tween core ProgressBar needs landed early
+  (TimeInterpolator, Interpolator, basic interpolators, Animation,
+  AlphaAnimation, Transformation, AnimationUtils.loadInterpolator).
+  Added com.android.internal.graphics.drawable.AnimationScaleListDrawable
+  (the Material spinners failed to inflate without it); it shows the
+  static frame until AVDs animate. tileify follows AOSP N+ (repeating
+  BitmapDrawable clone) so RatingBar star tints survive. tests/apps/progress
+  checks the bars, spinner frame, a SeekBar drag, a star tap, a
+  ProgressDialog and the listener calls.

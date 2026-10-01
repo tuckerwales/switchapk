@@ -138,12 +138,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] Adapter, ListAdapter, SpinnerAdapter, BaseAdapter, ArrayAdapter,
     Filter, AdapterView, AbsListView, ListView; tests/apps/list
   - [x] RelativeLayout (landed from WS4, which needed it); tests/apps/relative
-  - [ ] progress, popups, Toolbar and the rest
+  - [x] ProgressBar (determinate, indeterminate, tints, tiling), AbsSeekBar,
+    SeekBar, RatingBar, AnimationScaleListDrawable; tests/apps/progress
+  - [ ] popups (PopupWindow, ListPopupWindow, PopupMenu, Spinner), Toast
+  - [ ] Toolbar, ActionMenuView, and the rest
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,
     CheckedTextView, ActionBar API; tests/apps/appmodel
-  - [ ] ProgressDialog (needs WS3 ProgressBar), DatePicker/TimePicker dialogs
+  - [x] ProgressDialog (spinner and horizontal); tests/apps/progress
+  - [ ] DatePicker/TimePicker dialogs
   - [x] options menu (+ button falls back to MENU) as an overflow-style
     popup, context menus and sub menus as dialogs
   - [ ] action bar decor (Theme.Material with title and overflow)

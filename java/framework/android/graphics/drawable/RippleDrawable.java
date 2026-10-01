@@ -7,6 +7,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.ColorFilter;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
@@ -147,6 +148,20 @@ public class RippleDrawable extends LayerDrawable {
         mHotspotY = y;
     }
 
+    /**
+     * Draws a layer tinted with the ripple colour. The filter is swapped in and out with the layer's
+     * callback detached: the swap is part of drawing and must not invalidate (which would redraw forever).
+     */
+    private static void drawFiltered(Drawable d, Canvas canvas, int color) {
+        final Callback cb = d.getCallback();
+        d.setCallback(null);
+        final ColorFilter old = d.getColorFilter();
+        d.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+        d.draw(canvas);
+        d.setColorFilter(old);
+        d.setCallback(cb);
+    }
+
     @Override
     public void draw(Canvas canvas) {
         // content (everything but the mask)
@@ -161,9 +176,7 @@ public class RippleDrawable extends LayerDrawable {
         int c = (color & 0xffffff) | (alpha << 24);
         final Rect bounds = getBounds();
         if (mMask != null) {
-            mMask.setColorFilter(new PorterDuffColorFilter(c, PorterDuff.Mode.SRC_IN));
-            mMask.draw(canvas);
-            mMask.setColorFilter(null);
+            drawFiltered(mMask, canvas, c);
             return;
         }
         boolean hasContent = false;
@@ -173,9 +186,7 @@ public class RippleDrawable extends LayerDrawable {
             for (int i = 0; i < getNumberOfLayers(); i++) {
                 Drawable d = getDrawable(i);
                 if (d == null) continue;
-                d.setColorFilter(new PorterDuffColorFilter(c, PorterDuff.Mode.SRC_IN));
-                d.draw(canvas);
-                d.setColorFilter(null);
+                drawFiltered(d, canvas, c);
             }
             return;
         }

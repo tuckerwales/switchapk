@@ -3,11 +3,12 @@ package android.widget;
 import android.content.Context;
 import android.os.SystemClock;
 import android.view.ViewConfiguration;
+import android.view.animation.Interpolator;
 
 /**
  * Scroll animation for a start position and a distance (AOSP Scroller).
- * Fling uses the spline from {@link FlingMath}. Constructors that take an
- * Interpolator are omitted: that type is not in this tree yet.
+ * Fling uses the spline from {@link FlingMath}; a null interpolator means
+ * the viscous-fluid curve.
  */
 public class Scroller {
     private static final int DEFAULT_DURATION = 250;
@@ -32,6 +33,7 @@ public class Scroller {
     private float mDeltaY;
     private boolean mFinished = true;
     private boolean mFlywheel = true;
+    private final Interpolator mInterpolator;
     private float mVelocity;
     private float mCurrVelocity;
     private int mDistance;
@@ -39,11 +41,18 @@ public class Scroller {
     private float mFlingFriction = ViewConfiguration.getScrollFriction();
 
     public Scroller(Context context) {
+        // Apps targeting Honeycomb and later get flywheel flings. SDK here is 29.
+        this(context, null, true);
+    }
+
+    public Scroller(Context context, Interpolator interpolator) { this(context, interpolator, true); }
+
+    public Scroller(Context context, Interpolator interpolator, boolean flywheel) {
         mFinished = true;
+        mInterpolator = interpolator;
         float ppi = FlingMath.pixelsPerInch(context.getResources().getDisplayMetrics().density);
         mPhysicalCoeff = FlingMath.deceleration(ppi, FlingMath.LOOK);
-        // Apps targeting Honeycomb and later get flywheel flings. SDK here is 29.
-        mFlywheel = true;
+        mFlywheel = flywheel;
     }
 
     public final void setFriction(float friction) { mFlingFriction = friction; }
@@ -73,7 +82,8 @@ public class Scroller {
         int timePassed = (int) (SystemClock.uptimeMillis() - mStartTime);
         if (timePassed < mDuration) {
             if (mMode == SCROLL_MODE) {
-                float x = FlingMath.viscous(timePassed * mDurationReciprocal);
+                float t = timePassed * mDurationReciprocal;
+                float x = mInterpolator == null ? FlingMath.viscous(t) : mInterpolator.getInterpolation(t);
                 mCurrX = mStartX + Math.round(x * mDeltaX);
                 mCurrY = mStartY + Math.round(x * mDeltaY);
             } else {

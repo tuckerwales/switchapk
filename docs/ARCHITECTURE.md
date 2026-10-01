@@ -441,6 +441,19 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `MotionEvent.getPointerIdBits()`, `KeyEvent.isConfirmKey()`.
 - `@null` attribute values (a reference to 0) read as no value in
   `TypedArray`, as in AOSP's ApplyStyle.
+- `ViewRootImpl.performDraw` empties its dirty rect before drawing, as
+  AOSP's drawSoftware does: an `invalidate()` made during the draw (from
+  `computeScroll()` or `onDraw`) schedules the next frame.
+- Fading edges: `View.draw` honours `requiresFadingEdge` (the legacy
+  `fadingEdge` attr is ignored, as since ICS) and
+  `setVertical/HorizontalFadingEdgeEnabled`. Content (not the background)
+  goes into one `saveLayer` over the padded box and each edge with a
+  strength above zero is erased with a scaled black-to-clear
+  LinearGradient in DST_OUT; with a non-zero `getSolidColor()` a ramp of
+  that colour is drawn instead. NumberPicker fades its outer values so.
+- Clocks have no system time broadcasts: TextClock schedules its own tick
+  on the next second (formats with seconds) or minute boundary while
+  attached and visible; Chronometer ticks on second boundaries of its base.
 - Drawing is software only: `isHardwareAccelerated()` is false, layer
   types only add a `saveLayer` with the layer paint, elevation and
   outlines draw no shadows, and `clipToOutline` is not applied yet.
@@ -453,8 +466,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `SurfaceHolder.Callback`s on the UI thread when it is attached, visible
   and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
   backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
-- `View.animate()`, `startAnimation()` and `StateListAnimator` belong to
-  WS5. Only the tween core ProgressBar needs exists so far
+- `View.animate()`, tween application and `StateListAnimator` belong to
+  WS5. `View.startAnimation/setAnimation/getAnimation/clearAnimation`
+  exist and hold the animation (ViewAnimator and friends use them) but
+  draw does not apply it yet; `AnimationUtils.loadAnimation` parses
+  `<alpha>` and loads other tags as an identity alpha animation. Only the tween core ProgressBar needs exists so far
   (`TimeInterpolator`, `Interpolator`, linear/accelerate/decelerate
   interpolators, `Animation`, `AlphaAnimation`, `Transformation`,
   `AnimationUtils.loadInterpolator`); views do not apply tween animations

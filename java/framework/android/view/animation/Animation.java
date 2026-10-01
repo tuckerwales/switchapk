@@ -149,6 +149,14 @@ public abstract class Animation implements Cloneable {
         mMore = mOneMoreTime = false;
     }
 
+    /** framework-internal (hidden in AOSP): ends a running animation when its view drops it. */
+    public void detach() {
+        if (mStarted && !mEnded) {
+            mEnded = true;
+            fireAnimationEnd();
+        }
+    }
+
     public boolean isInitialized() { return mInitialized; }
 
     public void initialize(int width, int height, int parentWidth, int parentHeight) {

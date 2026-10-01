@@ -914,6 +914,11 @@ public class Resources {
                     continue;
                 }
                 res.resolveValue(v, theme);
+                if (v.type == TypedValue.TYPE_REFERENCE && v.data == 0) {
+                    // AOSP ApplyStyle: "@null" (a reference to 0) reads as no value
+                    v.type = TypedValue.TYPE_NULL;
+                    v.data = TypedValue.DATA_NULL_UNDEFINED;
+                }
                 if (v.type == TypedValue.TYPE_STRING && v.assetCookie == 0) {
                     v.assetCookie = v.resourceId != 0 ? ((v.resourceId >>> 24) == 1 ? 1 : 2) : 0;
                 }

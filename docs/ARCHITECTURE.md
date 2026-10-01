@@ -69,9 +69,11 @@ java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
 java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
 tools/           build_java.sh, fetch_toolchains.py, make_framework_res.py,
-                 genr/GenR.java (android.R generator), dexdump.py
+                 genr/GenR.java (android.R generator), dexdump.py,
+                 build_apk.sh (test APKs), api_check.py (API diff vs android.jar)
 tests/           run_dex_test.sh + tests/dex (VM conformance vs OpenJDK),
-                 tests/c (native unit/visual tests), [todo] tests/apps
+                 tests/c (native unit/visual tests), tests/apps (sample APKs
+                 with scripts and screenshot checks; shotlib.py)
 docs/            this documentation
 ```
 
@@ -291,7 +293,7 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   load TTF/OTF through stb_truetype. No shaping (no complex scripts,
   ligatures or bidi reordering yet).
 
-### 6.4 Main loop, input and windows (design; implementation in progress)
+### 6.4 Main loop, input and windows
 - `ActivityThread.main` prepares the main `Looper` and loops forever.
 - The main `MessageQueue` (flag `mIsMain`) never sleeps in Java: it calls
   `MessageQueue.nativePollOnce(timeoutMs)`, which releases the GIL and
@@ -305,40 +307,113 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (`a b c d`, `f[0..7]`, `time_ns`); `static native String nTakeText()`
   returns the text of the last PEV_TEXT event.
 - Event kinds (platform.h): PEV_TOUCH (a = MotionEvent action DOWN/UP/MOVE/
-  POINTER_DOWN/POINTER_UP/CANCEL, b = pointer id, f0/f1 = x/y in window
+  POINTER_DOWN/POINTER_UP/CANCEL, b = pointer id, f0/f1 = x/y in screen
   pixels), PEV_KEY (a = 0 down / 1 up, b = Android keycode, c = meta,
   d = repeat), PEV_JOYSTICK (f0..f7 = AXIS_X, AXIS_Y, AXIS_Z, AXIS_RZ,
   AXIS_LTRIGGER, AXIS_RTRIGGER, AXIS_HAT_X, AXIS_HAT_Y), PEV_QUIT,
   PEV_FOCUS (a = gained), PEV_RESIZE (a, b = size, c = dpi), PEV_SENSOR
   (a = Sensor type, f0..f2), PEV_TEXT (a = request id, text).
+- `PlatformInput` turns platform events into Android events: per-pointer
+  PEV_TOUCH events are merged into multi-pointer `MotionEvent`s (pointer
+  ids kept, ACTION_POINTER_DOWN/UP with the pointer index, device
+  `InputDevice.ID_TOUCHSCREEN`, source SOURCE_TOUCHSCREEN); keys get the
+  down time of their press, source SOURCE_GAMEPAD for gamepad buttons,
+  SOURCE_DPAD for D-pad keys, SOURCE_KEYBOARD otherwise; PEV_JOYSTICK
+  becomes an ACTION_MOVE `MotionEvent` from SOURCE_JOYSTICK with the eight
+  axes (plus AXIS_BRAKE/GAS mirroring the triggers). PEV_SENSOR goes to
+  `PlatformInput.setSensorSink` (for WS15). PEV_FOCUS also tells
+  `WindowManagerGlobal.setPlatformFocus`.
+- Input devices (`InputDevice`): id -1 virtual keyboard (US
+  `KeyCharacterMap`), id 1 touch screen, id 2 "Nintendo Switch Controller"
+  (SOURCE_GAMEPAD | SOURCE_DPAD | SOURCE_JOYSTICK, stick ranges -1..1,
+  triggers 0..1).
 - Controller mapping (Switch): A=BUTTON_A(96), B=BUTTON_B(97), X=99, Y=100,
   L=BUTTON_L1(102), R=BUTTON_R1(103), ZL=BUTTON_L2(104), ZR=BUTTON_R2(105),
   Plus=BUTTON_START(108), Minus=BUTTON_SELECT(109), stick clicks
   THUMBL(106)/THUMBR(107), D-pad DPAD_UP/DOWN/LEFT/RIGHT (19..22). As on
-  Android (Generic.kcm fallbacks), an unhandled BUTTON_A is re-dispatched
-  as DPAD_CENTER and an unhandled BUTTON_B as BACK; an unconsumed left
-  stick synthesizes DPAD keys (like ViewRootImpl's SyntheticJoystickHandler)
-  so every app is navigable with a controller. Touch screen events are
-  delivered in handheld mode.
-- Windows: `WindowManagerGlobal` keeps a z-ordered list of
-  `ViewRootImpl`s (activity windows, dialogs, popups, toasts). Rendering
-  is scheduled through `Choreographer` (60 Hz timing from the platform).
-  A frame redraws all windows bottom-up into one screen-sized `int[]`
-  back buffer (dim-behind layers for dialogs), then presents it with
-  `WindowManagerGlobal.nPresent(int[] px, int w, int h)` (GIL released).
-  Nothing is redrawn while nothing is invalidated.
-- Touch goes to the top-most window containing the point (or the top-most
-  modal window); keys go to the top-most focusable window.
+  Android (Generic.kcm fallbacks), `WindowManagerGlobal` re-dispatches an
+  unhandled BUTTON_A as DPAD_CENTER and an unhandled BUTTON_B as BACK
+  (FLAG_FALLBACK; the up of a fallback is canceled if the original up was
+  handled). Joystick motion that no view consumes is turned into D-pad
+  keys with key repeat by `ViewRootImpl.SyntheticJoystickHandler`
+  (threshold 0.5 on the left stick or hat). Every app is therefore
+  navigable with a controller.
+- Frames: `Choreographer` keeps AOSP's callback queues (INPUT, ANIMATION,
+  INSETS_ANIMATION, TRAVERSAL, COMMIT; `postCallback` and friends are
+  public hidden APIs) and runs them once per frame, paced at the display
+  refresh rate. `View.postOnAnimation` uses CALLBACK_ANIMATION.
+- Windows: `WindowManagerGlobal` keeps a z-ordered list of `ViewRootImpl`s
+  (layer by window type: application 2, sub-windows 3, system 10, input
+  method 15, toast 20; newer windows above older ones of the same layer).
+  Each `ViewRootImpl` owns an ARGB `Bitmap` of its window size and redraws
+  only the union of invalidated rectangles (dirty rects are propagated up
+  through `ViewGroup.invalidateChildInParent`, transformed by child
+  matrices). The window size comes from its `WindowManager.LayoutParams`:
+  MATCH_PARENT fills the display, WRAP_CONTENT measures the root first
+  against the 320dp preferred dialog width (as AOSP does); the window is
+  placed with `gravity`, `x`, `y` and margins. In the COMMIT phase the
+  windows are composited bottom-up into a screen bitmap (FLAG_DIM_BEHIND
+  draws a black layer of `dimAmount` alpha first; `alpha` is applied) and
+  presented with `WindowManagerGlobal.nPresent(int[] px, int w, int h)`
+  (GIL released). A single opaque full-screen window is presented without
+  copying. Nothing is drawn or presented while nothing is invalidated.
+- Input routing: touch DOWN goes to the topmost window that contains the
+  point or is touch-modal (not FLAG_NOT_TOUCH_MODAL / FLAG_NOT_FOCUSABLE),
+  skipping FLAG_NOT_TOUCHABLE windows, and the rest of the gesture follows
+  it (coordinates offset to the window); windows below a modal one that
+  set FLAG_WATCH_OUTSIDE_TOUCH get ACTION_OUTSIDE. Keys and joystick go to
+  the focused window, the topmost one without FLAG_NOT_FOCUSABLE. Window
+  focus changes are dispatched as `onWindowFocusChanged`.
+- Inside a window, `ViewRootImpl` follows AOSP: touch mode (entered on a
+  touch DOWN, left by a navigation key, which focuses the first focusable
+  view and is consumed), key pipeline pre-IME, view tree, unhandled-key
+  listeners, Ctrl shortcuts, then D-pad/Tab focus navigation through
+  `FocusFinder`. The root `DecorView` passes events to the
+  `Window.Callback` (Activity, later Dialog), which calls back into
+  `Window.superDispatch*`.
+- Decor: `PhoneWindow` reads the theme's window attributes (background,
+  floating, translucent, dim, min width for floating windows, close on
+  touch outside, soft input mode) and inflates the framework layout
+  `screen_simple` (LinearLayout + action mode ViewStub + FrameLayout
+  `android:id/content`). Action bar and title decors are not implemented
+  yet (WS4/WS2); such themes fall back to screen_simple with a warning.
 - Display metrics: `android.view.Display.nGetInfo(int[] out)` returns
   width, height, dpi, refresh rate x 1000, has-touch. 1280x720 at 240 dpi
   in handheld mode, 1920x1080 at 360 dpi docked (same 853x480 dp).
   Portrait-locked activities get a letterboxed portrait window (height =
   screen height, width = 9/16 of it) with density lowered so the window is
-  at least 320 dp wide.
+  at least 320 dp wide (todo, WS4).
 - Soft keyboard: `InputMethodManager` calls
   `nRequestText(int id, String initial, String hint, int inputType, int maxLen)`;
   the platform shows swkbd (Switch) or answers from the test script
   (host) and posts PEV_TEXT; the result replaces the EditText content.
+
+### 6.4.1 View system notes for widget authors
+- `View`/`ViewGroup` are ports of AOSP; subclasses behave as on Android.
+  Package-private hooks used inside `android.view`: `View.draw(Canvas,
+  ViewGroup, long)` (per-child transform/alpha/clip), `mAttachInfo`
+  (`View.AttachInfo`), `dispatchAttachedToWindow/DetachedFromWindow`,
+  `invalidate(boolean)` and `assignParent`.
+- Fields that apps or AndroidX read by reflection keep their AOSP names:
+  `View.mListenerInfo`, `mAttachInfo`, `mLayoutParams`, `mMinWidth`,
+  `mMinHeight`, `mID`, `mParent`, `mPrivateFlags`, `mViewFlags`;
+  `View.AttachInfo.mStableInsets`/`mContentInsets` (WindowInsetsCompat);
+  `ViewGroup.mGroupFlags`; `LayoutInflater.mFactory`, `mFactory2`,
+  `mPrivateFactory`, `mConstructorArgs`.
+- Hidden AOSP methods other packages may call are public and marked
+  "framework-internal (hidden in AOSP)", e.g. `View.isLayoutRtl()`,
+  `View.hasIdentityMatrix()`, `View.getInverseMatrix()`,
+  `View.pointInView()`, `View.internalSetPadding()`, `View.setFrame()`,
+  `ViewGroup.setIsRootNamespace()`, `MotionEvent.split()`,
+  `MotionEvent.getPointerIdBits()`, `KeyEvent.isConfirmKey()`.
+- `@null` attribute values (a reference to 0) read as no value in
+  `TypedArray`, as in AOSP's ApplyStyle.
+- Drawing is software only: `isHardwareAccelerated()` is false, layer
+  types only add a `saveLayer` with the layer paint, elevation and
+  outlines draw no shadows, and `clipToOutline` is not applied yet.
+- `View.animate()`, `startAnimation()` and `StateListAnimator` belong to
+  WS5 (android.animation and view.animation do not exist yet); accessibility
+  classes are value holders since no accessibility service runs.
 
 ### 6.5 Application model (design)
 - The app runner (C, `app_run_apk`) opens the APK, sets `g_app_zip` and

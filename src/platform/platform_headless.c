@@ -5,7 +5,7 @@
  * comes from a script file (see the .script files under tests/apps):
  *
  *   wait <ms>            sleep
- *   idle [ms]            wait until the app stops presenting frames (default 300ms quiet)
+ *   idle [ms]            wait until input is consumed and no frame was presented for ms (default 300)
  *   tap <x> <y>          touch down + up
  *   down|move|up <x> <y> raw touch events (pointer 0)
  *   swipe x0 y0 x1 y1 [ms]
@@ -227,14 +227,20 @@ static void push_key(int action, int code) {
 
 static void wait_idle(int quiet_ms) {
     int64_t start = (int64_t)sa_time_ns();
+    const int64_t t0 = start;
     for (;;) {
         pthread_mutex_lock(&g_lock);
         int64_t last = g_last_present_ns;
         bool has_frame = g_frame != NULL;
+        bool pending = g_qlen > 0;
         pthread_mutex_unlock(&g_lock);
         int64_t now = (int64_t)sa_time_ns();
-        if (has_frame && now - last >= (int64_t)quiet_ms * 1000000) break;
-        if (now - start > 20000000000LL) {
+        /* quiet means: queued input consumed and no frame for quiet_ms since the later of the
+         * last present and the start of the idle command */
+        if (pending) start = now;
+        int64_t ref = last > start ? last : start;
+        if (has_frame && !pending && now - ref >= (int64_t)quiet_ms * 1000000) break;
+        if (now - t0 > 20000000000LL) {
             LOGW("idle: app still drawing after 20s");
             break;
         }

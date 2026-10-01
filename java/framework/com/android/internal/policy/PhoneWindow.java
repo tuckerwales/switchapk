@@ -382,7 +382,7 @@ public class PhoneWindow extends Window {
             try {
                 root = mLayoutInflater.inflate(layoutResource, null);
             } catch (RuntimeException e) {
-                Log.w(TAG, "Could not inflate screen_simple: " + e);
+                Log.w(TAG, "Could not inflate screen_simple", e);
             }
         }
         if (root == null) {

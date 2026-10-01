@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 3, see SESSION_LOG.md)
+## Current state (end of session 4, see SESSION_LOG.md)
 
 Working:
 - VM core, libcore, JNI, reflection, threads; VmTest passes.
@@ -61,16 +61,26 @@ Working:
 - `tools/fetch_toolchains.py` fetches aapt2, android.jar, builds
   framework-res.apk, fetches SQLite; devkitPro fetch implemented (Docker
   Hub may rate-limit: retries built in).
-- `java/framework` compiles to `build/java/framework.dex`. Activity,
-  PhoneWindow and ViewRootImpl present one full-screen view.
-- Resource, graphics and OS natives are registered. `app_runner` opens an
-  APK and enters `ActivityThread.main`.
-- `tests/apps/hello` draws on the headless platform. Its screenshot
-  matches the background, the gold rectangle and the label.
+- `java/framework` compiles to `build/java/framework.dex`; resource,
+  graphics and OS natives are registered; `app_runner` opens an APK and
+  enters `ActivityThread.main`.
+- View system core (WS1, most of it): AOSP ports of View, ViewGroup,
+  MotionEvent/KeyEvent/InputDevice/KeyCharacterMap, ViewConfiguration,
+  VelocityTracker, GestureDetector, ScaleGestureDetector, FocusFinder,
+  ViewTreeObserver, LayoutInflater (include, merge, ViewStub, themes),
+  Choreographer, ViewRootImpl (dirty-rect redraw, touch mode, focus
+  navigation, synthetic D-pad), WindowManagerGlobal (window stack,
+  input routing, A/B fallbacks, dim, compositing), PhoneWindow/DecorView
+  (theme window attributes, screen_simple decor), MenuInflater and an
+  internal menu model, Activity as Window.Callback. FrameLayout and
+  LinearLayout are ported (needed by the decor).
+- `tests/apps/hello` and `tests/apps/views` pass their screenshot checks
+  (views: XML layouts with weights, include, ViewStub, selector states,
+  tap, D-pad focus, A/B buttons, long press, dim-behind second window).
 
-M1 (WS0) is done. The view system, widgets, app model and the other
-post-WS0 packages are not started. `setContentView(int)` does not inflate
-layouts yet.
+Not started: text and TextView (WS2), most widgets (WS3), the rest of
+the app model (WS4: action bar decor, dialogs, menus on screen,
+fragments), animation (WS5) and the other post-WS0 packages.
 
 ## Checklist
 
@@ -98,6 +108,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ### M2
 - [ ] WS1 view system core
+  - [x] View, ViewGroup, input events, ViewConfiguration, VelocityTracker, gesture detectors, FocusFinder
+  - [x] ViewRootImpl, Choreographer, WindowManagerGlobal (window stack, routing, compositing)
+  - [x] LayoutInflater, ViewStub, PhoneWindow/DecorView, MenuInflater + menu model, Window.Callback
+  - [x] tests/apps/views acceptance sample
+  - [ ] SurfaceView/SurfaceHolder (software lockCanvas), TextureView
+  - [ ] context menu and action mode presentation (with WS4 dialogs)
+  - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
 - [ ] WS2 text and IME
 - [ ] WS3 widgets
 - [ ] WS4 app model
@@ -124,12 +141,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS0 is done: the tree compiles, VmTest passes, and the hello APK
-   screenshots.
-2. Fan out: WS1 first pushes the public View/ViewGroup API; in parallel
-   WS4 (app model), WS10 (Switch backend), WS13 (test infra),
-   WS6/WS7/WS9/WS11/WS12/WS15 as agents are available.
-3. WS2/WS3/WS5 once View API is in; WS8 once WS10 can present.
+1. WS1 has pushed the public View/ViewGroup API: WS2 (text), WS3
+   (widgets), WS4 (app model) and WS5 (animation) can start now.
+2. Finish WS1: SurfaceView/TextureView software surfaces, context menu
+   and action mode presentation once WS4 has dialogs.
+3. In parallel as agents are available: WS10 (Switch backend), WS13
+   (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
+4. WS8 once WS10 can present.
 
 ## Known issues and gotchas
 
@@ -145,6 +163,14 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   unaffected; SoftReference-based image caches will miss more often).
 - No finalizers: classes relying on `finalize()` to free native memory
   must be written to not need it (ours keep memory in Java arrays).
+- `tools/api_check.py <class...>` (or `-p <package>`) lists android.jar
+  members our framework lacks: run it on every class you touch.
+- Themes with an action bar or title (Theme.Material, Theme.Holo) use the
+  screen_simple decor until WS4 adds the action bar, so their content
+  starts at the top of the window.
+- The headless `idle` script command now waits until queued input is
+  consumed and nothing was presented for the quiet time since the command
+  started.
 
 ## Interface changes log
 
@@ -157,3 +183,13 @@ and update ARCHITECTURE.md in the same commit.
   `{platform_framework_path()}/framework-res.apk`. If none is readable it
   still passes the toolchain path and continues with an empty framework
   table. Host tests and the later Switch romfs layout share this rule.
+- 2026-10-01 (WS1): `PlatformInput` merges per-pointer touch events into
+  multi-pointer MotionEvents, assigns key/joystick sources and devices
+  (`InputDevice.ID_TOUCHSCREEN` 1, `ID_GAMEPAD` 2), and exposes
+  `setSensorSink` for PEV_SENSOR. `WindowManagerGlobal` gained
+  `dispatchTouch/dispatchKey/dispatchGenericMotion` (screen coordinates),
+  `setPlatformFocus` and `onDisplayChanged` (`scheduleAll` kept).
+  `Activity` implements `Window.Callback`, `KeyEvent.Callback` and
+  `LayoutInflater.Factory2` (BACK handled by onKeyDown/onKeyUp tracking).
+  `ContextImpl` serves LAYOUT_INFLATER_SERVICE (PhoneLayoutInflater) and
+  ACCESSIBILITY_SERVICE. TypedArray reads `@null` as no value.

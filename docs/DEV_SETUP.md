@@ -66,7 +66,27 @@ build/host/switchapk-host --data build/data --screen 1280x720@240 \
 python3 tests/apps/hello/check_shot.py build/shots/hello.png
 ```
 
+Sample apps with scripts and screenshot checks:
+
+```
+tools/build_apk.sh tests/apps/views
+mkdir -p build/shots
+build/host/switchapk-host --data build/data --screen 1280x720@240 \
+    --script tests/apps/views/views.script --screenshots build/shots \
+    build/apps/views/views.apk
+python3 tests/apps/views/check_shots.py build/shots
+```
+
+The screenshot directory must exist. `idle` in a script waits until the
+queued input was consumed and the app presented nothing for the quiet time.
+
 ## Inspecting things
+
+- `python3 tools/api_check.py android.view.View android.view.ViewGroup`
+  (or `-p android.view`) lists public/protected members of android.jar
+  that our framework lacks (the ones the VM would auto-stub); `-v` also
+  lists members we declare that android.jar does not have. Run `make java`
+  first.
 
 - `python3 tools/dexdump.py file.dex` lists classes/methods.
 - `javap -cp build/toolchains/sdk/android.jar -public <class>` shows the

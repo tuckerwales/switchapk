@@ -28,10 +28,12 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.method.AllCapsTransformationMethod;
+import android.text.method.DigitsKeyListener;
 import android.text.method.KeyListener;
 import android.text.method.MovementMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.text.method.SingleLineTransformationMethod;
+import android.text.method.TextKeyListener;
 import android.text.method.TransformationMethod;
 import android.text.style.ClickableSpan;
 import android.text.style.URLSpan;
@@ -44,8 +46,10 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
+import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -338,7 +342,34 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         if (!filters.isEmpty()) setFilters(filters.toArray(new InputFilter[filters.size()]));
         if (haveText || buffer != BufferType.NORMAL) setText(text, buffer);
         if (hint != null) setHint(hint);
+        if (mMovement == null) {
+            MovementMethod movement = getDefaultMovementMethod();
+            if (movement != null) setMovementMethod(movement);
+        }
+        if (mKeyListener == null && (mBufferType == BufferType.EDITABLE || mInputType != InputType.TYPE_NULL)) {
+            setKeyListener(defaultKeyListener());
+        }
+        applyEditorFocus();
         updateTextColors();
+    }
+
+    private KeyListener defaultKeyListener() {
+        int cls = mInputType & InputType.TYPE_MASK_CLASS;
+        if (cls == InputType.TYPE_CLASS_NUMBER) {
+            return DigitsKeyListener.getInstance((mInputType & InputType.TYPE_NUMBER_FLAG_SIGNED) != 0,
+                    (mInputType & InputType.TYPE_NUMBER_FLAG_DECIMAL) != 0);
+        }
+        if (cls == InputType.TYPE_CLASS_PHONE) return DigitsKeyListener.getInstance();
+        return TextKeyListener.getInstance();
+    }
+
+    private void applyEditorFocus() {
+        if (mKeyListener != null || mMovement != null) {
+            setFocusable(true);
+            setClickable(true);
+            setLongClickable(true);
+        }
+        if (onCheckIsTextEditor()) setFocusableInTouchMode(true);
     }
 
     private boolean applyAppearance(int resId) {
@@ -1014,7 +1045,11 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
 
     public void setKeyListener(KeyListener input) {
         mKeyListener = input;
-        if (input != null && !(mText instanceof Editable)) setText(mText, BufferType.EDITABLE);
+        if (input != null) {
+            if (mInputType == InputType.TYPE_NULL) mInputType = input.getInputType();
+            if (!(mText instanceof Editable)) setText(mText, BufferType.EDITABLE);
+            applyEditorFocus();
+        }
     }
 
     public final MovementMethod getMovementMethod() { return mMovement; }
@@ -1289,7 +1324,8 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         outAttrs.initialSelStart = getSelectionStart();
         outAttrs.initialSelEnd = getSelectionEnd();
         outAttrs.hintLocales = mImeHintLocales;
-        return null;
+        if (!(mText instanceof Editable)) return null;
+        return new EditableInputConnection(this);
     }
 
     public boolean isInputMethodTarget() { return onCheckIsTextEditor() && isFocused(); }
@@ -1859,6 +1895,11 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_UP && onCheckIsTextEditor() && isFocusable() && isFocusableInTouchMode()
+                && !isFocused()) {
+            requestFocus();
+        }
         if (mMovement != null && mText instanceof Spannable
                 && mMovement.onTouchEvent(this, (Spannable) mText, event)) {
             return true;
@@ -1905,6 +1946,9 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         }
         if (focused && mSelectAllOnFocus && mText instanceof Spannable) Selection.selectAll((Spannable) mText);
         if (mMovement != null && mText instanceof Spannable) mMovement.onTakeFocus(this, (Spannable) mText, direction);
+        if (focused && onCheckIsTextEditor() && getShowSoftInputOnFocus()) {
+            InputMethodManager.systemInstance().showSoftInput(this, 0);
+        }
         invalidate();
     }
 
@@ -2047,6 +2091,30 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     public void beginBatchEdit() {}
 
     public void endBatchEdit() {}
+
+    private static final class EditableInputConnection extends BaseInputConnection {
+        private final TextView mTextView;
+
+        EditableInputConnection(TextView textView) {
+            super(textView, true);
+            mTextView = textView;
+        }
+
+        @Override
+        public Editable getEditable() { return mTextView.getEditableText(); }
+
+        @Override
+        public boolean beginBatchEdit() {
+            mTextView.beginBatchEdit();
+            return true;
+        }
+
+        @Override
+        public boolean endBatchEdit() {
+            mTextView.endBatchEdit();
+            return true;
+        }
+    }
 
     public void onBeginBatchEdit() {}
 

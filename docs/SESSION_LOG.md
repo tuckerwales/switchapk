@@ -65,7 +65,9 @@ what is left in flight.
 - `tests/apps/text` inflates TextViews and checks screenshots plus
   in-process logic (wrap, ellipsis count, gravity, spans, TextWatcher,
   password dots, length filter).
-- Left in WS2: movement and key listeners, EditText,
-  BaseInputConnection, IME delivery of scripted `text`, Html.fromHtml,
-  Linkify, DateUtils.
+- EditText, arrow/scrolling/link movement, key listeners (text, qwerty,
+  digits) and BaseInputConnection. A focused editor asks for platform
+  text; the result is committed with InputConnection.commitText.
+  `tests/apps/text` types hello, A and DEL and checks the TextWatcher.
+- Left in WS2: Html.fromHtml, Linkify, DateUtils.
 

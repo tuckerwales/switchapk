@@ -67,4 +67,23 @@
         android:textColor="#FF000000"
         android:textColorHint="#FF6A1B9A"
         android:textSize="16sp" />
+
+    <EditText
+        android:id="@+id/edit"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="#FFFFFFFF"
+        android:gravity="top|start"
+        android:hint="Type"
+        android:inputType="text"
+        android:singleLine="true"
+        android:textColor="#FF000000"
+        android:textColorHint="#FF9E9E9E"
+        android:textSize="18sp" />
+
+    <View
+        android:id="@+id/typed"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:background="#FF9E9E9E" />
 </LinearLayout>

@@ -80,10 +80,11 @@ Working:
 - Text engine (WS2): Spanned/Spannable, spans, TextUtils, TextPaint,
   StaticLayout, BoringLayout, DynamicLayout. TextView measures and draws
   through Layout (wrapping, gravity, ellipsize, hints, compound
-  drawables, password and single-line transformations). `tests/apps/text`
-  checks screenshots and in-process logic.
+  drawables, password and single-line transformations). EditText takes
+  hardware keys and scripted `text` through InputConnection.commitText.
+  `tests/apps/text` checks screenshots and in-process logic.
 
-Not started: EditText and IME delivery (rest of WS2), most widgets
+Not started: Html, Linkify and DateUtils (rest of WS2), most widgets
 (WS3), the rest of the app model (WS4: action bar decor, dialogs, menus
 on screen, fragments), animation (WS5) and the other post-WS0 packages.
 
@@ -123,7 +124,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - [ ] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
   - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
-  - [ ] movement and key listeners, EditText, BaseInputConnection, IME `text` delivery
+  - [x] movement and key listeners, EditText, BaseInputConnection, IME `text` delivery
   - [ ] Html.fromHtml, Linkify, DateUtils
 - [ ] WS3 widgets
 - [ ] WS4 app model
@@ -150,10 +151,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS2 is in progress. Next: movement and key listeners, EditText, and
-   IME delivery of scripted `text` (TextWatcher). Then Html, Linkify and
-   DateUtils. WS3 (widgets), WS4 (app model) and WS5 (animation) can
-   start in parallel.
+1. WS2 acceptance (text sample plus EditText `text` input) is met. Next
+   in WS2: Html.fromHtml, Linkify and DateUtils. WS3 (widgets), WS4 (app
+   model) and WS5 (animation) can start in parallel.
 2. Finish WS1: context menu and action mode presentation once WS4 has
    dialogs.
 3. In parallel as agents are available: WS10 (Switch backend), WS13
@@ -204,3 +204,7 @@ and update ARCHITECTURE.md in the same commit.
   `LayoutInflater.Factory2` (BACK handled by onKeyDown/onKeyUp tracking).
   `ContextImpl` serves LAYOUT_INFLATER_SERVICE (PhoneLayoutInflater) and
   ACCESSIBILITY_SERVICE. TypedArray reads `@null` as no value.
+- 2026-10-01 (WS2): PEV_TEXT is still (request id, string) and
+  `nRequestText` is unchanged. `InputMethodManager.deliverTextResult`
+  commits that string with `InputConnection.commitText` on the view that
+  last called `showSoftInput`.

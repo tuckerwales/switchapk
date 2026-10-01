@@ -386,7 +386,8 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - Soft keyboard: `InputMethodManager` calls
   `nRequestText(int id, String initial, String hint, int inputType, int maxLen)`;
   the platform shows swkbd (Switch) or answers from the test script
-  (host) and posts PEV_TEXT; the result replaces the EditText content.
+  (host) and posts PEV_TEXT. InputMethodManager commits that string into
+  the editor that called showSoftInput, via InputConnection.commitText.
 
 ### 6.4.1 View system notes for widget authors
 - `View`/`ViewGroup` are ports of AOSP; subclasses behave as on Android.

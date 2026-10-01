@@ -32,7 +32,7 @@ duplicating work.
 |---|---|---|---|---|
 | WS0 | Integration skeleton: framework compiles, natives registered, app runner, first APK on screen | none | done | ws0 2026-09-30 |
 | WS1 | View system core (View, ViewGroup, input dispatch, focus, windows, ViewRootImpl, Choreographer, LayoutInflater, PhoneWindow/DecorView) | WS0 | in progress (core, surfaces and acceptance sample done; context menu and action mode presentation left) | ws1 session 4, 2026-10-01 |
-| WS2 | Text: android.text + TextView/EditText + IME bridge | WS0, WS1 (View API) | in progress (text engine and TextView measure/draw/attrs landed; EditText, movement/key listeners and IME remain) | ws2 session 5, 2026-10-01 |
+| WS2 | Text: android.text + TextView/EditText + IME bridge | WS0, WS1 (View API) | in progress (TextView, EditText and IME commit landed; Html, Linkify and DateUtils remain) | ws2 session 5, 2026-10-01 |
 | WS3 | Widgets: layouts, lists/adapters, scrolling, buttons, progress, Toast, PopupWindow, Spinner, Toolbar | WS1 | not started | |
 | WS4 | App model: Activity/ActivityThread lifecycle, manifest, intents, dialogs, menus/ActionBar, services, legacy fragments | WS0 | not started | |
 | WS5 | Animation: android.animation, view.animation, ViewPropertyAnimator, AVD animation | WS1 | not started | |

@@ -14,10 +14,15 @@ import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.text.method.TextKeyListener;
 import android.text.style.ForegroundColorSpan;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import android.widget.EditText;
 import android.widget.TextView;
 
 /** TextView behaviour that the layout screenshot cannot prove on its own. */
@@ -35,6 +40,7 @@ final class WidgetChecks {
         lengthFilter(ctx);
         hint(ctx);
         compound(ctx);
+        editor(ctx);
     }
 
     private static TextView tv(Context ctx) {
@@ -175,5 +181,21 @@ final class WidgetChecks {
         v.setCompoundDrawables(box, null, null, null);
         v.setCompoundDrawablePadding(4);
         SelfTest.check("tvCompound", v.getCompoundPaddingLeft() == before + 24, v.getCompoundPaddingLeft());
+    }
+
+    private static void editor(Context ctx) {
+        EditText e = new EditText(ctx);
+        e.setAllCaps(false);
+        e.setKeyListener(TextKeyListener.getInstance());
+        SelfTest.check("editEditable", e.getText() != null && e.getFreezesText(), e.getText());
+        e.onKeyDown(KeyEvent.KEYCODE_A, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_A));
+        SelfTest.check("editKeyA", "a".equals(e.getText().toString()), e.getText());
+        e.onKeyDown(KeyEvent.KEYCODE_A, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_A));
+        e.onKeyDown(KeyEvent.KEYCODE_DEL, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL));
+        SelfTest.check("editKeyDel", "a".equals(e.getText().toString()), e.getText());
+        EditorInfo info = new EditorInfo();
+        InputConnection ic = e.onCreateInputConnection(info);
+        boolean committed = ic != null && ic.commitText("hi", 1);
+        SelfTest.check("editCommit", committed && "ahi".equals(e.getText().toString()), e.getText());
     }
 }

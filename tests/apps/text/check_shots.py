@@ -103,8 +103,36 @@ def main():
     expect_has(40, 412, 700, 470, solid_green, "background span")
     expect_has(4, 486, 160, 528, purple, "hint text")
 
+    fails += input_shot(os.path.join(d, "text_input.png"))
     print("FAIL: %d" % fails if fails else "PASS text")
     return 1 if fails else 0
+
+
+def input_shot(path):
+    """EditText after scripted text, key A and key DEL. The bar is green only if both landed."""
+    w, h, px = read_png(path)
+    fails = 0
+
+    def expect(x, y, color, label):
+        nonlocal fails
+        got = pixel(px, w, x, y)
+        ok = close(got, color, 6)
+        print("%s %s (%d,%d) %s: got #%08X want #%08X" % (
+            "ok  " if ok else "FAIL", os.path.basename(path), x, y, label, got, color))
+        if not ok:
+            fails += 1
+
+    def black(c):
+        return (c & 0xFFFFFF) < 0x303030 and (c >> 24) > 0xF0
+
+    expect(20, 616, 0xFF4CAF50, "hello, then A, then DEL")
+    expect(1100, 560, 0xFFFFFFFF, "edit field background")
+    if not has(px, w, 8, 540, 220, 600, black):
+        fails += 1
+        print("FAIL %s region (8,540)-(220,600) typed text" % os.path.basename(path))
+    else:
+        print("ok   %s region (8,540)-(220,600) typed text" % os.path.basename(path))
+    return fails
 
 
 if __name__ == "__main__":

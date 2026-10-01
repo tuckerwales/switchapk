@@ -148,7 +148,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] Toolbar, ActionMenuView, ActionMenuPresenter (action buttons,
     overflow popup), menu presenters (MenuPresenter, BaseMenuPresenter,
     ActionMenuItemView), DecorToolbar/ToolbarWidgetWrapper; tests/apps/toolbar
-  - [ ] the rest (GridView, TableLayout, GridLayout, pickers, SearchView, ...)
+  - [x] GridView (AbsListView lays out rows of N items), TableLayout,
+    TableRow, AbsoluteLayout; tests/apps/grid
+  - [ ] the rest (GridLayout, ViewAnimator family, clocks, pickers,
+    SearchView, AutoCompleteTextView, ExpandableListView, cursor and
+    simple adapters, TabHost, VideoView, RemoteViews, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,

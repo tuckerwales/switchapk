@@ -216,6 +216,20 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         requestLayout();
     }
 
+    /**
+     * framework-internal. Selects {@code selected} and lays out again with the row of
+     * {@code anchor} at {@code y} below the top padding (GridView key navigation).
+     */
+    void selectWithAnchor(int selected, int anchor, int y) {
+        if (mAdapter == null || mAdapter.getCount() == 0) return;
+        mSpecificPosition = anchor;
+        mSpecificTop = y;
+        mLayoutMode = LAYOUT_SPECIFIC;
+        mSelectedPosition = selected;
+        mSelectedRowId = mAdapter.getItemId(selected);
+        requestLayout();
+    }
+
     void resetList() {
         removeAllViewsInLayout();
         mFirstPosition = 0;
@@ -604,6 +618,8 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
                 newFirst = Math.max(0, mItemCount - 1);
                 newTop = childrenTop;
             }
+            // Rows always start at a multiple of the row size.
+            newFirst -= newFirst % itemsPerRow();
             for (int i = 0; i < childCount; i++) mRecycler.addScrapView(getChildAt(i));
             detachAllViewsFromParent();
             if (mItemCount == 0) {
@@ -631,31 +647,55 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         }
     }
 
-    /** Gap between rows. ListView uses the divider height. */
+    /** Gap between rows. ListView uses the divider height, GridView the vertical spacing. */
     int childGap() { return 0; }
 
+    /** Items laid out side by side in one row (GridView: its column count). Rows start at multiples of it. */
+    int itemsPerRow() { return 1; }
+
+    /** Width measure spec for an item in the given column. */
+    int childWidthMeasureSpec(LayoutParams p, int column) {
+        return ViewGroup.getChildMeasureSpec(mWidthMeasureSpec, mListPadding.left + mListPadding.right, p.width);
+    }
+
+    /** Left edge for a measured item in the given column. */
+    int childLeft(int column, int measuredWidth) { return mListPadding.left; }
+
     private View fillDown(int pos, int nextTop) {
+        final int n = itemsPerRow();
         int end = getHeight() - mListPadding.bottom;
         View child = null;
         while (nextTop < end && pos < mItemCount) {
             int before = nextTop;
-            child = makeAndAddView(pos, nextTop, true);
-            nextTop = child.getBottom() + childGap();
+            final int rowEnd = Math.min(pos + n, mItemCount);
+            int bottom = nextTop;
+            for (int p = pos; p < rowEnd; p++) {
+                child = makeAndAddView(p, nextTop, true, p - pos, -1);
+                bottom = Math.max(bottom, child.getBottom());
+            }
+            nextTop = bottom + childGap();
             if (nextTop <= before) break;
-            pos++;
+            pos = rowEnd;
         }
         return child;
     }
 
     private View fillUp(int pos, int nextBottom) {
+        final int n = itemsPerRow();
         int end = mListPadding.top;
         View child = null;
         while (nextBottom > end && pos >= 0) {
             int before = nextBottom;
-            child = makeAndAddView(pos, nextBottom, false);
-            nextBottom = child.getTop() - childGap();
+            final int rowStart = pos - pos % n;
+            int top = nextBottom;
+            for (int p = rowStart; p <= pos; p++) {
+                // The row goes in front of the existing children, in position order.
+                child = makeAndAddView(p, nextBottom, false, p - rowStart, p - rowStart);
+                top = Math.min(top, child.getTop());
+            }
+            nextBottom = top - childGap();
+            pos = rowStart - 1;
             if (nextBottom >= before) break;
-            pos--;
         }
         mFirstPosition = pos + 1;
         return child;
@@ -693,16 +733,16 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         }
     }
 
-    private View makeAndAddView(int position, int y, boolean flowDown) {
+    private View makeAndAddView(int position, int y, boolean flowDown, int column, int where) {
         View scrap = null;
         if (!mDataChanged) scrap = mRecycler.getScrapView(position);
         View child = mAdapter.getView(position, scrap, this);
         if (child == null) child = new View(getContext());
-        setupChild(child, position, y, flowDown);
+        setupChild(child, position, y, flowDown, column, where);
         return child;
     }
 
-    private void setupChild(View child, int position, int y, boolean flowDown) {
+    private void setupChild(View child, int position, int y, boolean flowDown, int column, int where) {
         LayoutParams p;
         ViewGroup.LayoutParams lp = child.getLayoutParams();
         if (lp == null) p = (LayoutParams) generateDefaultLayoutParams();
@@ -713,7 +753,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
             // Already attached from a previous fill in this pass. Relayout only.
         } else {
             if (child.getParent() instanceof ViewGroup) ((ViewGroup) child.getParent()).removeView(child);
-            addViewInLayout(child, flowDown ? -1 : 0, p, true);
+            addViewInLayout(child, flowDown ? -1 : where, p, true);
         }
         if (mChoiceMode != CHOICE_MODE_NONE && mCheckStates != null && child instanceof Checkable) {
             ((Checkable) child).setChecked(mCheckStates.get(position));
@@ -721,8 +761,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         boolean enable = mAdapter.isEnabled(position);
         if (!mSelectedChildViewEnabled && position == mSelectedPosition) enable = false;
         if (child.isEnabled() != enable) child.setEnabled(enable);
-        int widthPadding = mListPadding.left + mListPadding.right;
-        int childWidthSpec = ViewGroup.getChildMeasureSpec(mWidthMeasureSpec, widthPadding, p.width);
+        int childWidthSpec = childWidthMeasureSpec(p, column);
         int childHeightSpec;
         if (p.height > 0) childHeightSpec = MeasureSpec.makeMeasureSpec(p.height, MeasureSpec.EXACTLY);
         else childHeightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
@@ -730,7 +769,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         int w = child.getMeasuredWidth();
         int h = child.getMeasuredHeight();
         int childTop = flowDown ? y : y - h;
-        int left = mListPadding.left;
+        int left = childLeft(column, w);
         child.layout(left, childTop, left + w, childTop + h);
     }
 
@@ -789,7 +828,6 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
                 View child = getChildAt(i);
                 if (child.getBottom() >= threshold) break;
                 count++;
-                mRecycler.addScrapView(child);
             }
         } else {
             int threshold = listBottom - incrementalDeltaY;
@@ -798,9 +836,23 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
                 if (child.getTop() <= threshold) break;
                 start = i;
                 count++;
-                mRecycler.addScrapView(child);
             }
         }
+        final int n = itemsPerRow();
+        if (n > 1 && count > 0) {
+            // Only whole rows leave, so the first position stays at a row start.
+            if (movingUp) {
+                count -= count % n;
+            } else {
+                final int rem = (mFirstPosition + start) % n;
+                if (rem != 0) {
+                    start += n - rem;
+                    count -= n - rem;
+                }
+            }
+            if (count <= 0) count = 0;
+        }
+        for (int i = start; i < start + count; i++) mRecycler.addScrapView(getChildAt(i));
         mBlockLayoutRequests = true;
         if (count > 0) detachViewsFromParent(start, count);
         if (movingUp) mFirstPosition += count;
@@ -867,17 +919,23 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         int distance;
         if (position <= first) {
             View child = getChildAt(0);
-            distance = -((first - position) * row) + (mListPadding.top - child.getTop());
+            distance = -(rowsBetween(position, first) * row) + (mListPadding.top - child.getTop());
         } else if (position >= last) {
             View child = getChildAt(getChildCount() - 1);
             int end = getHeight() - mListPadding.bottom;
-            distance = (position - last) * row + (child.getBottom() - end);
+            distance = rowsBetween(last, position) * row + (child.getBottom() - end);
         } else {
             View child = getChildAt(position - first);
             distance = child.getTop() - mListPadding.top;
         }
         if (distance == 0) setSelectionFromTop(position, 0);
         else smoothScrollBy(distance, Math.max(100, Math.min(400, Math.abs(distance))));
+    }
+
+    /** Rows from the one holding position {@code from} to the one holding {@code to} (to >= from). */
+    private int rowsBetween(int from, int to) {
+        final int n = itemsPerRow();
+        return to / n - from / n;
     }
 
     public void smoothScrollToPosition(int position, int boundPosition) { smoothScrollToPosition(position); }
@@ -891,11 +949,11 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         else {
             int row = getChildCount() > 0 ? Math.max(1, getChildAt(0).getHeight() + childGap()) : 1;
             if (position < mFirstPosition) {
-                currentTop = (getChildCount() > 0 ? getChildAt(0).getTop() : 0) - (mFirstPosition - position) * row;
+                currentTop = (getChildCount() > 0 ? getChildAt(0).getTop() : 0) - rowsBetween(position, mFirstPosition) * row;
             } else {
                 View last = getChildCount() > 0 ? getChildAt(getChildCount() - 1) : null;
                 int lastPos = mFirstPosition + getChildCount() - 1;
-                currentTop = (last == null ? 0 : last.getBottom()) + (position - lastPos) * row;
+                currentTop = (last == null ? 0 : last.getBottom()) + rowsBetween(lastPos, position) * row;
             }
         }
         smoothScrollBy(currentTop - (mListPadding.top + offset), duration <= 0 ? 200 : duration);
@@ -1106,7 +1164,8 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
     }
 
     private void endTouch() {
-        mTouchMode = TOUCH_MODE_REST;
+        // A fling started by this ACTION_UP keeps running.
+        if (mTouchMode != TOUCH_MODE_FLING) mTouchMode = TOUCH_MODE_REST;
         mActivePointerId = INVALID_POINTER;
         recycleVelocityTracker();
         releaseEdges();

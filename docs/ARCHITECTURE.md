@@ -394,6 +394,10 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   uses `Resources.selectDefaultTheme(0, targetSdk)` (DeviceDefault Light
   DarkActionBar for targetSdk 24+), as AOSP ContextImpl and
   ContextThemeWrapper do.
+- Lists: AbsListView fills, scrolls and recycles in rows of
+  `itemsPerRow()` items (1 for ListView, the column count for GridView),
+  with `childWidthMeasureSpec`/`childLeft` per column and `childGap()`
+  between rows; the first position is always a row start.
 - Private framework resources: `InternalRes` resolves
   com.android.internal ids by name; private attrs live under the
   "^attr-private" type in framework-res and are found there.

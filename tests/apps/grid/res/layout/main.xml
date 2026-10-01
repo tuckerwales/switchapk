@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="horizontal" android:background="#FFFFFFFF">
+    <LinearLayout android:layout_width="400dp" android:layout_height="match_parent"
+        android:orientation="vertical" android:padding="8dp">
+        <TableLayout android:id="@+id/table" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:stretchColumns="1"
+            android:collapseColumns="3">
+            <TableRow android:background="#FFE0E0E0">
+                <TextView android:text="Name" android:padding="4dp" />
+                <TextView android:text="Value" android:padding="4dp" android:background="#FFB3E5FC" />
+                <TextView android:text="Unit" android:padding="4dp" />
+                <TextView android:text="Hidden" android:padding="4dp" />
+            </TableRow>
+            <TableRow>
+                <TextView android:text="Width" android:padding="4dp" />
+                <TextView android:text="1280" android:padding="4dp" android:gravity="end" />
+                <TextView android:text="px" android:padding="4dp" />
+                <TextView android:text="x" android:padding="4dp" />
+            </TableRow>
+            <TableRow>
+                <TextView android:text="Density, long label" android:padding="4dp"
+                    android:layout_span="2" android:background="#FFFFE0B2" />
+                <TextView android:text="dpi" android:padding="4dp" />
+            </TableRow>
+        </TableLayout>
+        <AbsoluteLayout android:layout_width="match_parent" android:layout_height="120dp"
+            android:background="#FFF5F5F5" android:layout_marginTop="8dp">
+            <View android:layout_width="40dp" android:layout_height="40dp"
+                android:layout_x="20dp" android:layout_y="10dp" android:background="#FFE53935" />
+            <View android:layout_width="40dp" android:layout_height="40dp"
+                android:layout_x="100dp" android:layout_y="60dp" android:background="#FF43A047" />
+        </AbsoluteLayout>
+        <TextView android:id="@+id/status" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:textSize="18sp" android:paddingTop="8dp" />
+    </LinearLayout>
+    <GridView android:id="@+id/grid" android:layout_width="0dp" android:layout_weight="1"
+        android:layout_height="match_parent" android:numColumns="auto_fit"
+        android:columnWidth="100dp" android:horizontalSpacing="8dp" android:verticalSpacing="8dp"
+        android:stretchMode="columnWidth" android:drawSelectorOnTop="true" android:padding="8dp" android:background="#FF263238" />
+</LinearLayout>

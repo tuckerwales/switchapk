@@ -241,3 +241,11 @@ what is left in flight.
   action bar like on Android; its checks moved down by 72px.
   tests/apps/actionbar covers the bar, items, overflow, MENU, both kinds
   of action mode, hide/show and setActionBar(Toolbar).
+- WS3 grid and tables. AbsListView now fills, scrolls and recycles whole
+  rows (itemsPerRow, per-column width and left hooks); GridView ports
+  AOSP determineColumns, stretch modes, spacing and gravity on top, with
+  D-pad navigation that keeps the selected row on screen. TableLayout,
+  TableRow (on LinearLayout's virtual child hooks) and AbsoluteLayout
+  ported. Fixed a list bug: ACTION_UP started a fling and then reset the
+  touch mode, so flings never ran and the next tap only "stopped" the
+  dead scroller. tests/apps/grid covers all of it.

@@ -35,7 +35,7 @@ public class MenuAdapter extends BaseAdapter {
     public void setForceShowIcon(boolean forceShow) { mForceShowIcon = forceShow; }
 
     private ArrayList<MenuItemImpl> items() {
-        if (mItems == null) mItems = mAdapterMenu.getVisibleItems();
+        if (mItems == null) mItems = mOverflowOnly ? mAdapterMenu.getNonActionItems() : mAdapterMenu.getVisibleItems();
         return mItems;
     }
 

@@ -214,3 +214,15 @@ what is left in flight.
   tests/apps/popups covers the drop-down, the dialog spinner, a popup menu
   with a sub menu, a toast, a popup flipping above its anchor, outside
   dismissal and D-pad use of the drop-down.
+- WS3 Toolbar. Toolbar, ActionMenuView, ActionMenuPresenter (overflow
+  button and popup, action buttons by ActionBarPolicy, submenus),
+  RtlSpacingHelper and CollapsibleActionView ported from AOSP. The menu
+  core gained presenters (MenuPresenter, BaseMenuPresenter,
+  ActionMenuItemView, ActionMenuItem), action item flagging and action
+  view expansion in MenuBuilder/MenuItemImpl. DecorToolbar and
+  ToolbarWidgetWrapper are ready for the action bar decor (tabs not
+  ported). InternalRes.attr now falls back to the "^attr-private" type:
+  private attrs such as navigationButtonStyle live there in framework-res,
+  so they used to resolve to 0 and silently drop their styles.
+  tests/apps/toolbar checks layout, nav/action/overflow clicks and the
+  overflow popup.

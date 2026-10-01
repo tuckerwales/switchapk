@@ -143,7 +143,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] PopupWindow, ListPopupWindow, DropDownListView, PopupMenu
     (MenuPopupHelper), AbsSpinner, Spinner (drop-down and dialog), Toast;
     tests/apps/popups (touch and D-pad)
-  - [ ] Toolbar, ActionMenuView, and the rest
+  - [x] Toolbar, ActionMenuView, ActionMenuPresenter (action buttons,
+    overflow popup), menu presenters (MenuPresenter, BaseMenuPresenter,
+    ActionMenuItemView), DecorToolbar/ToolbarWidgetWrapper; tests/apps/toolbar
+  - [ ] the rest (GridView, TableLayout, GridLayout, pickers, SearchView, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,

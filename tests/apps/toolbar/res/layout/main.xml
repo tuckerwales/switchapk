@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="#FFFFFFFF">
+    <Toolbar android:id="@+id/toolbar"
+        android:layout_width="match_parent" android:layout_height="?android:attr/actionBarSize"
+        android:background="#FF3F51B5" android:title="Inbox" android:subtitle="3 new"
+        android:titleTextColor="#FFFFFFFF" android:subtitleTextColor="#B3FFFFFF"
+        android:navigationIcon="@android:drawable/ic_menu_revert" />
+    <TextView android:id="@+id/status" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:textSize="18sp" android:padding="16dp" />
+</LinearLayout>

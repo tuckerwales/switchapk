@@ -24,7 +24,11 @@ public final class InternalRes {
         }
     }
 
-    public static int attr(String name) { return id("attr", name); }
+    /** Private framework attrs live under the "^attr-private" type in framework-res. */
+    public static int attr(String name) {
+        final int id = id("attr", name);
+        return id != 0 ? id : id("^attr-private", name);
+    }
 
     public static int layout(String name) { return id("layout", name); }
 

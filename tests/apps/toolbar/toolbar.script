@@ -1,0 +1,15 @@
+idle 500
+screenshot toolbar_start.png
+tap 42 36
+idle 200
+tap 1102 36
+idle 200
+tap 1180 36
+idle 200
+tap 1246 36
+idle 400
+screenshot toolbar_overflow.png
+tap 1040 108
+idle 300
+screenshot toolbar_end.png
+quit

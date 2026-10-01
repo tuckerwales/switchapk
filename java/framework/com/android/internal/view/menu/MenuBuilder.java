@@ -13,10 +13,11 @@ import android.view.View;
 import java.util.ArrayList;
 
 /**
- * framework-internal. Menu model (AOSP MenuBuilder without presenters):
- * items sorted by category and order, groups, shortcuts and item invocation.
- * Menus are shown by MenuPanel (options panel) and MenuDialogHelper (context
- * menus, sub menus), which register as close listeners.
+ * framework-internal. Menu model (AOSP MenuBuilder): items sorted by category
+ * and order, groups, shortcuts, item invocation, and presenters (the action
+ * bar's ActionMenuPresenter) that split items into action and overflow items.
+ * Menus are also shown by MenuPanel, MenuPopupHelper and MenuDialogHelper,
+ * which register as close listeners.
  */
 public class MenuBuilder implements Menu {
     private static final int[] sCategoryToOrder = new int[] {1, 4, 5, 3, 2, 0};
@@ -24,6 +25,14 @@ public class MenuBuilder implements Menu {
     private final Context mContext;
     private final Resources mResources;
     final ArrayList<MenuItemImpl> mItems = new ArrayList<MenuItemImpl>();
+    private final ArrayList<java.lang.ref.WeakReference<MenuPresenter>> mPresenters =
+            new ArrayList<java.lang.ref.WeakReference<MenuPresenter>>();
+    private final ArrayList<MenuItemImpl> mActionItems = new ArrayList<MenuItemImpl>();
+    private final ArrayList<MenuItemImpl> mNonActionItems = new ArrayList<MenuItemImpl>();
+    private boolean mIsActionItemsStale = true;
+    private boolean mPreventDispatchingItemsChanged;
+    private boolean mItemsChangedWhileDispatchPrevented;
+    private boolean mStructureChangedWhileDispatchPrevented;
     private Callback mCallback;
     private boolean mQwertyMode;
     private boolean mGroupDividerEnabled;
@@ -239,16 +248,147 @@ public class MenuBuilder implements Menu {
 
     public boolean performIdentifierAction(int id, int flags) { return performItemAction(findItem(id), flags); }
 
-    public boolean performItemAction(MenuItem item, int flags) {
+    public boolean performItemAction(MenuItem item, int flags) { return performItemAction(item, null, flags); }
+
+    public boolean performItemAction(MenuItem item, MenuPresenter preferredPresenter, int flags) {
         MenuItemImpl itemImpl = (MenuItemImpl) item;
         if (itemImpl == null || !itemImpl.isEnabled()) return false;
         boolean invoked = itemImpl.invoke();
         if (itemImpl.hasSubMenu()) {
-            if ((flags & FLAG_PERFORM_NO_CLOSE) == 0) close();
+            // A presenter (the action bar) may show the sub menu; otherwise the menu closes.
+            boolean shown = dispatchSubMenuSelected((SubMenuBuilder) itemImpl.getSubMenu(), preferredPresenter);
+            invoked |= shown;
+            if (!shown && (flags & FLAG_PERFORM_NO_CLOSE) == 0) close(true);
         } else if ((flags & FLAG_PERFORM_NO_CLOSE) == 0) {
-            close();
+            close(true);
         }
         return invoked;
+    }
+
+    // ---------------------------------------------------------------- presenters
+
+    public void addMenuPresenter(MenuPresenter presenter) { addMenuPresenter(presenter, mContext); }
+
+    public void addMenuPresenter(MenuPresenter presenter, Context menuContext) {
+        mPresenters.add(new java.lang.ref.WeakReference<MenuPresenter>(presenter));
+        presenter.initForMenu(menuContext, this);
+        mIsActionItemsStale = true;
+    }
+
+    public void removeMenuPresenter(MenuPresenter presenter) {
+        for (int i = mPresenters.size() - 1; i >= 0; i--) {
+            MenuPresenter item = mPresenters.get(i).get();
+            if (item == null || item == presenter) mPresenters.remove(i);
+        }
+    }
+
+    private void dispatchPresenterUpdate(boolean cleared) {
+        if (mPresenters.isEmpty()) return;
+        stopDispatchingItemsChanged();
+        for (int i = mPresenters.size() - 1; i >= 0; i--) {
+            MenuPresenter presenter = mPresenters.get(i).get();
+            if (presenter == null) mPresenters.remove(i);
+            else presenter.updateMenuView(cleared);
+        }
+        startDispatchingItemsChanged();
+    }
+
+    private boolean dispatchSubMenuSelected(SubMenuBuilder subMenu, MenuPresenter preferredPresenter) {
+        if (mPresenters.isEmpty()) return false;
+        boolean result = false;
+        if (preferredPresenter != null) result = preferredPresenter.onSubMenuSelected(subMenu);
+        for (int i = mPresenters.size() - 1; i >= 0; i--) {
+            MenuPresenter presenter = mPresenters.get(i).get();
+            if (presenter == null) mPresenters.remove(i);
+            else if (!result) result = presenter.onSubMenuSelected(subMenu);
+        }
+        return result;
+    }
+
+    public void stopDispatchingItemsChanged() {
+        if (!mPreventDispatchingItemsChanged) {
+            mPreventDispatchingItemsChanged = true;
+            mItemsChangedWhileDispatchPrevented = false;
+            mStructureChangedWhileDispatchPrevented = false;
+        }
+    }
+
+    public void startDispatchingItemsChanged() {
+        mPreventDispatchingItemsChanged = false;
+        if (mItemsChangedWhileDispatchPrevented) {
+            mItemsChangedWhileDispatchPrevented = false;
+            onItemsChanged(mStructureChangedWhileDispatchPrevented);
+        }
+    }
+
+    void onItemActionRequestChanged(MenuItemImpl item) {
+        mIsActionItemsStale = true;
+        onItemsChanged(true);
+    }
+
+    /** Asks the presenters which items go in the action bar; the rest overflow. */
+    public void flagActionItems() {
+        final ArrayList<MenuItemImpl> visibleItems = getVisibleItems();
+        if (!mIsActionItemsStale) return;
+        boolean flagged = false;
+        for (int i = mPresenters.size() - 1; i >= 0; i--) {
+            MenuPresenter presenter = mPresenters.get(i).get();
+            if (presenter == null) mPresenters.remove(i);
+            else flagged |= presenter.flagActionItems();
+        }
+        mActionItems.clear();
+        mNonActionItems.clear();
+        if (flagged) {
+            for (MenuItemImpl item : visibleItems) {
+                if (item.isActionButton()) mActionItems.add(item);
+                else mNonActionItems.add(item);
+            }
+        } else {
+            mNonActionItems.addAll(visibleItems);
+        }
+        mIsActionItemsStale = false;
+    }
+
+    private MenuItemImpl mExpandedItem;
+
+    public boolean expandItemActionView(MenuItemImpl item) {
+        if (mPresenters.isEmpty()) return false;
+        boolean expanded = false;
+        stopDispatchingItemsChanged();
+        for (int i = mPresenters.size() - 1; i >= 0; i--) {
+            MenuPresenter presenter = mPresenters.get(i).get();
+            if (presenter == null) mPresenters.remove(i);
+            else if ((expanded = presenter.expandItemActionView(this, item))) break;
+        }
+        startDispatchingItemsChanged();
+        if (expanded) mExpandedItem = item;
+        return expanded;
+    }
+
+    public boolean collapseItemActionView(MenuItemImpl item) {
+        if (mPresenters.isEmpty() || mExpandedItem != item) return false;
+        boolean collapsed = false;
+        stopDispatchingItemsChanged();
+        for (int i = mPresenters.size() - 1; i >= 0; i--) {
+            MenuPresenter presenter = mPresenters.get(i).get();
+            if (presenter == null) mPresenters.remove(i);
+            else if ((collapsed = presenter.collapseItemActionView(this, item))) break;
+        }
+        startDispatchingItemsChanged();
+        if (collapsed) mExpandedItem = null;
+        return collapsed;
+    }
+
+    public MenuItemImpl getExpandedItem() { return mExpandedItem; }
+
+    public ArrayList<MenuItemImpl> getActionItems() {
+        flagActionItems();
+        return mActionItems;
+    }
+
+    public ArrayList<MenuItemImpl> getNonActionItems() {
+        flagActionItems();
+        return mNonActionItems;
     }
 
     boolean dispatchMenuItemSelected(MenuBuilder menu, MenuItem item) {
@@ -278,6 +418,11 @@ public class MenuBuilder implements Menu {
     public final void close(boolean allMenusAreClosing) {
         if (mIsClosing) return;
         mIsClosing = true;
+        for (int i = mPresenters.size() - 1; i >= 0; i--) {
+            MenuPresenter presenter = mPresenters.get(i).get();
+            if (presenter == null) mPresenters.remove(i);
+            else presenter.onCloseMenu(this, allMenusAreClosing);
+        }
         ArrayList<CloseListener> listeners = new ArrayList<CloseListener>(mCloseListeners);
         for (CloseListener l : listeners) l.onMenuClosed(this, allMenusAreClosing);
         mIsClosing = false;
@@ -286,6 +431,13 @@ public class MenuBuilder implements Menu {
     public void close() { close(true); }
 
     public void onItemsChanged(boolean structureChanged) {
+        if (!mPreventDispatchingItemsChanged) {
+            if (structureChanged) mIsActionItemsStale = true;
+            dispatchPresenterUpdate(structureChanged);
+        } else {
+            mItemsChangedWhileDispatchPrevented = true;
+            if (structureChanged) mStructureChangedWhileDispatchPrevented = true;
+        }
         for (int i = 0; i < mChangeListeners.size(); i++) mChangeListeners.get(i).run();
     }
 

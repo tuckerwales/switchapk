@@ -273,6 +273,26 @@ public final class MenuItemImpl implements MenuItem {
                         + " and SHOW_AS_ACTION_NEVER are mutually exclusive.");
         }
         mShowAsAction = actionEnum;
+        mMenu.onItemActionRequestChanged(this);
+    }
+
+    public boolean isActionButton() { return (mFlags & IS_ACTION) == IS_ACTION; }
+
+    public boolean requestsActionButton() {
+        return (mShowAsAction & SHOW_AS_ACTION_IF_ROOM) == SHOW_AS_ACTION_IF_ROOM;
+    }
+
+    public void setIsActionButton(boolean isActionButton) {
+        if (isActionButton) mFlags |= IS_ACTION;
+        else mFlags &= ~IS_ACTION;
+    }
+
+    public boolean showsTextAsAction() {
+        return (mShowAsAction & SHOW_AS_ACTION_WITH_TEXT) == SHOW_AS_ACTION_WITH_TEXT;
+    }
+
+    public boolean hasCollapsibleActionView() {
+        return (mShowAsAction & SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW) != 0 && getActionView() != null;
     }
 
     public int getShowAsAction() { return mShowAsAction; }
@@ -315,6 +335,8 @@ public final class MenuItemImpl implements MenuItem {
         if ((mShowAsAction & SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW) == 0 || mActionView == null) return false;
         if (mOnActionExpandListener == null || mOnActionExpandListener.onMenuItemActionExpand(this)) {
             mIsActionViewExpanded = true;
+            mMenu.expandItemActionView(this);
+            mMenu.onItemsChanged(false);
             return true;
         }
         return false;
@@ -325,6 +347,8 @@ public final class MenuItemImpl implements MenuItem {
         if (mActionView == null) return true;
         if (mOnActionExpandListener == null || mOnActionExpandListener.onMenuItemActionCollapse(this)) {
             mIsActionViewExpanded = false;
+            mMenu.collapseItemActionView(this);
+            mMenu.onItemsChanged(false);
             return true;
         }
         return false;

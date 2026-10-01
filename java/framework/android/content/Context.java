@@ -184,8 +184,14 @@ public abstract class Context {
     public abstract void startActivity(Intent intent, Bundle options);
     public void startActivities(Intent[] intents) { for (Intent i : intents) startActivity(i); }
     public void startActivities(Intent[] intents, Bundle options) { startActivities(intents); }
-    public void startIntentSender(IntentSender intent, Intent fillInIntent, int flagsMask, int flagsValues, int extraFlags) throws IntentSender.SendIntentException {}
-    public void startIntentSender(IntentSender intent, Intent fillInIntent, int flagsMask, int flagsValues, int extraFlags, Bundle options) throws IntentSender.SendIntentException {}
+    public void startIntentSender(IntentSender intent, Intent fillInIntent, int flagsMask, int flagsValues, int extraFlags) throws IntentSender.SendIntentException {
+        startIntentSender(intent, fillInIntent, flagsMask, flagsValues, extraFlags, null);
+    }
+
+    public void startIntentSender(IntentSender intent, Intent fillInIntent, int flagsMask, int flagsValues, int extraFlags, Bundle options) throws IntentSender.SendIntentException {
+        if (fillInIntent != null) fillInIntent.setFlags((fillInIntent.getFlags() & ~flagsMask) | (flagsValues & flagsMask));
+        intent.sendIntent(this, 0, fillInIntent, null, null);
+    }
     public abstract void sendBroadcast(Intent intent);
     public abstract void sendBroadcast(Intent intent, String receiverPermission);
     public abstract void sendOrderedBroadcast(Intent intent, String receiverPermission);
@@ -194,6 +200,28 @@ public abstract class Context {
     public void sendBroadcastAsUser(Intent intent, UserHandle user, String receiverPermission) { sendBroadcast(intent); }
     @Deprecated public abstract void sendStickyBroadcast(Intent intent);
     @Deprecated public abstract void removeStickyBroadcast(Intent intent);
+    public void sendBroadcast(Intent intent, String receiverPermission, Bundle options) { sendBroadcast(intent, receiverPermission); }
+    public void sendBroadcastWithMultiplePermissions(Intent intent, String[] receiverPermissions) { sendBroadcast(intent); }
+    public void sendOrderedBroadcast(Intent intent, String receiverPermission, Bundle options) { sendOrderedBroadcast(intent, receiverPermission); }
+    public void sendOrderedBroadcast(Intent intent, String receiverPermission, Bundle options, BroadcastReceiver resultReceiver, Handler scheduler, int initialCode, String initialData, Bundle initialExtras) {
+        sendOrderedBroadcast(intent, receiverPermission, resultReceiver, scheduler, initialCode, initialData, initialExtras);
+    }
+    public void sendOrderedBroadcast(Intent intent, String receiverPermission, String receiverAppOp, BroadcastReceiver resultReceiver, Handler scheduler, int initialCode, String initialData, Bundle initialExtras) {
+        sendOrderedBroadcast(intent, receiverPermission, resultReceiver, scheduler, initialCode, initialData, initialExtras);
+    }
+    public void sendOrderedBroadcastAsUser(Intent intent, UserHandle user, String receiverPermission, BroadcastReceiver resultReceiver, Handler scheduler, int initialCode, String initialData, Bundle initialExtras) {
+        sendOrderedBroadcast(intent, receiverPermission, resultReceiver, scheduler, initialCode, initialData, initialExtras);
+    }
+    @Deprecated public void sendStickyBroadcast(Intent intent, Bundle options) { sendStickyBroadcast(intent); }
+    @Deprecated public void sendStickyBroadcastAsUser(Intent intent, UserHandle user) { sendStickyBroadcast(intent); }
+    @Deprecated public void sendStickyOrderedBroadcast(Intent intent, BroadcastReceiver resultReceiver, Handler scheduler, int initialCode, String initialData, Bundle initialExtras) {
+        sendOrderedBroadcast(intent, null, resultReceiver, scheduler, initialCode, initialData, initialExtras);
+    }
+    @Deprecated public void sendStickyOrderedBroadcastAsUser(Intent intent, UserHandle user, BroadcastReceiver resultReceiver, Handler scheduler, int initialCode, String initialData, Bundle initialExtras) {
+        sendStickyOrderedBroadcast(intent, resultReceiver, scheduler, initialCode, initialData, initialExtras);
+    }
+    @Deprecated public void removeStickyBroadcastAsUser(Intent intent, UserHandle user) { removeStickyBroadcast(intent); }
+    public boolean bindServiceAsUser(Intent service, ServiceConnection conn, int flags, UserHandle user) { return bindService(service, conn, flags); }
     public abstract Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter);
     public abstract Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter, int flags);
     public abstract Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter, String broadcastPermission, Handler scheduler);

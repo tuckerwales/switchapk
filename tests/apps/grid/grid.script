@@ -1,0 +1,30 @@
+idle 500
+screenshot grid_start.png
+tap 856 186
+idle 300
+swipe 800 600 800 200
+idle 2000
+screenshot grid_scrolled.png
+tap 856 278
+idle 300
+key DPAD_RIGHT
+idle 200
+key DPAD_RIGHT
+idle 200
+key DPAD_DOWN
+idle 200
+key DPAD_LEFT
+idle 300
+screenshot grid_dpad.png
+key BUTTON_A
+idle 300
+key DPAD_DOWN
+idle 100
+key DPAD_DOWN
+idle 100
+key DPAD_DOWN
+idle 100
+key DPAD_DOWN
+idle 300
+screenshot grid_end.png
+quit

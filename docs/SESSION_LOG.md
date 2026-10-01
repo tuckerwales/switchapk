@@ -34,3 +34,218 @@ what is left in flight.
   `tools/build_apk.sh` builds unsigned test APKs.
 - WS0 is done. View system, widgets, app model and the other post-WS0
   packages are not started.
+
+### Session 4 (2026-10-01, branch ccr-08dbdaa2-6llszo)
+- Claimed WS1 and ported the view system core from AOSP: View, ViewGroup
+  (touch targets, interception, split events), MotionEvent (multi-pointer,
+  history), KeyEvent, KeyCharacterMap, InputDevice, ViewConfiguration,
+  VelocityTracker, GestureDetector, ScaleGestureDetector, FocusFinder,
+  ViewTreeObserver, WindowInsets, accessibility value classes.
+- Choreographer with callback queues; ViewRootImpl with dirty-rect redraw,
+  touch mode, focus navigation and synthetic D-pad; WindowManagerGlobal
+  with window stack, input routing, A/B fallbacks, dim and compositing.
+- LayoutInflater, ViewStub, PhoneWindow/DecorView (screen_simple decor),
+  MenuInflater with an internal menu model, Activity as Window.Callback;
+  FrameLayout and LinearLayout ported for the decor.
+- `tests/apps/views` (WS1 acceptance) and `tests/apps/shotlib.py`;
+  `tools/api_check.py`; headless `idle` waits for queued input.
+- SurfaceView, Surface (software buffer queue that paces render threads)
+  and a software TextureView; `tests/apps/surface` checks them.
+- Left in WS1: context menu and action mode presentation (needs WS4
+  dialogs), clipToOutline.
+
+### Session 5 (2026-10-01, branch ccr-08dbdaa2-6llszo)
+- Text engine: Spanned/Spannable, spans, TextUtils, TextPaint,
+  StaticLayout, BoringLayout and DynamicLayout (greedy wrap, ellipsize,
+  alignment). No bidi or shaping. Checked by `tests/apps/text` SelfTest.
+- TextView measures and draws through Layout. Common XML attributes,
+  gravity, ellipsize, hints, compound drawables, selection and cursor,
+  and password, single-line and all-caps transformations. Spannable text
+  ellipsizes via a framework-internal `DynamicLayout.Builder.setMaxLines`.
+- `tests/apps/text` inflates TextViews and checks screenshots plus
+  in-process logic (wrap, ellipsis count, gravity, spans, TextWatcher,
+  password dots, length filter).
+- EditText, arrow/scrolling/link movement, key listeners (text, qwerty,
+  digits) and BaseInputConnection. A focused editor asks for platform
+  text; the result is committed with InputConnection.commitText.
+  `tests/apps/text` types hello, A and DEL and checks the TextWatcher.
+- Html.fromHtml/toHtml/escapeHtml for the common tags, Linkify (web,
+  email, phone, a simple street-address pattern) and
+  DateUtils/DateFormat/Formatter. autoLink runs Linkify from setText.
+  Checked in `tests/apps/text` without moving the screenshot bands.
+  Copy and paste still need a clipboard service.
+- WS3 started. ImageView (scale types, adjustViewBounds), Button,
+  ImageButton, CompoundButton, CheckBox, RadioButton, RadioGroup,
+  ToggleButton, Switch and Space. A tap toggles the compound controls.
+  tests/apps/widgets checks measure, exclusive radios and screenshots.
+- WS3 scrolling. Scroller and OverScroller (viscous scroll, spline fling).
+  Constructors that take an Interpolator stay unimplemented because that
+  type is not in the tree. EdgeEffect draws a glow. ScrollView and
+  HorizontalScrollView drag, fling and clamp to the child.
+  tests/apps/scroll swipes a tall column and a wide row; the sample pixel
+  leaves the red band for blue. In-process checks cover clamp, fling
+  distance, spring-back and the edge glow.
+- WS3 lists. Adapter, ListAdapter, SpinnerAdapter, BaseAdapter,
+  ArrayAdapter, Filter and ListView. AbsListView recycles visible rows,
+  and headers, choice mode and dividers work. tests/apps/list swipes the
+  list; the sample pixel leaves the red row for blue. In-process checks
+  cover recycling, the end clamp, selection, headers, filtering and
+  stackFromBottom.
+  Progress, popups and Toolbar are still open.
+
+- WS2 follow-up (merged with the parallel ws2/ws3 work). MetaKeyKeyListener,
+  BaseMovementMethod, ArrowKeyMovementMethod, ScrollingMovementMethod and
+  LinkMovementMethod are now straight AOSP ports: meta states report
+  pressed (1) or locked (2) as on Android, META_SELECTING exists (hidden
+  KeyEvent constant), modifiers pick word/line/paragraph moves, and
+  LinkMovementMethod moves between links with the D-pad and clicks the
+  selected one with A/center. Added Touch, Dialer/Date/Time/DateTime key
+  listeners, HideReturnsTransformationMethod, TransformationMethod2, and
+  the inputmethod value types (ExtractedText, ExtractedTextRequest,
+  CompletionInfo, CorrectionInfo, SurroundingText, TextAttribute,
+  InputContentInfo, TextSnapshot) with the matching InputConnection,
+  BaseInputConnection and TextView methods (extractText, setExtractedText,
+  onCommitCompletion, getHorizontallyScrolling). tests/apps/text checks
+  D-pad link selection and click and the alt meta state.
+- WS4 started (dialogs). Dialog, AlertDialog and its Builder are ports of
+  AOSP on top of the real framework-res alert layouts (title, message,
+  up to three buttons, item lists, single and multi choice, custom
+  view), with AlertController and the internal AlertDialogLayout,
+  ButtonBarLayout and DialogTitle. Added CheckedTextView (choice rows),
+  the ActionBar API (abstract; no decor yet), a FragmentTransaction
+  placeholder and InternalRes for internal resource ids. Two fixes in
+  the WS3 list code for D-pad use: ListView tracks DPAD_CENTER/ENTER so a
+  confirm key clicks the selected row, and AbsListView draws the
+  selector on the selected row when out of touch mode.
+  tests/apps/appmodel drives an alert and a choice list with the D-pad.
+  ProgressDialog waits for WS3's ProgressBar.
+- RelativeLayout (WS3 scope, written from WS4 because the framework menu
+  item layouts need it): AOSP port with the dependency graph, start/end
+  rule resolution and the API 18+ measure rules. ActivityThread now reads
+  `uses-sdk`, so ApplicationInfo.minSdkVersion/targetSdkVersion are real
+  (they were 0, which selected legacy code paths). tests/apps/relative
+  checks 13 positions and a screenshot.
+- WS4 menus. Options menu: PhoneWindow handles MENU (the + button falls
+  back to MENU), builds the menu through Window.Callback and shows it as
+  an overflow-style popup (MenuPanel) in the top end corner. Context menus
+  (long press, showContextMenu) and sub menus are AlertDialog lists via
+  MenuDialogHelper with ListMenuItemView rows from the framework layouts;
+  selections reach onOptionsItemSelected/onContextItemSelected and
+  closing reaches onOptionsMenuClosed/onContextMenuClosed. View sets the
+  menu info while it adds context items. Fixed WS2 TextView height with
+  maxLines/singleLine (AOSP getDesiredHeight: whole lines, not ems), which
+  clipped descenders of single-line text. tests/apps/appmodel covers the
+  options popup, a sub menu and a context menu.
+- WS4 lifecycle and fragments. Activity is rewritten around AOSP's
+  perform* methods (pre/post ActivityLifecycleCallbacks, SuperNotCalled
+  checks, managed dialogs, non-config instances, FragmentController
+  host), Application gains the full callback set, and the platform
+  fragments are ported (Fragment, FragmentManagerImpl with back stack and
+  saved/retained state, BackStackRecord, DialogFragment, ListFragment,
+  LoaderManager). ActivityThread's stack now posts start/finish to the
+  looper and follows AOSP ordering for launch, finish, results, launch
+  modes and intent flags, and treats PEV_RESIZE as a configuration change
+  that relaunches activities (stopped ones lazily). The headless script
+  gained `screen WxH@dpi`; the headless present now reallocates its frame
+  when the size changes (it overflowed). VM fix: Class.getModifiers reads
+  member class flags from the InnerClass annotation (a public static
+  nested Fragment was rejected). tests/apps/lifecycle drives a dock and
+  undock with two activities, results, single-top and a fragment and
+  checks screenshots and the callback order in the log. Open question:
+  two script taps with no idle between them click a button once.
+- WS4 services and broadcasts. In-process BroadcastQueue (registered,
+  manifest, ordered with priority and abort, sticky, goAsync, the target-O
+  implicit block, restricted receiver context) and ActiveServices
+  (started, bound with cached binders and onRebind, stopSelf ids,
+  BIND_AUTO_CREATE rules, binding death, executor binds), Service,
+  IntentService, PendingIntent (AMS identity and flags, OnFinished,
+  createPendingResult), IntentSender, AlarmManager on the main looper, and
+  a minimal Notification and NotificationManager that logs. Activities and
+  services now get per-component ContextImpls so leaked receivers and
+  connections are dropped after onDestroy with AOSP's leak errors. The
+  manifest parser now reads intent-filter priority. tests/apps/services
+  runs 21 steps, each comparing its event sequence with Android's, and
+  checks a result grid plus the framework's log lines. Next for WS4:
+  Notification.Builder and channels, action bar decor, ProgressDialog.
+- WS4 notifications. Notification rewritten on AOSP's data model:
+  Builder with every non-RemoteViews setter, Action (+Builder, RemoteInput,
+  data-only inputs), BigText/BigPicture/Inbox/Messaging/Media/
+  DecoratedCustomView styles with restore for recoverBuilder,
+  BubbleMetadata; Person, RemoteInput (results via ClipData), LocusId,
+  NotificationChannel, NotificationChannelGroup, StatusBarNotification and
+  NotificationManager.Policy. NotificationManager enforces channels for
+  target O+, blocks IMPORTANCE_NONE, follows the channel update rules and
+  tracks active notifications. Intent.fillIn now carries ClipData.
+  startForeground marks its notification FLAG_FOREGROUND_SERVICE. Note:
+  framework code cannot use lambdas or method references (libcore has no
+  java.lang.invoke; javac crashes), and `make` failures print "Error",
+  so grep case-insensitively. tests/apps/services gains a notifications
+  step (replacing the plain notify step).
+- WS4 JobScheduler. android.app.job ported: JobInfo (+Builder validation,
+  period and flex clamping), JobParameters (dequeueWork/completeWork),
+  JobWorkItem, JobService, JobServiceEngine (binder the scheduler drives,
+  as AndroidX JobIntentService expects) and JobSchedulerImpl (latency,
+  deadline, constraints, periodic windows, backoff, enqueue to a running
+  job, stop on cancel/timeout). The manifest parser reads a service's
+  android:permission. tests/apps/services gains four job steps (25).
+  The WS3 session has pushed nothing since its ListView commit and could
+  not be reached; the action bar decor and ProgressDialog wait on its
+  Toolbar, ActionMenuView and ProgressBar, so they were left alone.
+- WS3 taken over by the WS4 session (the WS3 session stopped; the user
+  confirmed). ProgressBar, AbsSeekBar, SeekBar and RatingBar ported from
+  AOSP with the Material styles; ProgressDialog (WS4) on the framework
+  progress layouts. The WS5 tween core ProgressBar needs landed early
+  (TimeInterpolator, Interpolator, basic interpolators, Animation,
+  AlphaAnimation, Transformation, AnimationUtils.loadInterpolator).
+  Added com.android.internal.graphics.drawable.AnimationScaleListDrawable
+  (the Material spinners failed to inflate without it); it shows the
+  static frame until AVDs animate. tileify follows AOSP N+ (repeating
+  BitmapDrawable clone) so RatingBar star tints survive. tests/apps/progress
+  checks the bars, spinner frame, a SeekBar drag, a star tap, a
+  ProgressDialog and the listener calls.
+- WS3 popups. PopupWindow, ListPopupWindow, DropDownListView, PopupMenu
+  (with an internal MenuPopupHelper over the existing MenuAdapter),
+  AbsSpinner, Spinner (drop-down and dialog) and Toast ported from AOSP.
+  The window manager now clamps windows to the screen (unless
+  FLAG_LAYOUT_NO_LIMITS) and does not treat toast windows as activity
+  leaks. AdapterView now holds mInLayout/mBlockLayoutRequests and posts
+  selection callbacks fired during layout (AOSP SelectionNotifier); the
+  first Spinner selection used to set text that never laid out.
+  tests/apps/popups covers the drop-down, the dialog spinner, a popup menu
+  with a sub menu, a toast, a popup flipping above its anchor, outside
+  dismissal and D-pad use of the drop-down.
+- WS3 Toolbar. Toolbar, ActionMenuView, ActionMenuPresenter (overflow
+  button and popup, action buttons by ActionBarPolicy, submenus),
+  RtlSpacingHelper and CollapsibleActionView ported from AOSP. The menu
+  core gained presenters (MenuPresenter, BaseMenuPresenter,
+  ActionMenuItemView, ActionMenuItem), action item flagging and action
+  view expansion in MenuBuilder/MenuItemImpl. DecorToolbar and
+  ToolbarWidgetWrapper are ready for the action bar decor (tabs not
+  ported). InternalRes.attr now falls back to the "^attr-private" type:
+  private attrs such as navigationButtonStyle live there in framework-res,
+  so they used to resolve to 0 and silently drop their styles.
+  tests/apps/toolbar checks layout, nav/action/overflow clicks and the
+  overflow popup.
+- WS4 action bar decor and WS1 action modes. PhoneWindow now inflates the
+  decor AOSP would (screen_toolbar for action bar themes, the dialog
+  title decor, screen_title, screen_simple) and drives the options menu
+  through the decor toolbar (posted rebuild, overflow on MENU). Ported
+  ActionBarOverlayLayout, ActionBarContainer, AbsActionBarView,
+  ActionBarContextView, DecorContentParent, WindowDecorActionBar (with
+  ActionModeImpl; tabs dispatched, no tab strip), ToolbarActionBar,
+  WindowCallbackWrapper and StandaloneActionMode; DecorView starts
+  action modes and BACK ends them. Activity getActionBar, setActionBar,
+  getMenuInflater (themed), home-as-up, menu visibility and MENU key
+  routing follow AOSP. Contexts with no theme now get
+  Resources.selectDefaultTheme, so tests/apps/hello (no theme) shows an
+  action bar like on Android; its checks moved down by 72px.
+  tests/apps/actionbar covers the bar, items, overflow, MENU, both kinds
+  of action mode, hide/show and setActionBar(Toolbar).
+- WS3 grid and tables. AbsListView now fills, scrolls and recycles whole
+  rows (itemsPerRow, per-column width and left hooks); GridView ports
+  AOSP determineColumns, stretch modes, spacing and gravity on top, with
+  D-pad navigation that keeps the selected row on screen. TableLayout,
+  TableRow (on LinearLayout's virtual child hooks) and AbsoluteLayout
+  ported. Fixed a list bug: ACTION_UP started a fling and then reset the
+  touch mode, so flings never ran and the next tap only "stopped" the
+  dead scroller. tests/apps/grid covers all of it.

@@ -156,6 +156,49 @@ public interface WindowManager extends ViewManager {
             readFromParcel(in);
         }
 
+        /** Copies every field that differs and returns the AOSP change flags (approximated: 0 or ~0). */
+        public final int copyFrom(LayoutParams o) {
+            boolean changed = width != o.width || height != o.height || x != o.x || y != o.y || type != o.type
+                    || flags != o.flags || gravity != o.gravity || format != o.format || alpha != o.alpha
+                    || dimAmount != o.dimAmount || softInputMode != o.softInputMode;
+            width = o.width;
+            height = o.height;
+            x = o.x;
+            y = o.y;
+            type = o.type;
+            flags = o.flags;
+            gravity = o.gravity;
+            format = o.format;
+            windowAnimations = o.windowAnimations;
+            alpha = o.alpha;
+            dimAmount = o.dimAmount;
+            screenBrightness = o.screenBrightness;
+            buttonBrightness = o.buttonBrightness;
+            token = o.token;
+            packageName = o.packageName;
+            softInputMode = o.softInputMode;
+            screenOrientation = o.screenOrientation;
+            systemUiVisibility = o.systemUiVisibility;
+            horizontalMargin = o.horizontalMargin;
+            verticalMargin = o.verticalMargin;
+            horizontalWeight = o.horizontalWeight;
+            verticalWeight = o.verticalWeight;
+            preferredRefreshRate = o.preferredRefreshRate;
+            layoutInDisplayCutoutMode = o.layoutInDisplayCutoutMode;
+            memoryType = o.memoryType;
+            rotationAnimation = o.rotationAnimation;
+            preferMinimalPostProcessing = o.preferMinimalPostProcessing;
+            preferredDisplayModeId = o.preferredDisplayModeId;
+            mTitle = o.mTitle;
+            return changed ? ~0 : 0;
+        }
+
+        private CharSequence mTitle = "";
+
+        public final void setTitle(CharSequence title) { mTitle = title != null ? title : ""; }
+
+        public final CharSequence getTitle() { return mTitle != null ? mTitle : ""; }
+
         public int describeContents() { return 0; }
 
         public void writeToParcel(Parcel dest, int parcelFlags) {

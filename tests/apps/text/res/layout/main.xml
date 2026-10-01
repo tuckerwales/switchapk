@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFAFAFA"
+    android:orientation="vertical">
+
+    <View
+        android:id="@+id/status"
+        android:layout_width="match_parent"
+        android:layout_height="16dp" />
+
+    <TextView
+        android:id="@+id/wrap"
+        android:layout_width="200dp"
+        android:layout_height="96dp"
+        android:background="#FFFFF3E0"
+        android:text="@string/long_text"
+        android:textColor="#FF000000"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/center"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="#FFE3F2FD"
+        android:gravity="center"
+        android:text="Centered"
+        android:textColor="#FF0D47A1"
+        android:textSize="18sp" />
+
+    <TextView
+        android:id="@+id/end"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:background="#FFE8F5E9"
+        android:gravity="end|center_vertical"
+        android:text="End aligned"
+        android:textColor="#FF1B5E20"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/ellipsis"
+        android:layout_width="180dp"
+        android:layout_height="72dp"
+        android:background="#FFFFEBEE"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:text="@string/long_text"
+        android:textColor="#FFB71C1C"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/spans"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="#FFFFFFFF"
+        android:textColor="#FF000000"
+        android:textSize="20sp" />
+
+    <TextView
+        android:id="@+id/hint"
+        android:layout_width="200dp"
+        android:layout_height="36dp"
+        android:background="#FFF3E5F5"
+        android:hint="Hint"
+        android:textColor="#FF000000"
+        android:textColorHint="#FF6A1B9A"
+        android:textSize="16sp" />
+
+    <EditText
+        android:id="@+id/edit"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="#FFFFFFFF"
+        android:gravity="top|start"
+        android:hint="Type"
+        android:inputType="text"
+        android:singleLine="true"
+        android:textColor="#FF000000"
+        android:textColorHint="#FF9E9E9E"
+        android:textSize="18sp" />
+
+    <View
+        android:id="@+id/typed"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:background="#FF9E9E9E" />
+</LinearLayout>

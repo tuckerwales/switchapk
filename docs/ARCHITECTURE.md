@@ -69,9 +69,11 @@ java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
 java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
 tools/           build_java.sh, fetch_toolchains.py, make_framework_res.py,
-                 genr/GenR.java (android.R generator), dexdump.py
+                 genr/GenR.java (android.R generator), dexdump.py,
+                 build_apk.sh (test APKs), api_check.py (API diff vs android.jar)
 tests/           run_dex_test.sh + tests/dex (VM conformance vs OpenJDK),
-                 tests/c (native unit/visual tests), [todo] tests/apps
+                 tests/c (native unit/visual tests), tests/apps (sample APKs
+                 with scripts and screenshot checks; shotlib.py)
 docs/            this documentation
 ```
 
@@ -291,7 +293,7 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   load TTF/OTF through stb_truetype. No shaping (no complex scripts,
   ligatures or bidi reordering yet).
 
-### 6.4 Main loop, input and windows (design; implementation in progress)
+### 6.4 Main loop, input and windows
 - `ActivityThread.main` prepares the main `Looper` and loops forever.
 - The main `MessageQueue` (flag `mIsMain`) never sleeps in Java: it calls
   `MessageQueue.nativePollOnce(timeoutMs)`, which releases the GIL and
@@ -305,40 +307,177 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (`a b c d`, `f[0..7]`, `time_ns`); `static native String nTakeText()`
   returns the text of the last PEV_TEXT event.
 - Event kinds (platform.h): PEV_TOUCH (a = MotionEvent action DOWN/UP/MOVE/
-  POINTER_DOWN/POINTER_UP/CANCEL, b = pointer id, f0/f1 = x/y in window
+  POINTER_DOWN/POINTER_UP/CANCEL, b = pointer id, f0/f1 = x/y in screen
   pixels), PEV_KEY (a = 0 down / 1 up, b = Android keycode, c = meta,
   d = repeat), PEV_JOYSTICK (f0..f7 = AXIS_X, AXIS_Y, AXIS_Z, AXIS_RZ,
   AXIS_LTRIGGER, AXIS_RTRIGGER, AXIS_HAT_X, AXIS_HAT_Y), PEV_QUIT,
   PEV_FOCUS (a = gained), PEV_RESIZE (a, b = size, c = dpi), PEV_SENSOR
   (a = Sensor type, f0..f2), PEV_TEXT (a = request id, text).
+- `PlatformInput` turns platform events into Android events: per-pointer
+  PEV_TOUCH events are merged into multi-pointer `MotionEvent`s (pointer
+  ids kept, ACTION_POINTER_DOWN/UP with the pointer index, device
+  `InputDevice.ID_TOUCHSCREEN`, source SOURCE_TOUCHSCREEN); keys get the
+  down time of their press, source SOURCE_GAMEPAD for gamepad buttons,
+  SOURCE_DPAD for D-pad keys, SOURCE_KEYBOARD otherwise; PEV_JOYSTICK
+  becomes an ACTION_MOVE `MotionEvent` from SOURCE_JOYSTICK with the eight
+  axes (plus AXIS_BRAKE/GAS mirroring the triggers). PEV_SENSOR goes to
+  `PlatformInput.setSensorSink` (for WS15). PEV_FOCUS also tells
+  `WindowManagerGlobal.setPlatformFocus`.
+- Input devices (`InputDevice`): id -1 virtual keyboard (US
+  `KeyCharacterMap`), id 1 touch screen, id 2 "Nintendo Switch Controller"
+  (SOURCE_GAMEPAD | SOURCE_DPAD | SOURCE_JOYSTICK, stick ranges -1..1,
+  triggers 0..1).
 - Controller mapping (Switch): A=BUTTON_A(96), B=BUTTON_B(97), X=99, Y=100,
   L=BUTTON_L1(102), R=BUTTON_R1(103), ZL=BUTTON_L2(104), ZR=BUTTON_R2(105),
   Plus=BUTTON_START(108), Minus=BUTTON_SELECT(109), stick clicks
   THUMBL(106)/THUMBR(107), D-pad DPAD_UP/DOWN/LEFT/RIGHT (19..22). As on
-  Android (Generic.kcm fallbacks), an unhandled BUTTON_A is re-dispatched
-  as DPAD_CENTER and an unhandled BUTTON_B as BACK; an unconsumed left
-  stick synthesizes DPAD keys (like ViewRootImpl's SyntheticJoystickHandler)
-  so every app is navigable with a controller. Touch screen events are
-  delivered in handheld mode.
-- Windows: `WindowManagerGlobal` keeps a z-ordered list of
-  `ViewRootImpl`s (activity windows, dialogs, popups, toasts). Rendering
-  is scheduled through `Choreographer` (60 Hz timing from the platform).
-  A frame redraws all windows bottom-up into one screen-sized `int[]`
-  back buffer (dim-behind layers for dialogs), then presents it with
-  `WindowManagerGlobal.nPresent(int[] px, int w, int h)` (GIL released).
-  Nothing is redrawn while nothing is invalidated.
-- Touch goes to the top-most window containing the point (or the top-most
-  modal window); keys go to the top-most focusable window.
+  Android (Generic.kcm fallbacks), `WindowManagerGlobal` re-dispatches an
+  unhandled BUTTON_A as DPAD_CENTER, an unhandled BUTTON_B as BACK and an
+  unhandled BUTTON_START (+) as MENU, which opens the options menu
+  (FLAG_FALLBACK; the up of a fallback is canceled if the original up was
+  handled). Joystick motion that no view consumes is turned into D-pad
+  keys with key repeat by `ViewRootImpl.SyntheticJoystickHandler`
+  (threshold 0.5 on the left stick or hat). Every app is therefore
+  navigable with a controller.
+- Frames: `Choreographer` keeps AOSP's callback queues (INPUT, ANIMATION,
+  INSETS_ANIMATION, TRAVERSAL, COMMIT; `postCallback` and friends are
+  public hidden APIs) and runs them once per frame, paced at the display
+  refresh rate. `View.postOnAnimation` uses CALLBACK_ANIMATION.
+- Windows: `WindowManagerGlobal` keeps a z-ordered list of `ViewRootImpl`s
+  (layer by window type: application 2, sub-windows 3, system 10, input
+  method 15, toast 20; newer windows above older ones of the same layer).
+  Each `ViewRootImpl` owns an ARGB `Bitmap` of its window size and redraws
+  only the union of invalidated rectangles (dirty rects are propagated up
+  through `ViewGroup.invalidateChildInParent`, transformed by child
+  matrices). The window size comes from its `WindowManager.LayoutParams`:
+  MATCH_PARENT fills the display, WRAP_CONTENT measures the root first
+  against the 320dp preferred dialog width (as AOSP does); the window is
+  placed with `gravity`, `x`, `y` and margins. In the COMMIT phase the
+  windows are composited bottom-up into a screen bitmap (FLAG_DIM_BEHIND
+  draws a black layer of `dimAmount` alpha first; `alpha` is applied) and
+  presented with `WindowManagerGlobal.nPresent(int[] px, int w, int h)`
+  (GIL released). A single opaque full-screen window is presented without
+  copying. Nothing is drawn or presented while nothing is invalidated.
+- Input routing: touch DOWN goes to the topmost window that contains the
+  point or is touch-modal (not FLAG_NOT_TOUCH_MODAL / FLAG_NOT_FOCUSABLE),
+  skipping FLAG_NOT_TOUCHABLE windows, and the rest of the gesture follows
+  it (coordinates offset to the window); windows below a modal one that
+  set FLAG_WATCH_OUTSIDE_TOUCH get ACTION_OUTSIDE. Keys and joystick go to
+  the focused window, the topmost one without FLAG_NOT_FOCUSABLE. Window
+  focus changes are dispatched as `onWindowFocusChanged`.
+- Inside a window, `ViewRootImpl` follows AOSP: touch mode (entered on a
+  touch DOWN, left by a navigation key, which focuses the first focusable
+  view and is consumed), key pipeline pre-IME, view tree, unhandled-key
+  listeners, Ctrl shortcuts, then D-pad/Tab focus navigation through
+  `FocusFinder`. The root `DecorView` passes events to the
+  `Window.Callback` (Activity, later Dialog), which calls back into
+  `Window.superDispatch*`.
+- Decor: `PhoneWindow` reads the theme's window attributes (background,
+  floating, translucent, dim, min width for floating windows, close on
+  touch outside, soft input mode) and inflates the framework decor layout
+  chosen as in AOSP generateLayout: the action bar decor
+  (windowActionBarFullscreenDecorLayout, `screen_toolbar` on Material:
+  ActionBarOverlayLayout `decor_content_parent` holding the content and an
+  ActionBarContainer with a Toolbar `action_bar` and an
+  ActionBarContextView `action_context_bar`), `dialogTitleDecorLayout` for
+  floating windows with a title, `screen_title`, or `screen_simple`
+  (LinearLayout + action mode ViewStub + FrameLayout `android:id/content`).
+  The decor content parent (DecorContentParent) takes the window title,
+  features, icon/logo and the options menu (MenuBuilder themed with
+  actionBarTheme/actionBarWidgetTheme, presenters from the toolbar). The
+  activity's ActionBar is a WindowDecorActionBar over that decor, or a
+  ToolbarActionBar after setActionBar(Toolbar), which wraps the window
+  callback. DecorView owns the primary ActionMode: the window callback
+  may supply it (the action bar's context bar), else DecorView inflates
+  `action_mode_bar_stub` for a StandaloneActionMode. BACK finishes it.
+- Default theme: a context whose component and application set no theme
+  uses `Resources.selectDefaultTheme(0, targetSdk)` (DeviceDefault Light
+  DarkActionBar for targetSdk 24+), as AOSP ContextImpl and
+  ContextThemeWrapper do.
+- Lists: AbsListView fills, scrolls and recycles in rows of
+  `itemsPerRow()` items (1 for ListView, the column count for GridView),
+  with `childWidthMeasureSpec`/`childLeft` per column and `childGap()`
+  between rows; the first position is always a row start.
+- Private framework resources: `InternalRes` resolves
+  com.android.internal ids by name; private attrs live under the
+  "^attr-private" type in framework-res and are found there.
 - Display metrics: `android.view.Display.nGetInfo(int[] out)` returns
   width, height, dpi, refresh rate x 1000, has-touch. 1280x720 at 240 dpi
   in handheld mode, 1920x1080 at 360 dpi docked (same 853x480 dp).
   Portrait-locked activities get a letterboxed portrait window (height =
   screen height, width = 9/16 of it) with density lowered so the window is
-  at least 320 dp wide.
+  at least 320 dp wide (todo, WS4).
 - Soft keyboard: `InputMethodManager` calls
   `nRequestText(int id, String initial, String hint, int inputType, int maxLen)`;
   the platform shows swkbd (Switch) or answers from the test script
-  (host) and posts PEV_TEXT; the result replaces the EditText content.
+  (host) and posts PEV_TEXT. InputMethodManager commits that string into
+  the editor that called showSoftInput, via InputConnection.commitText.
+
+### 6.4.1 View system notes for widget authors
+- `View`/`ViewGroup` are ports of AOSP; subclasses behave as on Android.
+  Package-private hooks used inside `android.view`: `View.draw(Canvas,
+  ViewGroup, long)` (per-child transform/alpha/clip), `mAttachInfo`
+  (`View.AttachInfo`), `dispatchAttachedToWindow/DetachedFromWindow`,
+  `invalidate(boolean)` and `assignParent`.
+- Fields that apps or AndroidX read by reflection keep their AOSP names:
+  `View.mListenerInfo`, `mAttachInfo`, `mLayoutParams`, `mMinWidth`,
+  `mMinHeight`, `mID`, `mParent`, `mPrivateFlags`, `mViewFlags`;
+  `View.AttachInfo.mStableInsets`/`mContentInsets` (WindowInsetsCompat);
+  `ViewGroup.mGroupFlags`; `LayoutInflater.mFactory`, `mFactory2`,
+  `mPrivateFactory`, `mConstructorArgs`.
+- Hidden AOSP methods other packages may call are public and marked
+  "framework-internal (hidden in AOSP)", e.g. `View.isLayoutRtl()`,
+  `View.hasIdentityMatrix()`, `View.getInverseMatrix()`,
+  `View.pointInView()`, `View.internalSetPadding()`, `View.setFrame()`,
+  `ViewGroup.setIsRootNamespace()`, `MotionEvent.split()`,
+  `MotionEvent.getPointerIdBits()`, `KeyEvent.isConfirmKey()`.
+- `@null` attribute values (a reference to 0) read as no value in
+  `TypedArray`, as in AOSP's ApplyStyle.
+- Drawing is software only: `isHardwareAccelerated()` is false, layer
+  types only add a `saveLayer` with the layer paint, elevation and
+  outlines draw no shadows, and `clipToOutline` is not applied yet.
+- `Surface` is a software buffer queue (`Surface.BufferQueue`, two ARGB
+  bitmaps). `lockCanvas` copies the last frame into the back buffer;
+  `unlockCanvasAndPost` swaps, notifies the consumer and, on a non-UI
+  thread, waits until the frame was drawn (at most ~34 ms), which paces
+  render threads to the display. `SurfaceView` draws the latest frame in
+  its own draw pass (scaled when `setFixedSize` was used) and runs the
+  `SurfaceHolder.Callback`s on the UI thread when it is attached, visible
+  and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
+  backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
+- `View.animate()`, `startAnimation()` and `StateListAnimator` belong to
+  WS5. Only the tween core ProgressBar needs exists so far
+  (`TimeInterpolator`, `Interpolator`, linear/accelerate/decelerate
+  interpolators, `Animation`, `AlphaAnimation`, `Transformation`,
+  `AnimationUtils.loadInterpolator`); views do not apply tween animations
+  and AnimatedVectorDrawables do not animate. Accessibility classes are
+  value holders since no accessibility service runs.
+- ProgressBar family (AOSP ports): determinate progress sets drawable
+  levels per layer id (`android:id/progress`, `secondaryProgress`,
+  `background`), indeterminate starts an Animatable drawable or cycles
+  levels with an AlphaAnimation. Bitmap layers are tiled with a repeating
+  BitmapDrawable clone (keeps the tint; RatingBar stars). The Material
+  spinners are `com.android.internal.graphics.drawable.
+  AnimationScaleListDrawable`, which shows its static child until WS5
+  (what Android shows with animations off). AbsSeekBar adds the thumb,
+  split track, tick marks, touch drag (slop in scrolling containers) and
+  D-pad/plus/minus steps (`keyProgressIncrement`, about 1/20 of the
+  range); RatingBar steps by stepSize and reports user changes on release.
+- Popups (AOSP ports): PopupWindow adds a TYPE_APPLICATION_PANEL window
+  (decor view dismissing on BACK and on touches outside; background view
+  with the above-anchor state); drop-downs go below the anchor, or above
+  when there is no room, and follow it when it scrolls. The window manager
+  keeps windows on screen unless FLAG_LAYOUT_NO_LIMITS. ListPopupWindow
+  sizes a DropDownListView to its rows (`ListView.measureHeightOfChildren`).
+  PopupMenu uses `MenuPopupHelper` (StandardMenuPopup folded in; a sub
+  menu replaces its parent on the same anchor). Spinner keeps AOSP's
+  AbsSpinner bookkeeping; its drop-down is a modal ListPopupWindow, its
+  dialog mode a single-choice AlertDialog. Toast queues one TYPE_TOAST
+  window at a time (2 s / 3.5 s) and logs `Toast: show: <text>`; toast
+  windows are not closed as activity leaks. Item selection callbacks
+  that fire during layout are posted (AdapterView SelectionNotifier), so
+  listeners can change other views. Transitions and window animations
+  are not run.
 
 ### 6.5 Application model (design)
 - The app runner (C, `app_run_apk`) opens the APK, sets `g_app_zip` and
@@ -357,16 +496,134 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `Application` (via `AppComponentFactory` when declared), installs
   content providers **before** `Application.onCreate` (as Android does;
   androidx startup relies on it), then launches the MAIN/LAUNCHER activity.
-- Activities form a single task stack. `startActivity` with an explicit
-  component (or an implicit intent matching one of the app's own
-  intent filters) pushes; `finish` pops and delivers results. Implicit
-  intents for other apps (browser, market, share) are logged and ignored
-  (ActivityNotFoundException only when the app requires a result).
-- Lifecycle: create -> start -> resume on launch; pause/stop on
-  covering or on PEV_FOCUS(0) (HOME / applet suspend); resume on refocus;
-  PEV_QUIT -> pause/stop/destroy all, then exit. Configuration changes
-  (docked/handheld) recreate activities unless `configChanges` covers
-  screenSize/orientation/density, as on Android.
+- Activities form a single task stack (`ActivityThread.ActivityRecord`:
+  caller, requestCode, resultWho, started, saved state, pending results,
+  relaunch pending). `startActivity`, `finish` and `recreate` resolve the
+  intent synchronously and post the work to the main looper, like the
+  binder calls they replace, so they never run inside another activity's
+  callback. Explicit components that do not resolve throw
+  ActivityNotFoundException; implicit intents for other apps (browser,
+  market, share) are logged and ignored. Manifest `launchMode`,
+  `parentActivityName` and `uiOptions` are read; FLAG_ACTIVITY_SINGLE_TOP,
+  CLEAR_TOP, NEW_TASK|CLEAR_TASK, singleTop and singleTask are honoured
+  (onNewIntent with a pause around it). navigateUpTo, finishAffinity,
+  finishActivity(requestCode), getCallingActivity and isTaskRoot work on
+  the stack.
+- Lifecycle, AOSP order: launching pauses the old top, then creates,
+  starts, post-creates and resumes the new activity, then stops the old
+  one and saves its state (API 28+ order: onStop before
+  onSaveInstanceState). Floating or translucent activities leave the one
+  below paused but not stopped. Finishing pauses, then the activity below
+  gets onRestart/onStart, its pending onActivityResult, onResume, then the
+  finished one is stopped and destroyed; windows it leaked are removed
+  (`WindowManagerGlobal.closeAll`). PEV_FOCUS(0) (HOME / applet suspend)
+  pauses the top, refocus resumes it; PEV_QUIT destroys everything top
+  down and exits.
+- Configuration changes: PEV_RESIZE (docked/handheld) recomputes the
+  Configuration and DisplayMetrics, updates the shared Resources, relays
+  out all windows and calls Application.onConfigurationChanged. Each
+  activity whose `configChanges` (plus the AOSP implied bits for old
+  targetSdk) covers the diff gets onConfigurationChanged; the others are
+  relaunched: pause, stop, save, retainNonConfigurationInstances
+  (fragments, loaders, onRetainNonConfigurationInstance), destroy, then a
+  new instance is created with that state and restored
+  (onRestoreInstanceState before onPostCreate). Stopped activities are
+  relaunched lazily when they come back to the top.
+- Fragments: the platform `android.app.Fragment`, `FragmentManager`
+  (FragmentManagerImpl state machine, back stack, BackStackRecord ops,
+  saved and retained state, `<fragment>` inflation), `DialogFragment`,
+  `ListFragment` and `LoaderManager`, hosted by Activity through
+  `FragmentController`/`FragmentHostCallback` as in AOSP (no transitions
+  or animators yet). AndroidX ReportFragment relies on this.
+- Contexts: the application's `ContextImpl` holds the package state;
+  each Activity and Service gets its own `ContextImpl` from
+  `createComponentContext(outer)` that shares it. Receivers and service
+  connections are keyed by that outer context, and `scheduleFinalCleanup`
+  (after onDestroy) unregisters and unbinds what the component leaked,
+  logging AOSP's "has leaked IntentReceiver/ServiceConnection" errors.
+- Broadcasts (`BroadcastQueue`, in place of the AMS queue and
+  LoadedApk's receiver dispatchers): always asynchronous. A normal
+  broadcast goes to registered receivers in parallel (each on its
+  scheduler Handler, else the main looper), then to manifest receivers
+  one at a time; an ordered one goes to all of them one at a time by
+  filter priority (registered first at equal priority), carrying result
+  code, data and extras in `BroadcastReceiver.PendingResult`, stopping on
+  abort, then calling the result receiver. `goAsync` holds the broadcast
+  until `PendingResult.finish()` (any thread). An explicit component
+  reaches only that manifest receiver; for targetSdk >= 26 implicit
+  broadcasts skip manifest receivers (logged as on Android). Manifest
+  receivers get a `ReceiverRestrictedContext` (no register or bind).
+  Sticky broadcasts are kept and replayed on register; the system's
+  ACTION_BATTERY_CHANGED is sticky (level 100 until WS15 reads the
+  battery).
+- Services (`ActiveServices`, in place of AMS ActiveServices and
+  LoadedApk's service dispatchers): bookkeeping is synchronous and
+  thread-safe; calls into the service and clients are posted to the main
+  looper in AMS order. One record per component; onCreate, then
+  onStartCommand with increasing start ids or onBind once per
+  filter-equal intent, whose binder is cached and handed to every
+  connection (onRebind when onUnbind returned true). stopSelf(id) acts on
+  the latest id only. A service is destroyed when neither started nor
+  bound with BIND_AUTO_CREATE; remaining connections get onBindingDied.
+  Service intents must be explicit for targetSdk >= 21. Connections are
+  dispatched per (context, ServiceConnection), so a second bind to the
+  same service does not repeat onServiceConnected. Running services get
+  onConfigurationChanged. `IntentService` is the AOSP worker thread one.
+- PendingIntent keeps an in-process record table keyed like AMS (kind,
+  request code, filter-equal intent, flags, activity for
+  createPendingResult) with FLAG_NO_CREATE/CANCEL_CURRENT/UPDATE_CURRENT/
+  ONE_SHOT, the S+ mutability check, fill-in for mutable ones and
+  OnFinished (via an ordered broadcast for broadcasts). `IntentSender`
+  wraps one; `startIntentSenderForResult` starts activity targets from
+  the caller so the result comes back. AlarmManager posts alarms on the
+  main looper (RTC converted to elapsed time; a re-set PendingIntent or
+  listener replaces its alarm; repeating alarms skip missed periods);
+  alarms live only as long as the process.
+- Notifications: `Notification.Builder` and the styles write the AOSP
+  extras keys (EXTRA_TITLE, EXTRA_BIG_TEXT, EXTRA_TEMPLATE, EXTRA_MESSAGES
+  bundles, ...), so NotificationCompat and recoverBuilder read back what
+  they expect; RemoteViews content is not supported. NotificationManager
+  keeps channels, groups and the active list per process (as
+  NotificationManagerService does per package): target O+ notifications
+  without an existing channel are dropped with the AOSP "No Channel found"
+  error, IMPORTANCE_NONE channels block, re-creating a channel may only
+  rename it, lower its importance or set its group once. Posted
+  notifications are logged (`notify <id> [title] text channel=<id>`);
+  there is no shade on the Switch.
+- Jobs (`android.app.job.JobSchedulerImpl`, in place of
+  JobSchedulerService): schedule/enqueue validate the service (declared,
+  requires BIND_JOB_SERVICE). A job is ready when its minimum latency has
+  passed and constraints hold, or its override deadline has passed. The
+  service is bound with BIND_AUTO_CREATE and driven through the
+  `JobServiceEngine` binder (so AndroidX JobIntentService works):
+  onStartJob, then jobFinished, a false return, or dequeueWork returning
+  null with no work in progress ends the run and unbinds. cancel,
+  re-schedule and a 10 minute timeout call onStopJob. Reschedules back
+  off (linear/exponential, 5 h cap); periodic jobs run once per interval
+  in their flex window. Constraint sources: network is taken as unmetered
+  Wi-Fi, charging and battery come from the sticky ACTION_BATTERY_CHANGED
+  (polled every minute while a job waits), the device is never idle,
+  content-URI triggers never fire. Jobs do not outlive the process
+  (WorkManager reschedules its work at app start).
+- Dialogs: `android.app.Dialog` owns a floating `PhoneWindow` themed from
+  `android:dialogTheme` (`alertDialogTheme` for AlertDialog) and is added
+  to the window manager on `show()`. `AlertDialog` uses a port of
+  `com.android.internal.app.AlertController` with the framework-res
+  layouts (`alert_dialog_material`, `select_dialog_*_material`) and the
+  internal widgets `AlertDialogLayout`, `ButtonBarLayout`, `DialogTitle`.
+- Menus: `PhoneWindow` builds the options menu (Window.Callback
+  onCreatePanelMenu/onPreparePanel) on MENU key up and shows it with
+  `MenuPanel`, an overflow-style popup in the top end corner (no action
+  bar decor yet). Context menus (`View.showContextMenu` -> `DecorView` ->
+  `PhoneWindow`) and sub menus are AlertDialog lists via
+  `MenuDialogHelper`, like AOSP. Rows use the framework
+  `popup_menu_item_layout`/`list_menu_item_layout` with
+  `ListMenuItemView`. Selections go to `onMenuItemSelected(featureId)`,
+  closing to `onPanelClosed`.
+- Framework resources that are not in the public `android.R`
+  (`com.android.internal.R` on AOSP) are looked up by name with
+  `com.android.internal.util.InternalRes` (`attr`, `layout`, `viewId`,
+  `style`, `attrs(...)`), which caches `Resources.getIdentifier`.
 
 ### 6.6 Storage, media, GL (design)
 - SQLite: bundled amalgamation compiled into the binary
@@ -427,7 +684,9 @@ Single C interface implemented once per target:
 
 Headless implementation: in-memory frame, event queue, script thread
 (`wait`, `idle [ms]`, `tap x y`, `down/move/up x y`, `swipe`, `key NAME`,
-`keydown/keyup`, `text ...`, `screenshot file.png`, `log`, `quit`), audio
+`keydown/keyup`, `text ...`, `screen WxH@dpi` (changes the display and
+posts PEV_RESIZE, to simulate a dock switch), `screenshot file.png`,
+`log`, `quit`), audio
 consumer thread that discards samples in real time. When the script ends
 it posts PEV_QUIT.
 

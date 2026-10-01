@@ -1,0 +1,9 @@
+idle 500
+screenshot widgets_off.png
+tap 100 180
+tap 40 252
+tap 40 396
+tap 200 468
+idle 500
+screenshot widgets_on.png
+quit

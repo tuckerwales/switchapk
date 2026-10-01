@@ -13,7 +13,10 @@ import android.content.pm.ServiceInfo;
 import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.content.res.XmlResourceParser;
+import android.os.Bundle;
+import android.os.Handler;
 import android.os.Looper;
 import android.os.MessageQueue;
 import android.os.Process;
@@ -50,11 +53,13 @@ public final class ActivityThread {
     static final ArrayList<ProviderInfo> sProviders = new ArrayList<ProviderInfo>();
     private static final ArrayList<ActivityRecord> sStack = new ArrayList<ActivityRecord>();
     private static boolean sShutdown;
+    private static Handler sHandler;
 
     private ActivityThread() {}
 
     public static void main(String[] args) {
         Looper.prepareMainLooper();
+        sHandler = new Handler(Looper.getMainLooper());
         MessageQueue.setPlatformDispatcher(new Runnable() {
             public void run() { dispatchPlatform(); }
         });
@@ -73,64 +78,520 @@ public final class ActivityThread {
         if (sShutdown) return;
         sShutdown = true;
         for (int i = sStack.size() - 1; i >= 0; i--) {
-            Activity activity = sStack.get(i).activity;
-            if (activity != null) activity.performDestroy();
+            ActivityRecord rec = sStack.get(i);
+            try {
+                destroyRecord(rec);
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Error destroying " + rec.parsed.info.name, e);
+            }
         }
         sStack.clear();
         System.exit(0);
     }
 
+    // ---------------------------------------------------------------- activity stack
+    //
+    // One task, one stack. Requests from app code (start, finish, recreate) are
+    // posted to the main looper like the binder calls they replace, so they never
+    // run inside another activity's lifecycle callback. Ordering follows AOSP:
+    // launching pauses the previous activity, creates, starts and resumes the new
+    // one, then stops the previous one and saves its state (P+ order); finishing
+    // pauses, resumes the activity below (results delivered just before its
+    // onResume), then stops and destroys the finished one.
+
     static void startActivity(Activity caller, Intent intent, int requestCode) {
-        if (sShutdown) return;
-        ParsedActivity parsed = resolveActivity(intent);
-        if (parsed == null) {
-            Log.w(TAG, "No activity for " + intent);
-            if (requestCode >= 0) throw new android.content.ActivityNotFoundException(String.valueOf(intent));
-            return;
-        }
-        ActivityRecord prev = top();
-        if (prev != null && prev.activity != null) prev.activity.performPause();
-        Object obj = newComponent(parsed.info.name);
-        if (!(obj instanceof Activity)) throw new ClassCastException(parsed.info.name + " is not an Activity");
-        Activity next = (Activity) obj;
-        ActivityRecord rec = new ActivityRecord();
-        rec.activity = next;
-        rec.parsed = parsed;
-        rec.caller = caller == null ? null : findRecord(caller);
-        rec.requestCode = requestCode;
-        rec.intent = intent != null ? new Intent(intent) : new Intent();
-        if (rec.intent.getComponent() == null) {
-            rec.intent.setComponent(new ComponentName(parsed.info.packageName, parsed.info.name));
-        }
-        sStack.add(rec);
-        next.attach(sContext, parsed.info, rec.intent, sApplication);
-        next.performCreate();
-        if (next.isFinishing() || top() != rec) return;
-        next.performStart();
-        if (next.isFinishing() || top() != rec) return;
-        next.performResume();
-        if (prev != null && prev != rec && prev.activity != null) prev.activity.performStop();
+        startActivity(caller, intent, requestCode, null);
     }
 
-    static void finishActivity(Activity activity, int resultCode, Intent data) {
-        if (sShutdown || activity == null) return;
-        ActivityRecord rec = findRecord(activity);
-        if (rec == null) return;
-        boolean wasTop = top() == rec;
-        activity.performDestroy();
-        sStack.remove(rec);
-        if (rec.caller != null && rec.requestCode >= 0 && rec.caller.activity != null) {
-            rec.caller.activity.deliverResult(rec.requestCode, resultCode, data);
+    static void startActivity(Activity caller, Intent intent, int requestCode, final String resultWho) {
+        if (sShutdown) return;
+        if (intent == null) throw new IllegalArgumentException("intent is null");
+        final ParsedActivity parsed = resolveActivity(intent);
+        if (parsed == null) {
+            if (intent.getComponent() != null) {
+                throw new android.content.ActivityNotFoundException("Unable to find explicit activity class "
+                        + intent.getComponent().toShortString() + "; have you declared this activity in your AndroidManifest.xml?");
+            }
+            // Implicit intents for other apps (browser, mail, settings) have no handler here.
+            Log.w(TAG, "No activity for " + intent);
+            return;
         }
+        final ActivityRecord callerRec = caller != null ? findRecord(caller) : null;
+        final Intent copy = new Intent(intent);
+        if (copy.getComponent() == null) copy.setComponent(new ComponentName(parsed.info.packageName, parsed.info.name));
+        final int code = callerRec != null ? requestCode : -1;
+        post(new Runnable() {
+            public void run() { handleStartActivity(callerRec, parsed, copy, code, resultWho); }
+        });
+    }
+
+    static void finishActivity(Activity activity, final int resultCode, final Intent data) {
+        if (sShutdown || activity == null) return;
+        final ActivityRecord rec = findRecord(activity);
+        if (rec == null) return;
+        post(new Runnable() {
+            public void run() { handleFinish(rec, resultCode, data); }
+        });
+    }
+
+    /** Activity.finishActivity(int): finishes activities this one started with requestCode. */
+    static void finishActivityForRequest(Activity caller, int requestCode) {
+        ActivityRecord callerRec = findRecord(caller);
+        if (callerRec == null) return;
+        for (int i = sStack.size() - 1; i >= 0; i--) {
+            ActivityRecord rec = sStack.get(i);
+            if (rec.caller == callerRec && rec.requestCode == requestCode && rec.resultWho == null) {
+                rec.activity.mFinished = true;
+                finishActivity(rec.activity, Activity.RESULT_CANCELED, null);
+            }
+        }
+    }
+
+    /** Activity.finishAffinity: this activity and everything below it (one task, one affinity). */
+    static void finishAffinity(Activity activity) {
+        final ActivityRecord rec = findRecord(activity);
+        if (rec == null) return;
+        if (rec.caller != null && rec.requestCode >= 0) {
+            throw new IllegalStateException("Can not be called to deliver a result");
+        }
+        for (int i = sStack.indexOf(rec); i >= 0; i--) {
+            Activity a = sStack.get(i).activity;
+            if (a.mFinished) continue;
+            a.mFinished = true;
+            finishActivity(a, Activity.RESULT_CANCELED, null);
+        }
+    }
+
+    static boolean isTaskRoot(Activity activity) {
+        return !sStack.isEmpty() && sStack.get(0).activity == activity;
+    }
+
+    static String getCallingPackage(Activity activity) {
+        ActivityRecord rec = findRecord(activity);
+        if (rec == null || rec.caller == null || rec.requestCode < 0) return null;
+        return rec.caller.parsed.info.packageName;
+    }
+
+    static ComponentName getCallingActivity(Activity activity) {
+        ActivityRecord rec = findRecord(activity);
+        if (rec == null || rec.caller == null || rec.requestCode < 0) return null;
+        return new ComponentName(rec.caller.parsed.info.packageName, rec.caller.parsed.info.name);
+    }
+
+    static void recreateActivity(Activity activity) {
+        final ActivityRecord rec = findRecord(activity);
+        if (rec == null) return;
+        post(new Runnable() {
+            public void run() {
+                if (!sStack.contains(rec) || rec.activity.isFinishing()) return;
+                relaunch(rec, 0, rec.activity.mResumed || top() == rec);
+            }
+        });
+    }
+
+    /** Activity.navigateUpTo: back to the parent if it is in the stack, finishing everything above it. */
+    static boolean navigateUpTo(Activity activity, Intent upIntent) {
+        final ActivityRecord rec = findRecord(activity);
+        if (rec == null || upIntent == null || upIntent.getComponent() == null) return false;
+        ActivityRecord parent = null;
+        for (int i = sStack.indexOf(rec) - 1; i >= 0; i--) {
+            if (sameComponent(sStack.get(i).parsed.info, upIntent.getComponent())) {
+                parent = sStack.get(i);
+                break;
+            }
+        }
+        if (parent == null) return false;
+        final ActivityRecord target = parent;
+        final Intent intent = new Intent(upIntent);
+        final int resultCode;
+        final Intent resultData;
+        synchronized (activity) {
+            resultCode = activity.mResultCode;
+            resultData = activity.mResultData;
+        }
+        activity.mFinished = true;
+        post(new Runnable() {
+            public void run() {
+                if (!sStack.contains(target)) return;
+                boolean reuse = target.parsed.info.launchMode != ActivityInfo.LAUNCH_MULTIPLE
+                        || (intent.getFlags() & Intent.FLAG_ACTIVITY_SINGLE_TOP) != 0;
+                if (reuse) {
+                    clearAbove(target, rec, resultCode, resultData, intent);
+                    return;
+                }
+                // Standard launch mode: the parent is replaced by a new instance (AOSP).
+                ArrayList<ActivityRecord> removed = popTo(target, true, rec, resultCode, resultData);
+                launch(sStack.contains(target.caller) ? target.caller : null, target.parsed, intent, -1, null, null);
+                for (int i = 0; i < removed.size(); i++) destroyRecord(removed.get(i));
+            }
+        });
+        return true;
+    }
+
+    private static void handleStartActivity(ActivityRecord caller, ParsedActivity parsed, Intent intent,
+            int requestCode, String resultWho) {
+        if (sShutdown) return;
+        if (caller != null && !sStack.contains(caller)) caller = null;
+        int flags = intent.getFlags();
+        int launchMode = parsed.info.launchMode;
+        boolean singleTop = launchMode == ActivityInfo.LAUNCH_SINGLE_TOP
+                || (flags & Intent.FLAG_ACTIVITY_SINGLE_TOP) != 0;
+        boolean singleTask = launchMode == ActivityInfo.LAUNCH_SINGLE_TASK
+                || launchMode == ActivityInfo.LAUNCH_SINGLE_INSTANCE;
+        if ((flags & Intent.FLAG_ACTIVITY_NEW_TASK) != 0 && (flags & Intent.FLAG_ACTIVITY_CLEAR_TASK) != 0
+                && !sStack.isEmpty()) {
+            // The new activity becomes the only one: pause the top, launch, then destroy the rest.
+            ArrayList<ActivityRecord> old = new ArrayList<ActivityRecord>(sStack);
+            ActivityRecord prev = top();
+            if (prev != null) pauseRecord(prev);
+            sStack.clear();
+            launch(null, parsed, intent, -1, null, null);
+            for (int i = old.size() - 1; i >= 0; i--) {
+                old.get(i).activity.mFinished = true;
+                destroyRecord(old.get(i));
+            }
+            return;
+        }
+        ActivityRecord existing = null;
+        if ((flags & Intent.FLAG_ACTIVITY_CLEAR_TOP) != 0 || singleTask) {
+            for (int i = sStack.size() - 1; i >= 0; i--) {
+                if (sStack.get(i).parsed == parsed && !sStack.get(i).activity.isFinishing()) {
+                    existing = sStack.get(i);
+                    break;
+                }
+            }
+        }
+        if (existing != null) {
+            if (singleTop || singleTask) {
+                if (requestCode >= 0 && caller != null) sendResult(caller, resultWho, requestCode, Activity.RESULT_CANCELED, null);
+                if (existing == top()) newIntent(existing, intent);
+                else clearAbove(existing, null, 0, null, intent);
+                return;
+            }
+            // CLEAR_TOP on a standard activity: it is finished too and launched again.
+            ArrayList<ActivityRecord> removed = popTo(existing, true, null, 0, null);
+            launch(caller != null && sStack.contains(caller) ? caller : null, parsed, intent, requestCode, resultWho, null);
+            for (int i = 0; i < removed.size(); i++) destroyRecord(removed.get(i));
+            return;
+        }
+        ActivityRecord top = top();
+        if (singleTop && top != null && top.parsed == parsed && !top.activity.isFinishing()) {
+            if (requestCode >= 0 && caller != null) sendResult(caller, resultWho, requestCode, Activity.RESULT_CANCELED, null);
+            newIntent(top, intent);
+            return;
+        }
+        launch(caller, parsed, intent, requestCode, resultWho, top);
+    }
+
+    /** Creates, starts and resumes a new activity on top; prev (the old top) is paused first and stopped after. */
+    private static void launch(ActivityRecord caller, ParsedActivity parsed, Intent intent, int requestCode,
+            String resultWho, ActivityRecord prev) {
+        if (prev != null) {
+            if ((intent.getFlags() & Intent.FLAG_ACTIVITY_NO_USER_ACTION) == 0 && prev.activity.mResumed) {
+                prev.activity.performUserLeaving();
+            }
+            pauseRecord(prev);
+        }
+        ActivityRecord rec = new ActivityRecord();
+        rec.parsed = parsed;
+        rec.intent = intent;
+        rec.caller = caller;
+        rec.requestCode = requestCode;
+        rec.resultWho = resultWho;
+        sStack.add(rec);
+        if (!createRecord(rec, null, null)) return;
+        Activity a = rec.activity;
+        a.performStart();
+        rec.started = true;
+        a.performPostCreate(null);
+        if (top() != rec || a.isFinishing()) return;
+        a.performResume();
+        show(rec);
+        if (prev != null && sStack.contains(prev) && !isTranslucent(rec)) stopRecord(prev, true);
+    }
+
+    /** New instance, attach, onCreate. False if it finished (or threw away its record) during onCreate. */
+    private static boolean createRecord(ActivityRecord rec, Bundle state, Activity.NonConfigurationInstances nci) {
+        ActivityInfo info = rec.parsed.info;
+        Object obj = newComponent(info.name);
+        if (!(obj instanceof Activity)) throw new ClassCastException(info.name + " is not an Activity");
+        Activity a = (Activity) obj;
+        rec.activity = a;
+        rec.started = false;
+        rec.relaunchPending = false;
+        rec.pendingConfigChanges = 0;
+        a.attach(sContext.createComponentContext(a), info, rec.intent, sApplication, nci, sResources.getConfiguration());
+        a.performCreate(state);
+        return !a.isFinishing();
+    }
+
+    private static void handleFinish(ActivityRecord rec, int resultCode, Intent data) {
+        if (sShutdown || !sStack.contains(rec)) return;
+        boolean wasTop = top() == rec;
+        pauseRecord(rec);
+        removeRecord(rec, resultCode, data);
         if (sStack.isEmpty()) {
+            destroyRecord(rec);
             shutdown();
             return;
         }
-        if (!wasTop) return;
-        ActivityRecord now = top();
-        if (now == null || now.activity == null || now.activity.isFinishing()) return;
-        now.activity.performStart();
-        now.activity.performResume();
+        if (wasTop) resumeTop();
+        destroyRecord(rec);
+    }
+
+    /** Takes rec off the stack and queues its result for the caller. */
+    private static void removeRecord(ActivityRecord rec, int resultCode, Intent data) {
+        sStack.remove(rec);
+        rec.activity.mFinished = true;
+        sendResult(rec.caller, rec.resultWho, rec.requestCode, resultCode, data);
+    }
+
+    /**
+     * Pauses the top and takes records off the stack down to target (inclusive or not).
+     * finishing reports resultCode/resultData, the others RESULT_CANCELED, as AOSP's
+     * clear-top does. The caller destroys the returned records once the new top is resumed.
+     */
+    private static ArrayList<ActivityRecord> popTo(ActivityRecord target, boolean inclusive, ActivityRecord finishing,
+            int resultCode, Intent resultData) {
+        pauseRecord(top());
+        ArrayList<ActivityRecord> removed = new ArrayList<ActivityRecord>();
+        while (!sStack.isEmpty()) {
+            ActivityRecord r = top();
+            if (r == target && !inclusive) break;
+            if (r == finishing) removeRecord(r, resultCode, resultData);
+            else removeRecord(r, Activity.RESULT_CANCELED, null);
+            removed.add(r);
+            if (r == target) break;
+        }
+        return removed;
+    }
+
+    /** Finishes everything above target, then brings target back, delivering newIntent if given. */
+    private static void clearAbove(ActivityRecord target, ActivityRecord finishing, int resultCode, Intent resultData,
+            Intent newIntent) {
+        ArrayList<ActivityRecord> removed = popTo(target, false, finishing, resultCode, resultData);
+        if (newIntent != null) newIntent(target, newIntent);
+        else resumeTop();
+        for (int i = 0; i < removed.size(); i++) destroyRecord(removed.get(i));
+    }
+
+    /** onNewIntent for an existing activity, paused around the call as AOSP does. */
+    private static void newIntent(ActivityRecord rec, Intent intent) {
+        if (rec.relaunchPending) relaunch(rec, rec.pendingConfigChanges, false);
+        Activity a = rec.activity;
+        if (a.mResumed) a.performPause();
+        startRecord(rec);
+        a.performNewIntent(intent);
+        deliverResults(rec);
+        if (top() == rec && !a.isFinishing()) {
+            a.performResume();
+            show(rec);
+        }
+    }
+
+    /** The top activity comes back: onRestart/onStart, pending results, onResume. */
+    private static void resumeTop() {
+        ActivityRecord rec = top();
+        if (rec == null || rec.activity.isFinishing()) return;
+        if (rec.relaunchPending) {
+            relaunch(rec, rec.pendingConfigChanges, true);
+            return;
+        }
+        Activity a = rec.activity;
+        startRecord(rec);
+        deliverResults(rec);
+        if (top() != rec || a.isFinishing() || a.mResumed) return;
+        a.performResume();
+        show(rec);
+    }
+
+    private static void sendResult(ActivityRecord caller, String who, int requestCode, int resultCode, Intent data) {
+        if (caller == null || requestCode < 0 || !sStack.contains(caller)) return;
+        ResultInfo result = new ResultInfo(who, requestCode, resultCode, data);
+        Activity a = caller.activity;
+        if (a.mResumed && !caller.relaunchPending) {
+            a.performPause();
+            a.dispatchActivityResult(who, requestCode, resultCode, data);
+            a.performResume();
+        } else {
+            caller.pendingResults.add(result);
+        }
+    }
+
+    /** A createPendingResult PendingIntent was sent: deliver like a result, on the main thread. */
+    static void sendPendingResult(final Activity activity, final int requestCode, final int resultCode,
+            final Intent data) {
+        post(new Runnable() {
+            public void run() {
+                ActivityRecord rec = findRecord(activity);
+                if (rec != null && !activity.isFinishing()) sendResult(rec, null, requestCode, resultCode, data);
+            }
+        });
+    }
+
+    /** framework-internal. BroadcastReceiver.peekService. */
+    public static android.os.IBinder peekService(Intent service) { return ActiveServices.peekService(service); }
+
+    private static void deliverResults(ActivityRecord rec) {
+        while (!rec.pendingResults.isEmpty()) {
+            ResultInfo r = rec.pendingResults.remove(0);
+            rec.activity.dispatchActivityResult(r.who, r.requestCode, r.resultCode, r.data);
+        }
+    }
+
+    /** onRestart (if it was stopped) and onStart. */
+    private static void startRecord(ActivityRecord rec) {
+        if (rec.started) return;
+        Activity a = rec.activity;
+        if (a.isStopped()) a.performRestart();
+        else a.performStart();
+        rec.started = true;
+    }
+
+    private static void pauseRecord(ActivityRecord rec) {
+        if (rec != null && rec.activity != null && rec.activity.mResumed) rec.activity.performPause();
+    }
+
+    /** onStop, hide the window, then onSaveInstanceState unless finishing (API 28+ order). */
+    private static void stopRecord(ActivityRecord rec, boolean saveState) {
+        Activity a = rec.activity;
+        pauseRecord(rec);
+        if (!rec.started) return;
+        a.performStop();
+        rec.started = false;
+        hide(rec);
+        if (saveState && !a.isFinishing()) {
+            Bundle state = new Bundle();
+            a.performSaveInstanceState(state);
+            rec.state = state;
+        }
+    }
+
+    private static void destroyRecord(ActivityRecord rec) {
+        Activity a = rec.activity;
+        if (a == null || a.isDestroyed()) return;
+        stopRecord(rec, false);
+        a.performDestroy();
+        a.removeWindow();
+        WindowManagerGlobal.getInstance().closeAll(a);
+        if (a.getBaseContext() instanceof ContextImpl) {
+            ((ContextImpl) a.getBaseContext()).scheduleFinalCleanup(a.getClass().getName(), "Activity");
+        }
+    }
+
+    private static void show(ActivityRecord rec) {
+        Activity a = rec.activity;
+        a.mVisibleFromServer = true;
+        if (!a.mWindowAdded) {
+            if (a.mVisibleFromClient) a.makeVisible();
+        } else {
+            a.updateVisibility(true);
+        }
+    }
+
+    private static void hide(ActivityRecord rec) {
+        rec.activity.mVisibleFromServer = false;
+        rec.activity.updateVisibility(false);
+    }
+
+    /** Dialog-themed and translucent activities leave the one below visible (paused, not stopped). */
+    private static boolean isTranslucent(ActivityRecord rec) {
+        TypedArray a = rec.activity.getTheme().obtainStyledAttributes(new int[] {
+                android.R.attr.windowIsFloating, android.R.attr.windowIsTranslucent });
+        try {
+            return a.getBoolean(0, false) || a.getBoolean(1, false);
+        } finally {
+            a.recycle();
+        }
+    }
+
+    /**
+     * Destroys rec's activity and creates a new instance with its saved state and
+     * non-config instances (configuration change or recreate()).
+     */
+    private static void relaunch(ActivityRecord rec, int configChanges, boolean resume) {
+        Activity old = rec.activity;
+        boolean visible = rec.started;
+        old.mConfigChangeFlags |= configChanges;
+        old.mChangingConfigurations = true;
+        pauseRecord(rec);
+        Bundle state = rec.state;
+        if (rec.started) {
+            old.performStop();
+            rec.started = false;
+            state = new Bundle();
+            old.performSaveInstanceState(state);
+        }
+        Activity.NonConfigurationInstances nci = old.retainNonConfigurationInstances();
+        old.performDestroy();
+        old.removeWindow();
+        WindowManagerGlobal.getInstance().closeAll(old);
+        rec.state = null;
+        if (!createRecord(rec, state, nci)) return;
+        Activity a = rec.activity;
+        a.performStart();
+        rec.started = true;
+        if (state != null) a.performRestoreInstanceState(state);
+        a.performPostCreate(state);
+        deliverResults(rec);
+        if (resume && top() == rec && !a.isFinishing()) {
+            a.performResume();
+            show(rec);
+        } else if (visible || resume) {
+            show(rec);
+        }
+    }
+
+    /** The display changed (docked/handheld): new configuration, then handle or relaunch each activity. */
+    private static void handleDisplayChanged() {
+        Configuration oldConfig = new Configuration(sResources.getConfiguration());
+        DisplayMetrics metrics = new DisplayMetrics();
+        Configuration newConfig = computeConfiguration(metrics);
+        newConfig.fontScale = oldConfig.fontScale;
+        newConfig.uiMode = oldConfig.uiMode;
+        newConfig.setLocales(oldConfig.getLocales());
+        int diff = oldConfig.diff(newConfig);
+        sResources.updateConfiguration(newConfig, metrics);
+        WindowManagerGlobal.getInstance().onDisplayChanged();
+        if (diff == 0) return;
+        Configuration config = new Configuration(sResources.getConfiguration());
+        sApplication.onConfigurationChanged(new Configuration(config));
+        ActiveServices.dispatchConfigurationChanged(config);
+        ArrayList<ActivityRecord> stack = new ArrayList<ActivityRecord>(sStack);
+        for (int i = stack.size() - 1; i >= 0; i--) {
+            ActivityRecord rec = stack.get(i);
+            if (!sStack.contains(rec) || rec.activity.isFinishing()) continue;
+            int changes = diff | rec.pendingConfigChanges;
+            if ((changes & ~activityConfigChanges(rec.parsed.info)) == 0 && !rec.relaunchPending) {
+                rec.activity.performConfigurationChanged(new Configuration(config));
+            } else if (rec == top()) {
+                relaunch(rec, changes, rec.activity.mResumed);
+            } else if (rec.started) {
+                relaunch(rec, changes, false);
+            } else {
+                rec.relaunchPending = true;
+                rec.pendingConfigChanges = changes;
+            }
+        }
+    }
+
+    /**
+     * android:configChanges as AOSP applies it: screenSize and smallestScreenSize are
+     * implied handled for apps targeting below 13, as is everything below 4.
+     */
+    private static int activityConfigChanges(ActivityInfo info) {
+        int handled = info.configChanges;
+        int target = sAppInfo != null ? sAppInfo.targetSdkVersion : 0;
+        if (target < 13) {
+            handled |= ActivityInfo.CONFIG_SCREEN_SIZE | ActivityInfo.CONFIG_SMALLEST_SCREEN_SIZE;
+        }
+        if (target < 4) handled |= ActivityInfo.CONFIG_SCREEN_LAYOUT;
+        return handled;
+    }
+
+    static void post(Runnable r) {
+        if (sHandler == null) sHandler = new Handler(Looper.getMainLooper());
+        sHandler.post(r);
     }
 
     static boolean sameComponent(ComponentInfo info, ComponentName component) {
@@ -181,7 +642,7 @@ public final class ActivityThread {
         Intent launch = new Intent(Intent.ACTION_MAIN);
         launch.addCategory(Intent.CATEGORY_LAUNCHER);
         launch.setComponent(new ComponentName(launcher.info.packageName, launcher.info.name));
-        startActivity(null, launch, -1);
+        handleStartActivity(null, launcher, launch, -1, null);
         Log.i(TAG, sPackageName + " " + launcher.info.name);
     }
 
@@ -191,20 +652,24 @@ public final class ActivityThread {
 
             public void onFocus(boolean gained) {
                 ActivityRecord rec = top();
-                if (rec == null || rec.activity == null || rec.activity.isFinishing()) return;
-                if (gained) rec.activity.performResume();
-                else rec.activity.performPause();
+                if (rec == null || rec.activity == null || rec.activity.isFinishing() || rec.relaunchPending) return;
+                if (gained && !rec.activity.mResumed) rec.activity.performResume();
+                else if (!gained) pauseRecord(rec);
             }
 
-            public void onResize(int width, int height, int dpi) {
-                WindowManagerGlobal.getInstance().scheduleAll();
-            }
+            public void onResize(int width, int height, int dpi) { handleDisplayChanged(); }
         });
     }
 
     private static Resources buildResources() {
-        Display display = WindowManagerImpl.getDefault().getDefaultDisplay();
         DisplayMetrics metrics = new DisplayMetrics();
+        Configuration config = computeConfiguration(metrics);
+        return new Resources(AssetManager.getSystem(), metrics, config);
+    }
+
+    /** Configuration for the current display (fills metrics); docked and handheld differ in size and density. */
+    private static Configuration computeConfiguration(DisplayMetrics metrics) {
+        Display display = WindowManagerImpl.getDefault().getDefaultDisplay();
         display.getMetrics(metrics);
         Configuration config = new Configuration();
         config.setToDefaults();
@@ -222,8 +687,8 @@ public final class ActivityThread {
         else if (config.smallestScreenWidthDp >= 600) size = Configuration.SCREENLAYOUT_SIZE_LARGE;
         else if (config.smallestScreenWidthDp >= 480) size = Configuration.SCREENLAYOUT_SIZE_NORMAL;
         config.screenLayout = size | Configuration.SCREENLAYOUT_LAYOUTDIR_LTR;
-        config.uiMode = Configuration.UI_MODE_TYPE_NORMAL;
-        return new Resources(AssetManager.getSystem(), metrics, config);
+        config.uiMode = Configuration.UI_MODE_TYPE_NORMAL | Configuration.UI_MODE_NIGHT_NO;
+        return config;
     }
 
     private static void parseManifest() throws Exception {
@@ -245,6 +710,8 @@ public final class ActivityThread {
                     if ("manifest".equals(name)) {
                         sPackageName = parser.getAttributeValue(null, "package");
                         if (sPackageName == null) sPackageName = parser.getAttributeValue("", "package");
+                    } else if ("uses-sdk".equals(name)) {
+                        readUsesSdk(parser);
                     } else if ("application".equals(name)) {
                         readApplication(parser);
                     } else if ("activity".equals(name) || "activity-alias".equals(name) || "receiver".equals(name)) {
@@ -256,11 +723,17 @@ public final class ActivityThread {
                         info.configChanges = attrInt(parser, android.R.attr.configChanges, "configChanges", 0);
                         info.softInputMode = attrInt(parser, android.R.attr.windowSoftInputMode,
                                 "windowSoftInputMode", 0);
+                        info.launchMode = attrInt(parser, android.R.attr.launchMode, "launchMode",
+                                ActivityInfo.LAUNCH_MULTIPLE);
+                        info.uiOptions = attrInt(parser, android.R.attr.uiOptions, "uiOptions", 0);
+                        info.parentActivityName = qualify(sPackageName,
+                                attrString(parser, android.R.attr.parentActivityName, "parentActivityName"));
                         activity = new ParsedActivity(info, "receiver".equals(name));
                         filter = null;
                     } else if ("service".equals(name)) {
                         ServiceInfo info = new ServiceInfo();
                         fillComponent(info, parser);
+                        info.permission = attrString(parser, android.R.attr.permission, "permission");
                         service = new ParsedService(info);
                         filter = null;
                     } else if ("provider".equals(name)) {
@@ -269,6 +742,7 @@ public final class ActivityThread {
                         provider.authority = attrString(parser, android.R.attr.authorities, "authorities");
                     } else if ("intent-filter".equals(name)) {
                         filter = new IntentFilter();
+                        filter.setPriority(attrInt(parser, android.R.attr.priority, "priority", 0));
                         if (activity != null) activity.filters.add(filter);
                         else if (service != null) service.filters.add(filter);
                         else filter = null;
@@ -304,6 +778,7 @@ public final class ActivityThread {
             try { parser.close(); } catch (Exception ignored) {}
         }
         if (sPackageName == null || sPackageName.isEmpty()) throw new RuntimeException("Manifest has no package");
+        if (sAppInfo.targetSdkVersion == 0) sAppInfo.targetSdkVersion = Math.max(1, sAppInfo.minSdkVersion);
         sAppInfo.packageName = sPackageName;
         sAppInfo.processName = sPackageName;
         sAppInfo.className = sAppClass;
@@ -316,6 +791,23 @@ public final class ActivityThread {
         sAppInfo.enabled = true;
         sAppInfo.flags |= ApplicationInfo.FLAG_HAS_CODE;
         stamp(sAppInfo);
+    }
+
+    /** android:minSdkVersion / targetSdkVersion; a codename counts as the newest level, as on Android. */
+    private static void readUsesSdk(XmlResourceParser parser) {
+        int min = sdkLevel(attrString(parser, android.R.attr.minSdkVersion, "minSdkVersion"), 1);
+        int target = sdkLevel(attrString(parser, android.R.attr.targetSdkVersion, "targetSdkVersion"), min);
+        sAppInfo.minSdkVersion = min;
+        sAppInfo.targetSdkVersion = target;
+    }
+
+    private static int sdkLevel(String value, int def) {
+        if (value == null || value.isEmpty()) return def;
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return 10000;
+        }
     }
 
     private static void readApplication(XmlResourceParser parser) {
@@ -392,7 +884,7 @@ public final class ActivityThread {
         return filter.match(action, intent.getType(), intent.getScheme(), intent.getData(), categories, TAG) >= 0;
     }
 
-    private static Object newComponent(String className) {
+    static Object newComponent(String className) {
         try {
             return Class.forName(className).newInstance();
         } catch (Exception e) {
@@ -502,5 +994,28 @@ public final class ActivityThread {
         Intent intent;
         ActivityRecord caller;
         int requestCode = -1;
+        String resultWho;
+        /** Between onStart and onStop. */
+        boolean started;
+        /** Saved when stopped; used if the activity is relaunched later. */
+        Bundle state;
+        /** A configuration change arrived while stopped; relaunch when it comes back. */
+        boolean relaunchPending;
+        int pendingConfigChanges;
+        final ArrayList<ResultInfo> pendingResults = new ArrayList<ResultInfo>();
+    }
+
+    private static final class ResultInfo {
+        final String who;
+        final int requestCode;
+        final int resultCode;
+        final Intent data;
+
+        ResultInfo(String who, int requestCode, int resultCode, Intent data) {
+            this.who = who;
+            this.requestCode = requestCode;
+            this.resultCode = resultCode;
+            this.data = data;
+        }
     }
 }

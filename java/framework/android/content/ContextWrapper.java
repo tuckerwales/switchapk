@@ -260,7 +260,25 @@ public class ContextWrapper extends Context {
     public boolean bindService(Intent service, ServiceConnection conn, int flags) { return mBase.bindService(service, conn, flags); }
 
     @Override
+    public boolean bindService(Intent service, int flags, java.util.concurrent.Executor executor, ServiceConnection conn) {
+        return mBase.bindService(service, flags, executor, conn);
+    }
+
+    @Override
     public void unbindService(ServiceConnection conn) { mBase.unbindService(conn); }
+
+    public void sendOrderedBroadcast(Intent intent, int initialCode, String receiverPermission, String receiverAppOp,
+            BroadcastReceiver resultReceiver, Handler scheduler, String initialData, Bundle initialExtras,
+            Bundle options) {
+        mBase.sendOrderedBroadcast(intent, receiverPermission, resultReceiver, scheduler, initialCode, initialData,
+                initialExtras);
+    }
+
+    @Override
+    public void sendStickyOrderedBroadcast(Intent intent, BroadcastReceiver resultReceiver, Handler scheduler,
+            int initialCode, String initialData, Bundle initialExtras) {
+        mBase.sendStickyOrderedBroadcast(intent, resultReceiver, scheduler, initialCode, initialData, initialExtras);
+    }
 
     @Override
     public boolean startInstrumentation(ComponentName className, String profileFile, Bundle arguments) { return mBase.startInstrumentation(className, profileFile, arguments); }

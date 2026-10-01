@@ -5,13 +5,14 @@
  * comes from a script file (see the .script files under tests/apps):
  *
  *   wait <ms>            sleep
- *   idle [ms]            wait until the app stops presenting frames (default 300ms quiet)
+ *   idle [ms]            wait until input is consumed and no frame was presented for ms (default 300)
  *   tap <x> <y>          touch down + up
  *   down|move|up <x> <y> raw touch events (pointer 0)
  *   swipe x0 y0 x1 y1 [ms]
  *   key <NAME|code>      key press (down + up), e.g. key BACK, key DPAD_DOWN
  *   keydown|keyup <NAME|code>
  *   text <string>        answer to the next soft keyboard request
+ *   screen <W>x<H>@<dpi> change the display and send PEV_RESIZE (docked/handheld switch)
  *   screenshot <file>    write the last frame as PNG
  *   log <message>
  *   quit
@@ -120,6 +121,11 @@ bool platform_wait_event(PlatformEvent *ev, int timeout_ms) {
 
 void platform_present(const uint32_t *argb, int w, int h, int stride) {
     pthread_mutex_lock(&g_lock);
+    if (g_frame && (g_frame_w != g_width || g_frame_h != g_height)) {
+        /* the screen command changed the display size */
+        free(g_frame);
+        g_frame = NULL;
+    }
     if (!g_frame) g_frame = sa_calloc((size_t)g_width * (size_t)g_height, 4);
     g_frame_w = g_width;
     g_frame_h = g_height;
@@ -227,14 +233,20 @@ static void push_key(int action, int code) {
 
 static void wait_idle(int quiet_ms) {
     int64_t start = (int64_t)sa_time_ns();
+    const int64_t t0 = start;
     for (;;) {
         pthread_mutex_lock(&g_lock);
         int64_t last = g_last_present_ns;
         bool has_frame = g_frame != NULL;
+        bool pending = g_qlen > 0;
         pthread_mutex_unlock(&g_lock);
         int64_t now = (int64_t)sa_time_ns();
-        if (has_frame && now - last >= (int64_t)quiet_ms * 1000000) break;
-        if (now - start > 20000000000LL) {
+        /* quiet means: queued input consumed and no frame for quiet_ms since the later of the
+         * last present and the start of the idle command */
+        if (pending) start = now;
+        int64_t ref = last > start ? last : start;
+        if (has_frame && !pending && now - ref >= (int64_t)quiet_ms * 1000000) break;
+        if (now - t0 > 20000000000LL) {
             LOGW("idle: app still drawing after 20s");
             break;
         }
@@ -311,6 +323,23 @@ static void *script_thread(void *arg) {
                     ev.a = id;
                     ev.text = sa_strdup(rest);
                     platform_push_event(&ev);
+                }
+            } else if (!strcmp(cmd, "screen")) {
+                int w, h, dpi;
+                if (sscanf(rest, "%dx%d@%d", &w, &h, &dpi) == 3 && w > 0 && h > 0 && dpi > 0) {
+                    pthread_mutex_lock(&g_lock);
+                    g_width = w;
+                    g_height = h;
+                    g_dpi = dpi;
+                    pthread_mutex_unlock(&g_lock);
+                    PlatformEvent ev = {0};
+                    ev.kind = PEV_RESIZE;
+                    ev.a = w;
+                    ev.b = h;
+                    ev.c = dpi;
+                    platform_push_event(&ev);
+                } else {
+                    LOGW("script line %d: screen wants WxH@dpi", lineno);
                 }
             } else if (!strcmp(cmd, "screenshot")) {
                 char *path = (g_shot_dir && rest[0] != '/') ? sa_sprintf("%s/%s", g_shot_dir, rest) : sa_strdup(rest);

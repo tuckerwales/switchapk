@@ -25,13 +25,54 @@ public final class Character implements java.io.Serializable, Comparable<Charact
     public static final byte MODIFIER_LETTER = 4;
     public static final byte OTHER_LETTER = 5;
     public static final byte NON_SPACING_MARK = 6;
+    public static final byte ENCLOSING_MARK = 7;
+    public static final byte COMBINING_SPACING_MARK = 8;
     public static final byte DECIMAL_DIGIT_NUMBER = 9;
+    public static final byte LETTER_NUMBER = 10;
+    public static final byte OTHER_NUMBER = 11;
     public static final byte SPACE_SEPARATOR = 12;
     public static final byte LINE_SEPARATOR = 13;
     public static final byte PARAGRAPH_SEPARATOR = 14;
     public static final byte CONTROL = 15;
+    public static final byte FORMAT = 16;
+    public static final byte PRIVATE_USE = 18;
+    public static final byte SURROGATE = 19;
+    public static final byte DASH_PUNCTUATION = 20;
+    public static final byte START_PUNCTUATION = 21;
+    public static final byte END_PUNCTUATION = 22;
+    public static final byte CONNECTOR_PUNCTUATION = 23;
     public static final byte OTHER_PUNCTUATION = 24;
     public static final byte MATH_SYMBOL = 25;
+    public static final byte CURRENCY_SYMBOL = 26;
+    public static final byte MODIFIER_SYMBOL = 27;
+    public static final byte OTHER_SYMBOL = 28;
+    public static final byte INITIAL_QUOTE_PUNCTUATION = 29;
+    public static final byte FINAL_QUOTE_PUNCTUATION = 30;
+
+    public static final byte DIRECTIONALITY_UNDEFINED = -1;
+    public static final byte DIRECTIONALITY_LEFT_TO_RIGHT = 0;
+    public static final byte DIRECTIONALITY_RIGHT_TO_LEFT = 1;
+    public static final byte DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC = 2;
+    public static final byte DIRECTIONALITY_EUROPEAN_NUMBER = 3;
+    public static final byte DIRECTIONALITY_EUROPEAN_NUMBER_SEPARATOR = 4;
+    public static final byte DIRECTIONALITY_EUROPEAN_NUMBER_TERMINATOR = 5;
+    public static final byte DIRECTIONALITY_ARABIC_NUMBER = 6;
+    public static final byte DIRECTIONALITY_COMMON_NUMBER_SEPARATOR = 7;
+    public static final byte DIRECTIONALITY_NONSPACING_MARK = 8;
+    public static final byte DIRECTIONALITY_BOUNDARY_NEUTRAL = 9;
+    public static final byte DIRECTIONALITY_PARAGRAPH_SEPARATOR = 10;
+    public static final byte DIRECTIONALITY_SEGMENT_SEPARATOR = 11;
+    public static final byte DIRECTIONALITY_WHITESPACE = 12;
+    public static final byte DIRECTIONALITY_OTHER_NEUTRALS = 13;
+    public static final byte DIRECTIONALITY_LEFT_TO_RIGHT_EMBEDDING = 14;
+    public static final byte DIRECTIONALITY_LEFT_TO_RIGHT_OVERRIDE = 15;
+    public static final byte DIRECTIONALITY_RIGHT_TO_LEFT_EMBEDDING = 16;
+    public static final byte DIRECTIONALITY_RIGHT_TO_LEFT_OVERRIDE = 17;
+    public static final byte DIRECTIONALITY_POP_DIRECTIONAL_FORMAT = 18;
+    public static final byte DIRECTIONALITY_LEFT_TO_RIGHT_ISOLATE = 19;
+    public static final byte DIRECTIONALITY_RIGHT_TO_LEFT_ISOLATE = 20;
+    public static final byte DIRECTIONALITY_FIRST_STRONG_ISOLATE = 21;
+    public static final byte DIRECTIONALITY_POP_DIRECTIONAL_ISOLATE = 22;
 
     private final char value;
 
@@ -356,6 +397,22 @@ public final class Character implements java.io.Serializable, Comparable<Charact
     }
 
     public static int getType(int ch) {
+        if (ch >= 0xd800 && ch <= 0xdfff) {
+            return SURROGATE;
+        }
+        if ((ch >= 0xe000 && ch <= 0xf8ff) || ch >= 0xf0000) {
+            return PRIVATE_USE;
+        }
+        if (ch == 0xad || (ch >= 0x200b && ch <= 0x200f) || (ch >= 0x202a && ch <= 0x202e)
+                || (ch >= 0x2060 && ch <= 0x2064) || (ch >= 0x2066 && ch <= 0x206f) || ch == 0xfeff) {
+            return FORMAT;
+        }
+        if (ch == 0x2028) {
+            return LINE_SEPARATOR;
+        }
+        if (ch == 0x2029) {
+            return PARAGRAPH_SEPARATOR;
+        }
         if (isUpperCase(ch)) {
             return UPPERCASE_LETTER;
         }
@@ -374,7 +431,104 @@ public final class Character implements java.io.Serializable, Comparable<Charact
         if (isISOControl(ch)) {
             return CONTROL;
         }
+        switch (ch) {
+            case '(': case '[': case '{': case 0x2018: case 0x201c: case 0x3008: case 0x300a: case 0x300c:
+            case 0x300e: case 0x3010: case 0xff08: case 0xff3b: case 0xff5b:
+                return ch == 0x2018 || ch == 0x201c ? INITIAL_QUOTE_PUNCTUATION : START_PUNCTUATION;
+            case ')': case ']': case '}': case 0x2019: case 0x201d: case 0x3009: case 0x300b: case 0x300d:
+            case 0x300f: case 0x3011: case 0xff09: case 0xff3d: case 0xff5d:
+                return ch == 0x2019 || ch == 0x201d ? FINAL_QUOTE_PUNCTUATION : END_PUNCTUATION;
+            case '-': case 0x2010: case 0x2011: case 0x2012: case 0x2013: case 0x2014: case 0x2015:
+                return DASH_PUNCTUATION;
+            case '_':
+                return CONNECTOR_PUNCTUATION;
+            case '+': case '<': case '=': case '>': case '|': case '~': case 0xac: case 0xb1: case 0xd7: case 0xf7:
+                return MATH_SYMBOL;
+            case '$': case 0xa2: case 0xa3: case 0xa4: case 0xa5: case 0x20ac:
+                return CURRENCY_SYMBOL;
+            case '^': case '`': case 0xa8: case 0xaf: case 0xb4: case 0xb8:
+                return MODIFIER_SYMBOL;
+            case 0xa6: case 0xa9: case 0xae: case 0xb0:
+                return OTHER_SYMBOL;
+            default:
+                break;
+        }
+        if (ch >= 0x300 && ch <= 0x36f) {
+            return NON_SPACING_MARK;
+        }
+        if ((ch >= 0x2190 && ch <= 0x21ff) || (ch >= 0x2200 && ch <= 0x22ff)) {
+            return MATH_SYMBOL;
+        }
+        if ((ch >= 0x2300 && ch <= 0x2bff) || (ch >= 0x1f000 && ch <= 0x1faff)) {
+            return OTHER_SYMBOL;
+        }
         return OTHER_PUNCTUATION;
+    }
+
+    public static byte getDirectionality(char ch) {
+        return getDirectionality((int) ch);
+    }
+
+    /** Range-based approximation of the Unicode bidi class. */
+    public static byte getDirectionality(int ch) {
+        if (ch < 0 || ch > MAX_CODE_POINT) {
+            return DIRECTIONALITY_UNDEFINED;
+        }
+        if (ch == '\n' || ch == '\r' || ch == 0x1c || ch == 0x1d || ch == 0x1e || ch == 0x85 || ch == 0x2029) {
+            return DIRECTIONALITY_PARAGRAPH_SEPARATOR;
+        }
+        if (ch == '\t' || ch == 0x0b || ch == 0x1f) {
+            return DIRECTIONALITY_SEGMENT_SEPARATOR;
+        }
+        if (ch == ' ' || ch == 0x0c || ch == 0x2028 || isSpaceChar((char) ch) && ch < 0x10000) {
+            return DIRECTIONALITY_WHITESPACE;
+        }
+        if (ch >= '0' && ch <= '9') {
+            return DIRECTIONALITY_EUROPEAN_NUMBER;
+        }
+        if (ch == '+' || ch == '-') {
+            return DIRECTIONALITY_EUROPEAN_NUMBER_SEPARATOR;
+        }
+        if (ch == '#' || ch == '$' || ch == '%' || (ch >= 0xa2 && ch <= 0xa5) || ch == 0xb0 || ch == 0xb1) {
+            return DIRECTIONALITY_EUROPEAN_NUMBER_TERMINATOR;
+        }
+        if (ch == ',' || ch == '.' || ch == '/' || ch == ':' || ch == 0xa0) {
+            return DIRECTIONALITY_COMMON_NUMBER_SEPARATOR;
+        }
+        if (ch == 0x200e) return DIRECTIONALITY_LEFT_TO_RIGHT;
+        if (ch == 0x200f) return DIRECTIONALITY_RIGHT_TO_LEFT;
+        if (ch == 0x202a) return DIRECTIONALITY_LEFT_TO_RIGHT_EMBEDDING;
+        if (ch == 0x202b) return DIRECTIONALITY_RIGHT_TO_LEFT_EMBEDDING;
+        if (ch == 0x202c) return DIRECTIONALITY_POP_DIRECTIONAL_FORMAT;
+        if (ch == 0x202d) return DIRECTIONALITY_LEFT_TO_RIGHT_OVERRIDE;
+        if (ch == 0x202e) return DIRECTIONALITY_RIGHT_TO_LEFT_OVERRIDE;
+        if (ch == 0x2066) return DIRECTIONALITY_LEFT_TO_RIGHT_ISOLATE;
+        if (ch == 0x2067) return DIRECTIONALITY_RIGHT_TO_LEFT_ISOLATE;
+        if (ch == 0x2068) return DIRECTIONALITY_FIRST_STRONG_ISOLATE;
+        if (ch == 0x2069) return DIRECTIONALITY_POP_DIRECTIONAL_ISOLATE;
+        if (ch < 0x20 || (ch >= 0x7f && ch <= 0x9f) || ch == 0xad || (ch >= 0x200b && ch <= 0x200d) || ch == 0xfeff) {
+            return DIRECTIONALITY_BOUNDARY_NEUTRAL;
+        }
+        if ((ch >= 0x300 && ch <= 0x36f) || (ch >= 0x591 && ch <= 0x5bd) || (ch >= 0x610 && ch <= 0x61a)
+                || (ch >= 0x64b && ch <= 0x65f) || (ch >= 0x20d0 && ch <= 0x20ff) || (ch >= 0xfe00 && ch <= 0xfe0f)) {
+            return DIRECTIONALITY_NONSPACING_MARK;
+        }
+        if ((ch >= 0x660 && ch <= 0x669) || (ch >= 0x6f0 && ch <= 0x6f9)) {
+            return DIRECTIONALITY_ARABIC_NUMBER;
+        }
+        if ((ch >= 0x590 && ch <= 0x5ff) || (ch >= 0x7c0 && ch <= 0x85f) || (ch >= 0xfb1d && ch <= 0xfb4f)
+                || (ch >= 0x10800 && ch <= 0x10fff) || (ch >= 0x1e800 && ch <= 0x1edff)) {
+            return DIRECTIONALITY_RIGHT_TO_LEFT;
+        }
+        if ((ch >= 0x600 && ch <= 0x7bf) || (ch >= 0x860 && ch <= 0x8ff) || (ch >= 0xfb50 && ch <= 0xfdff)
+                || (ch >= 0xfe70 && ch <= 0xfefe) || (ch >= 0x1ee00 && ch <= 0x1eeff)) {
+            return DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC;
+        }
+        if (isLetterOrDigit(ch) || (ch >= 0x2e80 && ch <= 0xd7ff) || (ch >= 0xf900 && ch <= 0xfaff)
+                || (ch >= 0x20000 && ch <= 0x3ffff)) {
+            return DIRECTIONALITY_LEFT_TO_RIGHT;
+        }
+        return DIRECTIONALITY_OTHER_NEUTRALS;
     }
 
     public static char toLowerCase(char ch) {

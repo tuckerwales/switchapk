@@ -1,0 +1,41 @@
+idle 500
+screenshot lifecycle_start.png
+tap 120 198
+idle 100
+tap 120 198
+idle 100
+tap 300 264
+tap 630 195
+idle 200
+text hello
+idle 300
+screenshot lifecycle_counted.png
+log dock
+screen 1920x1080@360
+idle 800
+screenshot lifecycle_docked.png
+log open
+tap 540 297
+idle 500
+screenshot lifecycle_detail.png
+log undock
+screen 1280x720@240
+idle 800
+screenshot lifecycle_detail_undocked.png
+log next
+tap 66 264
+idle 500
+screenshot lifecycle_next.png
+log back
+key BUTTON_B
+idle 800
+screenshot lifecycle_canceled.png
+log reopen
+tap 360 198
+idle 500
+log done
+tap 66 192
+idle 800
+screenshot lifecycle_result.png
+log end
+quit

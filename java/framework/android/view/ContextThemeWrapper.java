@@ -59,7 +59,10 @@ public class ContextThemeWrapper extends ContextWrapper {
 
     @Override
     public Resources.Theme getTheme() {
-        if (mTheme == null) initializeTheme();
+        if (mTheme != null) return mTheme;
+        final android.content.pm.ApplicationInfo info = getApplicationInfo();
+        if (info != null) mThemeResource = Resources.selectDefaultTheme(mThemeResource, info.targetSdkVersion);
+        initializeTheme();
         return mTheme;
     }
 
@@ -77,6 +80,14 @@ public class ContextThemeWrapper extends ContextWrapper {
         onApplyThemeResource(mTheme, mThemeResource, first);
     }
 
+    private LayoutInflater mInflater;
+
     @Override
-    public Object getSystemService(String name) { return getBaseContext().getSystemService(name); }
+    public Object getSystemService(String name) {
+        if (LAYOUT_INFLATER_SERVICE.equals(name)) {
+            if (mInflater == null) mInflater = LayoutInflater.from(getBaseContext()).cloneInContext(this);
+            return mInflater;
+        }
+        return getBaseContext().getSystemService(name);
+    }
 }

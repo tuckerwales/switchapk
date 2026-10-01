@@ -31,11 +31,11 @@ duplicating work.
 | ID | Package | Depends on | Status | Owner |
 |---|---|---|---|---|
 | WS0 | Integration skeleton: framework compiles, natives registered, app runner, first APK on screen | none | done | ws0 2026-09-30 |
-| WS1 | View system core (View, ViewGroup, input dispatch, focus, windows, ViewRootImpl, Choreographer, LayoutInflater, PhoneWindow/DecorView) | WS0 | not started | |
-| WS2 | Text: android.text + TextView/EditText + IME bridge | WS0, WS1 (View API) | not started | |
-| WS3 | Widgets: layouts, lists/adapters, scrolling, buttons, progress, Toast, PopupWindow, Spinner, Toolbar | WS1 | not started | |
-| WS4 | App model: Activity/ActivityThread lifecycle, manifest, intents, dialogs, menus/ActionBar, services, legacy fragments | WS0 | not started | |
-| WS5 | Animation: android.animation, view.animation, ViewPropertyAnimator, AVD animation | WS1 | not started | |
+| WS1 | View system core (View, ViewGroup, input dispatch, focus, windows, ViewRootImpl, Choreographer, LayoutInflater, PhoneWindow/DecorView) | WS0 | in progress (core, surfaces, acceptance sample, context menus and primary action modes done (action modes landed from the WS4 session); floating action modes left) | ws1 session 4, 2026-10-01 |
+| WS2 | Text: android.text + TextView/EditText + IME bridge | WS0, WS1 (View API) | done | ws2 session 5, 2026-10-01 |
+| WS3 | Widgets: layouts, lists/adapters, scrolling, buttons, progress, Toast, PopupWindow, Spinner, Toolbar | WS1 | in progress (ImageView, compound controls, scrolling and lists landed; taken over by the WS4 session after the WS3 session stopped: progress, popups and Toolbar done, the remaining widgets next) | ws4 session 6 (from ws3 session 5), 2026-10-01 |
+| WS4 | App model: Activity/ActivityThread lifecycle, manifest, intents, dialogs, menus/ActionBar, services, legacy fragments | WS0 | in progress (lifecycle, fragments, dialogs, ProgressDialog, menus, action bar decor, services, broadcasts, notifications and jobs done; Date/TimePicker dialogs and loaders left) | ws4 session 6, 2026-10-01 |
+| WS5 | Animation: android.animation, view.animation, ViewPropertyAnimator, AVD animation | WS1 | not started (the tween core ProgressBar needs landed early from WS3: TimeInterpolator, Interpolator and the basic interpolators, Animation, AlphaAnimation, Transformation, AnimationUtils.loadInterpolator) | |
 | WS6 | Storage: SQLite natives, database/content provider checks, file APIs, SharedPreferences tests | WS0 | not started | |
 | WS7 | Audio/media: mixer, SoundPool, MediaPlayer, AudioTrack, decoders, platform audio | WS0 | not started | |
 | WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | not started | |
@@ -118,6 +118,8 @@ controller mapping).
 Acceptance: sample app with nested LinearLayout/FrameLayout from XML,
 clickable views reacting to scripted taps, D-pad focus navigation between
 buttons, a dialog-style second window, all verified by screenshots.
+(Met by `tests/apps/views`. FrameLayout and LinearLayout were ported here
+because the decor needs them; WS3 owns them from now on.)
 
 ## WS2: Text
 

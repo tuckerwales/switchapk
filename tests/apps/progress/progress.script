@@ -1,0 +1,11 @@
+idle 500
+screenshot progress_start.png
+tap 462 133
+idle 200
+tap 340 218
+idle 200
+screenshot progress_changed.png
+tap 90 341
+idle 600
+screenshot progress_dialog.png
+quit

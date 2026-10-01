@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 3, see SESSION_LOG.md)
+## Current state (end of session 5, see SESSION_LOG.md)
 
 Working:
 - VM core, libcore, JNI, reflection, threads; VmTest passes.
@@ -61,16 +61,34 @@ Working:
 - `tools/fetch_toolchains.py` fetches aapt2, android.jar, builds
   framework-res.apk, fetches SQLite; devkitPro fetch implemented (Docker
   Hub may rate-limit: retries built in).
-- `java/framework` compiles to `build/java/framework.dex`. Activity,
-  PhoneWindow and ViewRootImpl present one full-screen view.
-- Resource, graphics and OS natives are registered. `app_runner` opens an
-  APK and enters `ActivityThread.main`.
-- `tests/apps/hello` draws on the headless platform. Its screenshot
-  matches the background, the gold rectangle and the label.
+- `java/framework` compiles to `build/java/framework.dex`; resource,
+  graphics and OS natives are registered; `app_runner` opens an APK and
+  enters `ActivityThread.main`.
+- View system core (WS1, most of it): AOSP ports of View, ViewGroup,
+  MotionEvent/KeyEvent/InputDevice/KeyCharacterMap, ViewConfiguration,
+  VelocityTracker, GestureDetector, ScaleGestureDetector, FocusFinder,
+  ViewTreeObserver, LayoutInflater (include, merge, ViewStub, themes),
+  Choreographer, ViewRootImpl (dirty-rect redraw, touch mode, focus
+  navigation, synthetic D-pad), WindowManagerGlobal (window stack,
+  input routing, A/B fallbacks, dim, compositing), PhoneWindow/DecorView
+  (theme window attributes, screen_simple decor), MenuInflater and an
+  internal menu model, Activity as Window.Callback. FrameLayout and
+  LinearLayout are ported (needed by the decor).
+- `tests/apps/hello`, `tests/apps/views` and `tests/apps/surface` pass their screenshot checks
+  (views: XML layouts with weights, include, ViewStub, selector states,
+  tap, D-pad focus, A/B buttons, long press, dim-behind second window).
+- Text engine (WS2): Spanned/Spannable, spans, TextUtils, TextPaint,
+  StaticLayout, BoringLayout, DynamicLayout. TextView measures and draws
+  through Layout (wrapping, gravity, ellipsize, hints, compound
+  drawables, password and single-line transformations). EditText takes
+  hardware keys and scripted `text` through InputConnection.commitText.
+  Html.fromHtml (basic tags), Linkify and DateUtils/DateFormat/Formatter
+  are in place. autoLink runs Linkify when text is set. `tests/apps/text`
+  checks screenshots and in-process logic.
 
-M1 (WS0) is done. The view system, widgets, app model and the other
-post-WS0 packages are not started. `setContentView(int)` does not inflate
-layouts yet.
+Not started: most widgets (WS3), the rest of the app model (WS4: action
+bar decor, ProgressDialog), animation (WS5) and the other
+post-WS0 packages.
 
 ## Checklist
 
@@ -98,9 +116,76 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ### M2
 - [ ] WS1 view system core
-- [ ] WS2 text and IME
+  - [x] View, ViewGroup, input events, ViewConfiguration, VelocityTracker, gesture detectors, FocusFinder
+  - [x] ViewRootImpl, Choreographer, WindowManagerGlobal (window stack, routing, compositing)
+  - [x] LayoutInflater, ViewStub, PhoneWindow/DecorView, MenuInflater + menu model, Window.Callback
+  - [x] tests/apps/views acceptance sample
+  - [x] SurfaceView/SurfaceHolder (software lockCanvas, paced producers), TextureView (software)
+  - [x] context menu presentation (MenuDialogHelper, from WS4)
+  - [x] action mode presentation: primary modes in the action bar's
+    context bar (WindowDecorActionBar) or standalone in the decor's
+    action_mode_bar stub; floating (text selection) modes are not done
+  - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
+- [x] WS2 text and IME
+  - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
+  - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
+  - [x] movement and key listeners, EditText, BaseInputConnection, IME `text` delivery
+  - [x] Html.fromHtml, Linkify, DateUtils
 - [ ] WS3 widgets
+  - [x] ImageView (scale types), Button, ImageButton, CompoundButton,
+    CheckBox, RadioButton, RadioGroup, ToggleButton, Switch, Space;
+    tests/apps/widgets
+  - [x] Scroller, OverScroller, EdgeEffect, ScrollView,
+    HorizontalScrollView; tests/apps/scroll
+  - [x] Adapter, ListAdapter, SpinnerAdapter, BaseAdapter, ArrayAdapter,
+    Filter, AdapterView, AbsListView, ListView; tests/apps/list
+  - [x] RelativeLayout (landed from WS4, which needed it); tests/apps/relative
+  - [x] ProgressBar (determinate, indeterminate, tints, tiling), AbsSeekBar,
+    SeekBar, RatingBar, AnimationScaleListDrawable; tests/apps/progress
+  - [x] PopupWindow, ListPopupWindow, DropDownListView, PopupMenu
+    (MenuPopupHelper), AbsSpinner, Spinner (drop-down and dialog), Toast;
+    tests/apps/popups (touch and D-pad)
+  - [x] Toolbar, ActionMenuView, ActionMenuPresenter (action buttons,
+    overflow popup), menu presenters (MenuPresenter, BaseMenuPresenter,
+    ActionMenuItemView), DecorToolbar/ToolbarWidgetWrapper; tests/apps/toolbar
+  - [x] GridView (AbsListView lays out rows of N items), TableLayout,
+    TableRow, AbsoluteLayout; tests/apps/grid
+  - [ ] the rest (GridLayout, ViewAnimator family, clocks, pickers,
+    SearchView, AutoCompleteTextView, ExpandableListView, cursor and
+    simple adapters, TabHost, VideoView, RemoteViews, ...)
 - [ ] WS4 app model
+  - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
+    multi choice, custom view) on the framework's material alert layouts,
+    CheckedTextView, ActionBar API; tests/apps/appmodel
+  - [x] ProgressDialog (spinner and horizontal); tests/apps/progress
+  - [ ] DatePicker/TimePicker dialogs
+  - [x] options menu (+ button falls back to MENU) as an overflow-style
+    popup, context menus and sub menus as dialogs
+  - [x] action bar decor: screen_toolbar (ActionBarOverlayLayout,
+    ActionBarContainer, ActionBarContextView), WindowDecorActionBar
+    (title, subtitle, up, action items, overflow, MENU key, hide/show,
+    overlay mode, action modes; tabs dispatched but not drawn),
+    setActionBar(Toolbar) through ToolbarActionBar, screen_title and the
+    floating dialog title decor, default theme selection by targetSdk;
+    tests/apps/actionbar
+  - [x] lifecycle in AOSP order, results, launch modes and flags, saved
+    state, recreation on docked/handheld switch (lazy for stopped
+    activities), ActivityLifecycleCallbacks with pre/post;
+    tests/apps/lifecycle (screenshots plus callback order from the log)
+  - [x] platform fragments (FragmentManager, back stack, saved and
+    retained state, DialogFragment, ListFragment, LoaderManager)
+  - [x] in-process services (started, bound, IntentService), broadcasts
+    (registered, manifest, ordered, sticky, goAsync), PendingIntent,
+    IntentSender, AlarmManager, createPendingResult, leak cleanup on
+    destroy; tests/apps/services (25 steps checked against AOSP behaviour)
+  - [x] Notification.Builder (AOSP extras layout), Action with
+    RemoteInput, BigText/BigPicture/Inbox/Messaging/Media styles,
+    BubbleMetadata, Person, recoverBuilder, NotificationChannel and groups,
+    StatusBarNotification; NotificationManager enforces channels for
+    target O+ and logs what is posted (no RemoteViews content yet)
+  - [x] JobScheduler in process (android.app.job: JobInfo validation,
+    latency, deadlines, constraints, periodic, backoff, enqueue/dequeue
+    work, JobServiceEngine binder for AndroidX JobIntentService)
 - [ ] WS13 app test runner with screenshot goldens
 
 ### M3
@@ -124,12 +209,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS0 is done: the tree compiles, VmTest passes, and the hello APK
-   screenshots.
-2. Fan out: WS1 first pushes the public View/ViewGroup API; in parallel
-   WS4 (app model), WS10 (Switch backend), WS13 (test infra),
-   WS6/WS7/WS9/WS11/WS12/WS15 as agents are available.
-3. WS2/WS3/WS5 once View API is in; WS8 once WS10 can present.
+1. WS2 is done. WS3 is in progress: ImageView, the compound controls,
+   scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
+   EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
+   landed, and so have progress, popups, Toolbar and the action bar.
+   The remaining WS3 widgets are open. WS5 (animation) can start in
+   parallel.
+2. Finish WS1: floating action modes (text selection toolbar).
+3. In parallel as agents are available: WS10 (Switch backend), WS13
+   (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
+4. WS8 once WS10 can present.
 
 ## Known issues and gotchas
 
@@ -145,11 +234,33 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   unaffected; SoftReference-based image caches will miss more often).
 - No finalizers: classes relying on `finalize()` to free native memory
   must be written to not need it (ours keep memory in Java arrays).
+- `tools/api_check.py <class...>` (or `-p <package>`) lists android.jar
+  members our framework lacks: run it on every class you touch.
+- Apps whose manifest sets no theme get Theme.DeviceDefault.Light.DarkActionBar
+  (AOSP selectDefaultTheme for targetSdk 24+), so they now show an action
+  bar with the activity label. Action bar show/hide and action mode
+  transitions are immediate until WS5 animators land.
+- The headless `idle` script command now waits until queued input is
+  consumed and nothing was presented for the quiet time since the command
+  started.
 
 ## Interface changes log
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-01 (WS3/WS4): `PhoneWindow` picks its decor like AOSP
+  generateLayout: the theme's windowActionBarFullscreenDecorLayout
+  (screen_toolbar on Material) for FEATURE_ACTION_BAR, the
+  dialogTitleDecorLayout for floating windows with a title, screen_title
+  for other titled windows, screen_simple(_overlay_action_mode) otherwise.
+  With an action bar the options menu is the decor toolbar's menu
+  (rebuilt, posted, on invalidatePanelMenu) and MENU toggles its
+  overflow. `DecorView` starts action modes (Window.Callback
+  onWindowStartingActionMode, then a StandaloneActionMode) and BACK ends
+  the primary mode. `Activity.getActionBar/setActionBar` are real.
+  Contexts with no theme get `Resources.selectDefaultTheme`.
+  `InternalRes.attr` also looks up the "^attr-private" type.
 
 - 2026-09-30: the app runner loads `framework-res.apk` from the first
   readable path of `build/toolchains/framework-res.apk`,
@@ -157,3 +268,49 @@ and update ARCHITECTURE.md in the same commit.
   `{platform_framework_path()}/framework-res.apk`. If none is readable it
   still passes the toolchain path and continues with an empty framework
   table. Host tests and the later Switch romfs layout share this rule.
+- 2026-10-01 (WS1): `PlatformInput` merges per-pointer touch events into
+  multi-pointer MotionEvents, assigns key/joystick sources and devices
+  (`InputDevice.ID_TOUCHSCREEN` 1, `ID_GAMEPAD` 2), and exposes
+  `setSensorSink` for PEV_SENSOR. `WindowManagerGlobal` gained
+  `dispatchTouch/dispatchKey/dispatchGenericMotion` (screen coordinates),
+  `setPlatformFocus` and `onDisplayChanged` (`scheduleAll` kept).
+  `Activity` implements `Window.Callback`, `KeyEvent.Callback` and
+  `LayoutInflater.Factory2` (BACK handled by onKeyDown/onKeyUp tracking).
+  `ContextImpl` serves LAYOUT_INFLATER_SERVICE (PhoneLayoutInflater) and
+  ACCESSIBILITY_SERVICE. TypedArray reads `@null` as no value.
+- 2026-10-01 (WS2): PEV_TEXT is still (request id, string) and
+  `nRequestText` is unchanged. `InputMethodManager.deliverTextResult`
+  commits that string with `InputConnection.commitText` on the view that
+  last called `showSoftInput`.
+- 2026-10-01 (WS4): `WindowManagerGlobal` key fallbacks gain
+  BUTTON_START -> MENU (the + button opens the options menu when the app
+  does not handle it). Documented with the controller mapping in
+  ARCHITECTURE 6.4.
+- 2026-10-01 (WS4): the headless script gains `screen WxH@dpi` (changes
+  the display, posts PEV_RESIZE). ActivityThread handles PEV_RESIZE as a
+  configuration change (relaunch or onConfigurationChanged per activity)
+  instead of only relaying out windows. `WindowManagerGlobal.closeAll`
+  removes windows a destroyed activity leaked. `Class.getModifiers` now
+  reports member class modifiers from the InnerClass annotation (static,
+  private), as ART does; FragmentManager checks them. ActivityThread start
+  and finish requests are posted to the main looper (asynchronous, as on
+  Android). ARCHITECTURE 6.5 updated.
+- 2026-10-01 (WS4): each Activity and Service gets its own `ContextImpl`
+  (`createComponentContext`, sharing package state with the application's)
+  so receivers and service connections are tracked per component and
+  removed with a leak warning after onDestroy, as on Android. Broadcasts
+  (`BroadcastQueue`) and services (`ActiveServices`) are delivered in
+  process on the main looper; `BroadcastReceiver.PendingResult` now
+  carries the ordered result and continues the broadcast on `finish()`.
+  The manifest parser reads `<intent-filter android:priority>`.
+  `IntentSender` wraps a `PendingIntent`. Documented in ARCHITECTURE 6.5.
+- 2026-10-01 (WS4): `ServiceInfo.permission` is now read from the
+  manifest (`android:permission` on `<service>`); JobScheduler requires
+  BIND_JOB_SERVICE there. `Context.getSystemService(JOB_SCHEDULER_SERVICE)`
+  returns `android.app.job.JobSchedulerImpl`. ARCHITECTURE 6.5 updated.
+- 2026-10-01 (WS3): ViewRootImpl clamps a window into the screen unless it
+  sets FLAG_LAYOUT_NO_LIMITS (as the window manager does); `closeAll` only
+  removes activity-token window types (application and sub windows), so
+  toasts survive their activity. AdapterView owns `mInLayout` and
+  `mBlockLayoutRequests` (moved from AbsListView) and posts selection
+  callbacks during layout. ARCHITECTURE 6.4.1 updated.

@@ -1,0 +1,32 @@
+idle 500
+screenshot views_initial.png
+tap 501 168
+idle 300
+screenshot views_tap.png
+key DPAD_DOWN
+idle 300
+screenshot views_focus1.png
+key DPAD_RIGHT
+idle 300
+screenshot views_focus2.png
+key DPAD_RIGHT
+key BUTTON_A
+idle 300
+screenshot views_click3.png
+key DPAD_DOWN
+idle 300
+screenshot views_focus4.png
+key BUTTON_A
+idle 300
+screenshot views_dialog.png
+key BUTTON_B
+idle 300
+screenshot views_after.png
+down 175 168
+wait 250
+screenshot views_pressed.png
+wait 550
+up 175 168
+idle 300
+screenshot views_long.png
+quit

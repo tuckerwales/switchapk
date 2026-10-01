@@ -1,0 +1,12 @@
+idle 500
+screenshot text_views.png
+tap 100 570
+idle 300
+text hello
+idle 300
+key A
+idle 200
+key DEL
+idle 400
+screenshot text_input.png
+quit

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tile_pressed">#FFFF5722</color>
+    <color name="tile_focused">#FF4CAF50</color>
+    <color name="tile_normal">#FF2196F3</color>
+    <color name="header">#FF3F51B5</color>
+</resources>

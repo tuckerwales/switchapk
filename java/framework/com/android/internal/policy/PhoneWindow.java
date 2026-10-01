@@ -21,6 +21,10 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.Window;
 import android.view.WindowManager;
+import com.android.internal.view.menu.ContextMenuBuilder;
+import com.android.internal.view.menu.MenuBuilder;
+import com.android.internal.view.menu.MenuDialogHelper;
+import com.android.internal.view.menu.MenuPanel;
 
 /**
  * framework-internal. The standard window (AOSP PhoneWindow): builds the decor
@@ -147,30 +151,140 @@ public class PhoneWindow extends Window {
     @Deprecated
     public void setTitleColor(int textColor) { mTitleColor = textColor; }
 
-    // Options and context panels are TODO(WS4) (menus, action bar).
-    @Override
-    public void openPanel(int featureId, KeyEvent event) {}
+    // ---------------------------------------------------------------- panels (options menu, context menu)
+
+    private MenuBuilder mOptionsMenu;
+    private boolean mOptionsMenuInvalid = true;
+    private MenuPanel mOptionsPanel;
+    private ContextMenuBuilder mContextMenu;
+    private MenuDialogHelper mContextMenuHelper;
+
+    private MenuBuilder.Callback menuCallback(final int featureId) {
+        return new MenuBuilder.Callback() {
+            public boolean onMenuItemSelected(MenuBuilder menu, android.view.MenuItem item) {
+                final Callback cb = getCallback();
+                return cb != null && !isDestroyed() && cb.onMenuItemSelected(featureId, item);
+            }
+
+            public void onMenuModeChange(MenuBuilder menu) {}
+        };
+    }
+
+    /** Creates and prepares the options menu; false when the app shows none (AOSP preparePanel). */
+    private boolean prepareOptionsMenu() {
+        final Callback cb = getCallback();
+        if (cb == null || isDestroyed()) return false;
+        if (mOptionsMenu == null || mOptionsMenuInvalid) {
+            MenuBuilder menu = new MenuBuilder(getContext());
+            menu.setCallback(menuCallback(FEATURE_OPTIONS_PANEL));
+            if (!cb.onCreatePanelMenu(FEATURE_OPTIONS_PANEL, menu)) {
+                mOptionsMenu = null;
+                return false;
+            }
+            mOptionsMenu = menu;
+            mOptionsMenuInvalid = false;
+        }
+        return cb.onPreparePanel(FEATURE_OPTIONS_PANEL, null, mOptionsMenu);
+    }
+
+    private final MenuBuilder.CloseListener mOptionsClosed = new MenuBuilder.CloseListener() {
+        public void onMenuClosed(MenuBuilder menu, boolean allMenusAreClosing) {
+            menu.removeCloseListener(this);
+            mOptionsPanel = null;
+            final Callback cb = getCallback();
+            if (cb != null && !isDestroyed()) cb.onPanelClosed(FEATURE_OPTIONS_PANEL, menu);
+        }
+    };
+
+    private final MenuBuilder.CloseListener mContextClosed = new MenuBuilder.CloseListener() {
+        public void onMenuClosed(MenuBuilder menu, boolean allMenusAreClosing) {
+            menu.removeCloseListener(this);
+            mContextMenuHelper = null;
+            final Callback cb = getCallback();
+            if (cb != null && !isDestroyed()) cb.onPanelClosed(FEATURE_CONTEXT_MENU, menu);
+        }
+    };
 
     @Override
-    public void closePanel(int featureId) {}
+    public void openPanel(int featureId, KeyEvent event) {
+        if (featureId != FEATURE_OPTIONS_PANEL || mOptionsPanel != null) return;
+        if (!prepareOptionsMenu() || !mOptionsMenu.hasVisibleItems()) return;
+        final Callback cb = getCallback();
+        if (cb != null && !cb.onMenuOpened(FEATURE_OPTIONS_PANEL, mOptionsMenu)) {
+            cb.onPanelClosed(FEATURE_OPTIONS_PANEL, mOptionsMenu);
+            return;
+        }
+        mOptionsMenu.addCloseListener(mOptionsClosed);
+        mOptionsPanel = new MenuPanel(getContext(), mOptionsMenu, null);
+        mOptionsPanel.show();
+    }
 
     @Override
-    public void togglePanel(int featureId, KeyEvent event) {}
+    public void closePanel(int featureId) {
+        if (featureId == FEATURE_OPTIONS_PANEL) {
+            if (mOptionsPanel != null && mOptionsMenu != null) mOptionsMenu.close(true);
+        } else if (featureId == FEATURE_CONTEXT_MENU) {
+            if (mContextMenuHelper != null && mContextMenu != null) mContextMenu.close(true);
+        }
+    }
 
     @Override
-    public void invalidatePanelMenu(int featureId) {}
+    public void togglePanel(int featureId, KeyEvent event) {
+        if (featureId == FEATURE_OPTIONS_PANEL && mOptionsPanel != null) closePanel(featureId);
+        else openPanel(featureId, event);
+    }
 
     @Override
-    public boolean performPanelShortcut(int featureId, int keyCode, KeyEvent event, int flags) { return false; }
+    public void invalidatePanelMenu(int featureId) {
+        if (featureId == FEATURE_OPTIONS_PANEL) mOptionsMenuInvalid = true;
+    }
 
     @Override
-    public boolean performPanelIdentifierAction(int featureId, int id, int flags) { return false; }
+    public boolean performPanelShortcut(int featureId, int keyCode, KeyEvent event, int flags) {
+        if (featureId != FEATURE_OPTIONS_PANEL || event.isSystem()) return false;
+        if (!prepareOptionsMenu()) return false;
+        return mOptionsMenu.performShortcut(keyCode, event, flags);
+    }
 
     @Override
-    public void closeAllPanels() {}
+    public boolean performPanelIdentifierAction(int featureId, int id, int flags) {
+        if (featureId != FEATURE_OPTIONS_PANEL || !prepareOptionsMenu()) return false;
+        boolean res = mOptionsMenu.performIdentifierAction(id, flags);
+        closePanel(featureId);
+        return res;
+    }
 
     @Override
-    public boolean performContextMenuIdentifierAction(int id, int flags) { return false; }
+    public void closeAllPanels() {
+        closePanel(FEATURE_OPTIONS_PANEL);
+        closePanel(FEATURE_CONTEXT_MENU);
+    }
+
+    @Override
+    public boolean performContextMenuIdentifierAction(int id, int flags) {
+        return mContextMenu != null && mContextMenu.performIdentifierAction(id, flags);
+    }
+
+    /** framework-internal. Called by the decor when a child asks for its context menu. */
+    boolean showContextMenuForChild(View originalView) {
+        if (mContextMenuHelper != null) {
+            mContextMenu.close(true);
+            mContextMenuHelper = null;
+        }
+        if (mContextMenu == null) {
+            mContextMenu = new ContextMenuBuilder(getContext());
+            mContextMenu.setCallback(menuCallback(FEATURE_CONTEXT_MENU));
+        } else {
+            mContextMenu.clear();
+            mContextMenu.clearHeader();
+        }
+        final MenuDialogHelper helper = mContextMenu.showDialog(originalView, originalView.getWindowToken());
+        if (helper != null) {
+            mContextMenu.addCloseListener(mContextClosed);
+            mContextMenuHelper = helper;
+        }
+        return helper != null;
+    }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {}
@@ -219,11 +333,23 @@ public class PhoneWindow extends Window {
         return mDecor.superDispatchGenericMotionEvent(event);
     }
 
-    /** framework-internal. Keys the view hierarchy and callback did not handle. */
-    protected boolean onKeyDown(int featureId, int keyCode, KeyEvent event) { return false; }
+    /** framework-internal. Keys the view hierarchy and callback did not handle (AOSP onKeyDown). */
+    protected boolean onKeyDown(int featureId, int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            if (event.getRepeatCount() == 0) event.startTracking();
+            return true;
+        }
+        return false;
+    }
 
-    /** framework-internal. */
-    protected boolean onKeyUp(int featureId, int keyCode, KeyEvent event) { return false; }
+    /** framework-internal. MENU toggles the options panel on release (AOSP onKeyUpPanel). */
+    protected boolean onKeyUp(int featureId, int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            if (!event.isCanceled()) togglePanel(featureId < 0 ? FEATURE_OPTIONS_PANEL : featureId, event);
+            return true;
+        }
+        return false;
+    }
 
     @Override
     public final View getDecorView() {

@@ -18,4 +18,31 @@ key DPAD_DOWN
 key BUTTON_A
 idle 500
 screenshot appmodel_done.png
+key BUTTON_START
+idle 500
+screenshot appmodel_options.png
+key DPAD_DOWN
+key BUTTON_A
+idle 500
+screenshot appmodel_purple.png
+key BUTTON_START
+idle 300
+key DPAD_DOWN
+key DPAD_DOWN
+key BUTTON_A
+idle 500
+screenshot appmodel_submenu.png
+key BUTTON_A
+idle 500
+screenshot appmodel_orange.png
+down 120 183
+wait 800
+up 120 183
+idle 500
+screenshot appmodel_context.png
+key DPAD_DOWN
+key DPAD_DOWN
+key BUTTON_A
+idle 500
+screenshot appmodel_gold.png
 quit

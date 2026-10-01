@@ -350,4 +350,30 @@ public final class MenuItemImpl implements MenuItem {
     }
 
     public CharSequence getTooltipText() { return mTooltipText; }
+
+    /** framework-internal. The title an item view shows (condensed when it prefers it). */
+    CharSequence getTitleForItemView(MenuView.ItemView itemView) {
+        return ((itemView != null) && itemView.prefersCondensedTitle()) ? getTitleCondensed() : getTitle();
+    }
+
+    /** framework-internal. Shortcuts are shown only when the menu shows them (no hardware keyboard here). */
+    boolean shouldShowShortcut() { return mMenu.isShortcutsVisible() && (getShortcut() != 0); }
+
+    char getShortcut() { return mMenu.isQwertyMode() ? getAlphabeticShortcut() : getNumericShortcut(); }
+
+    String getShortcutLabel() {
+        char shortcut = getShortcut();
+        if (shortcut == 0) return "";
+        StringBuilder sb = new StringBuilder("Menu+");
+        switch (shortcut) {
+            case '\n': sb.append("enter"); break;
+            case '\b': sb.append("delete"); break;
+            case ' ': sb.append("space"); break;
+            default: sb.append(shortcut); break;
+        }
+        return sb.toString();
+    }
+
+    /** framework-internal. Overflow menus hide icons unless the menu opts in. */
+    public boolean shouldShowIcon() { return mMenu.getOptionalIconsVisible(); }
 }

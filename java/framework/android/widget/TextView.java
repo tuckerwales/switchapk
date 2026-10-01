@@ -1733,14 +1733,8 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
             makeNewLayout(contentWidth);
         }
 
-        int want = mLayout != null ? mLayout.getHeight() : 0;
-        if (mText.length() == 0 && mHintLayout != null) want = mHintLayout.getHeight();
-        int minH = mMinMode == LINES ? limitPx(mMinimum, EMS) : mMinimum;
-        int maxH = mMaxMode == LINES ? limitPx(mMaximum, EMS) : mMaximum;
-        if (mMaxMode == LINES && mMaximum == Integer.MAX_VALUE) maxH = Integer.MAX_VALUE;
-        want = Math.min(want, maxH);
-        want = Math.max(want, minH);
-        want += getCompoundPaddingTop() + getCompoundPaddingBottom();
+        Layout measured = mText.length() == 0 && mHintLayout != null ? mHintLayout : mLayout;
+        int want = getDesiredHeight(measured);
         want = Math.max(want, drawableHeight(mResolvedLeft) + getPaddingTop() + getPaddingBottom());
         want = Math.max(want, drawableHeight(mResolvedRight) + getPaddingTop() + getPaddingBottom());
         want = Math.max(want, getSuggestedMinimumHeight());
@@ -1752,6 +1746,31 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
             if (heightMode == MeasureSpec.AT_MOST) height = Math.min(want, heightSize);
         }
         setMeasuredDimension(width, height);
+    }
+
+    /**
+     * AOSP getDesiredHeight: line counts limit by whole lines (layout line tops),
+     * pixel limits clamp the padded height.
+     */
+    private int getDesiredHeight(Layout layout) {
+        if (layout == null) return getCompoundPaddingTop() + getCompoundPaddingBottom();
+        int linecount = layout.getLineCount();
+        final int padding = getCompoundPaddingTop() + getCompoundPaddingBottom();
+        int desired = layout.getLineTop(linecount) + padding;
+        if (mMaxMode == LINES) {
+            if (linecount > mMaximum) {
+                desired = layout.getLineTop(mMaximum) + padding;
+                linecount = mMaximum;
+            }
+        } else {
+            desired = Math.min(desired, mMaximum);
+        }
+        if (mMinMode == LINES) {
+            if (linecount < mMinimum) desired += getLineHeight() * (mMinimum - linecount);
+        } else {
+            desired = Math.max(desired, mMinimum);
+        }
+        return desired;
     }
 
     private CharSequence displayText() {

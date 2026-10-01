@@ -13,9 +13,10 @@ import android.view.View;
 import java.util.ArrayList;
 
 /**
- * framework-internal. Plain menu model (AOSP MenuBuilder without presenters):
+ * framework-internal. Menu model (AOSP MenuBuilder without presenters):
  * items sorted by category and order, groups, shortcuts and item invocation.
- * Showing menus (options panel, popup, context menu) is TODO(WS4).
+ * Menus are shown by MenuPanel (options panel) and MenuDialogHelper (context
+ * menus, sub menus), which register as close listeners.
  */
 public class MenuBuilder implements Menu {
     private static final int[] sCategoryToOrder = new int[] {1, 4, 5, 3, 2, 0};
@@ -254,9 +255,50 @@ public class MenuBuilder implements Menu {
         return mCallback != null && mCallback.onMenuItemSelected(menu, item);
     }
 
-    public void close() {}
+    /** framework-internal. Told when the menu (or a sub menu of it) closes. */
+    public interface CloseListener {
+        void onMenuClosed(MenuBuilder menu, boolean allMenusAreClosing);
+    }
 
-    public void onItemsChanged(boolean structureChanged) {}
+    private final ArrayList<CloseListener> mCloseListeners = new ArrayList<CloseListener>();
+    private final ArrayList<Runnable> mChangeListeners = new ArrayList<Runnable>();
+    private boolean mIsClosing;
+    private boolean mShortcutsVisible;
+    private boolean mOptionalIconsVisible;
+
+    public void addCloseListener(CloseListener l) { if (!mCloseListeners.contains(l)) mCloseListeners.add(l); }
+
+    public void removeCloseListener(CloseListener l) { mCloseListeners.remove(l); }
+
+    /** framework-internal. Runs when items are added, removed or changed. */
+    public void addChangeListener(Runnable r) { if (!mChangeListeners.contains(r)) mChangeListeners.add(r); }
+
+    public void removeChangeListener(Runnable r) { mChangeListeners.remove(r); }
+
+    public final void close(boolean allMenusAreClosing) {
+        if (mIsClosing) return;
+        mIsClosing = true;
+        ArrayList<CloseListener> listeners = new ArrayList<CloseListener>(mCloseListeners);
+        for (CloseListener l : listeners) l.onMenuClosed(this, allMenusAreClosing);
+        mIsClosing = false;
+    }
+
+    public void close() { close(true); }
+
+    public void onItemsChanged(boolean structureChanged) {
+        for (int i = 0; i < mChangeListeners.size(); i++) mChangeListeners.get(i).run();
+    }
+
+    public void setShortcutsVisible(boolean shortcutsVisible) { mShortcutsVisible = shortcutsVisible; }
+
+    public boolean isShortcutsVisible() { return mShortcutsVisible; }
+
+    public void setOptionalIconsVisible(boolean visible) { mOptionalIconsVisible = visible; }
+
+    public boolean getOptionalIconsVisible() { return mOptionalIconsVisible; }
+
+    /** framework-internal. Callback that receives item selections (used by sub menus). */
+    public Callback getCallback() { return mCallback; }
 
     public ArrayList<MenuItemImpl> getVisibleItems() {
         ArrayList<MenuItemImpl> visible = new ArrayList<MenuItemImpl>();

@@ -332,7 +332,8 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   Plus=BUTTON_START(108), Minus=BUTTON_SELECT(109), stick clicks
   THUMBL(106)/THUMBR(107), D-pad DPAD_UP/DOWN/LEFT/RIGHT (19..22). As on
   Android (Generic.kcm fallbacks), `WindowManagerGlobal` re-dispatches an
-  unhandled BUTTON_A as DPAD_CENTER and an unhandled BUTTON_B as BACK
+  unhandled BUTTON_A as DPAD_CENTER, an unhandled BUTTON_B as BACK and an
+  unhandled BUTTON_START (+) as MENU, which opens the options menu
   (FLAG_FALLBACK; the up of a fallback is canceled if the original up was
   handled). Joystick motion that no view consumes is turned into D-pad
   keys with key repeat by `ViewRootImpl.SyntheticJoystickHandler`
@@ -458,6 +459,15 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `com.android.internal.app.AlertController` with the framework-res
   layouts (`alert_dialog_material`, `select_dialog_*_material`) and the
   internal widgets `AlertDialogLayout`, `ButtonBarLayout`, `DialogTitle`.
+- Menus: `PhoneWindow` builds the options menu (Window.Callback
+  onCreatePanelMenu/onPreparePanel) on MENU key up and shows it with
+  `MenuPanel`, an overflow-style popup in the top end corner (no action
+  bar decor yet). Context menus (`View.showContextMenu` -> `DecorView` ->
+  `PhoneWindow`) and sub menus are AlertDialog lists via
+  `MenuDialogHelper`, like AOSP. Rows use the framework
+  `popup_menu_item_layout`/`list_menu_item_layout` with
+  `ListMenuItemView`. Selections go to `onMenuItemSelected(featureId)`,
+  closing to `onPanelClosed`.
 - Framework resources that are not in the public `android.R`
   (`com.android.internal.R` on AOSP) are looked up by name with
   `com.android.internal.util.InternalRes` (`attr`, `layout`, `viewId`,

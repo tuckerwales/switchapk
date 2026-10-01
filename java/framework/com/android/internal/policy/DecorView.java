@@ -171,4 +171,12 @@ public class DecorView extends FrameLayout {
 
     @Override
     public String toString() { return "DecorView@" + Integer.toHexString(hashCode()); }
+
+    @Override
+    public boolean showContextMenuForChild(View originalView) { return mWindow.showContextMenuForChild(originalView); }
+
+    @Override
+    public boolean showContextMenuForChild(View originalView, float x, float y) {
+        return mWindow.showContextMenuForChild(originalView);
+    }
 }

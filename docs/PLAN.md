@@ -121,7 +121,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] LayoutInflater, ViewStub, PhoneWindow/DecorView, MenuInflater + menu model, Window.Callback
   - [x] tests/apps/views acceptance sample
   - [x] SurfaceView/SurfaceHolder (software lockCanvas, paced producers), TextureView (software)
-  - [ ] context menu and action mode presentation (with WS4 dialogs)
+  - [x] context menu presentation (MenuDialogHelper, from WS4)
+  - [ ] action mode presentation (needs the action bar decor)
   - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
@@ -143,7 +144,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     multi choice, custom view) on the framework's material alert layouts,
     CheckedTextView, ActionBar API; tests/apps/appmodel
   - [ ] ProgressDialog (needs WS3 ProgressBar), DatePicker/TimePicker dialogs
-  - [ ] options menu (BUTTON_START) and context menu presentation
+  - [x] options menu (+ button falls back to MENU) as an overflow-style
+    popup, context menus and sub menus as dialogs
+  - [ ] action bar decor (Theme.Material with title and overflow)
   - [ ] lifecycle: saved state, recreation on docked/handheld switch
   - [ ] services, broadcasts, PendingIntent, AlarmManager, legacy fragments
 - [ ] WS13 app test runner with screenshot goldens
@@ -228,3 +231,7 @@ and update ARCHITECTURE.md in the same commit.
   `nRequestText` is unchanged. `InputMethodManager.deliverTextResult`
   commits that string with `InputConnection.commitText` on the view that
   last called `showSoftInput`.
+- 2026-10-01 (WS4): `WindowManagerGlobal` key fallbacks gain
+  BUTTON_START -> MENU (the + button opens the options menu when the app
+  does not handle it). Documented with the controller mapping in
+  ARCHITECTURE 6.4.

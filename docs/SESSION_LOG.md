@@ -125,3 +125,14 @@ what is left in flight.
   `uses-sdk`, so ApplicationInfo.minSdkVersion/targetSdkVersion are real
   (they were 0, which selected legacy code paths). tests/apps/relative
   checks 13 positions and a screenshot.
+- WS4 menus. Options menu: PhoneWindow handles MENU (the + button falls
+  back to MENU), builds the menu through Window.Callback and shows it as
+  an overflow-style popup (MenuPanel) in the top end corner. Context menus
+  (long press, showContextMenu) and sub menus are AlertDialog lists via
+  MenuDialogHelper with ListMenuItemView rows from the framework layouts;
+  selections reach onOptionsItemSelected/onContextItemSelected and
+  closing reaches onOptionsMenuClosed/onContextMenuClosed. View sets the
+  menu info while it adds context items. Fixed WS2 TextView height with
+  maxLines/singleLine (AOSP getDesiredHeight: whole lines, not ems), which
+  clipped descenders of single-line text. tests/apps/appmodel covers the
+  options popup, a sub menu and a context menu.

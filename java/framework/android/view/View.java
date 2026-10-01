@@ -4008,10 +4008,17 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
 
     public void createContextMenu(ContextMenu menu) {
         ContextMenu.ContextMenuInfo menuInfo = getContextMenuInfo();
+        // Items added by this view carry its menu info (AdapterContextMenuInfo for lists).
+        if (menu instanceof com.android.internal.view.menu.MenuBuilder) {
+            ((com.android.internal.view.menu.MenuBuilder) menu).setCurrentMenuInfo(menuInfo);
+        }
         onCreateContextMenu(menu);
         ListenerInfo li = mListenerInfo;
         if (li != null && li.mOnCreateContextMenuListener != null) {
             li.mOnCreateContextMenuListener.onCreateContextMenu(menu, this, menuInfo);
+        }
+        if (menu instanceof com.android.internal.view.menu.MenuBuilder) {
+            ((com.android.internal.view.menu.MenuBuilder) menu).setCurrentMenuInfo(null);
         }
         if (mParent != null) mParent.createContextMenu(menu);
     }

@@ -216,7 +216,8 @@ public final class WindowManagerGlobal {
 
     /**
      * framework-internal. Dispatches a key, then (like Android's Generic.kcm fallbacks) re-dispatches
-     * an unhandled BUTTON_A as DPAD_CENTER and an unhandled BUTTON_B as BACK.
+     * an unhandled BUTTON_A as DPAD_CENTER, an unhandled BUTTON_B as BACK and an unhandled
+     * BUTTON_START (the + button) as MENU.
      */
     boolean dispatchKeyToWindow(ViewRootImpl r, KeyEvent event) {
         final int keyCode = event.getKeyCode();
@@ -263,6 +264,7 @@ public final class WindowManagerGlobal {
         switch (keyCode) {
             case KeyEvent.KEYCODE_BUTTON_A: return KeyEvent.KEYCODE_DPAD_CENTER;
             case KeyEvent.KEYCODE_BUTTON_B: return KeyEvent.KEYCODE_BACK;
+            case KeyEvent.KEYCODE_BUTTON_START: return KeyEvent.KEYCODE_MENU;
             default: return 0;
         }
     }

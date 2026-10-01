@@ -313,7 +313,18 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         }
     }
 
-    public void onPanelClosed(int featureId, Menu menu) {}
+    public void onPanelClosed(int featureId, Menu menu) {
+        switch (featureId) {
+            case Window.FEATURE_OPTIONS_PANEL:
+                onOptionsMenuClosed(menu);
+                break;
+            case Window.FEATURE_CONTEXT_MENU:
+                onContextMenuClosed(menu);
+                break;
+            default:
+                break;
+        }
+    }
 
     public boolean onCreateOptionsMenu(Menu menu) { return true; }
 
@@ -323,11 +334,11 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void onOptionsMenuClosed(Menu menu) {}
 
-    public void invalidateOptionsMenu() {}
+    public void invalidateOptionsMenu() { getWindow().invalidatePanelMenu(Window.FEATURE_OPTIONS_PANEL); }
 
-    public void openOptionsMenu() {}
+    public void openOptionsMenu() { getWindow().openPanel(Window.FEATURE_OPTIONS_PANEL, null); }
 
-    public void closeOptionsMenu() {}
+    public void closeOptionsMenu() { getWindow().closePanel(Window.FEATURE_OPTIONS_PANEL); }
 
     public boolean onContextItemSelected(MenuItem item) { return false; }
 
@@ -341,7 +352,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void openContextMenu(View view) { view.showContextMenu(); }
 
-    public void closeContextMenu() {}
+    public void closeContextMenu() { getWindow().closePanel(Window.FEATURE_CONTEXT_MENU); }
 
     public MenuInflater getMenuInflater() {
         if (mMenuInflater == null) mMenuInflater = new MenuInflater(this);

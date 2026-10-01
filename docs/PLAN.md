@@ -82,11 +82,13 @@ Working:
   through Layout (wrapping, gravity, ellipsize, hints, compound
   drawables, password and single-line transformations). EditText takes
   hardware keys and scripted `text` through InputConnection.commitText.
-  `tests/apps/text` checks screenshots and in-process logic.
+  Html.fromHtml (basic tags), Linkify and DateUtils/DateFormat/Formatter
+  are in place. autoLink runs Linkify when text is set. `tests/apps/text`
+  checks screenshots and in-process logic.
 
-Not started: Html, Linkify and DateUtils (rest of WS2), most widgets
-(WS3), the rest of the app model (WS4: action bar decor, dialogs, menus
-on screen, fragments), animation (WS5) and the other post-WS0 packages.
+Not started: most widgets (WS3), the rest of the app model (WS4: action
+bar decor, dialogs, menus on screen, fragments), animation (WS5) and the
+other post-WS0 packages.
 
 ## Checklist
 
@@ -121,11 +123,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] SurfaceView/SurfaceHolder (software lockCanvas, paced producers), TextureView (software)
   - [ ] context menu and action mode presentation (with WS4 dialogs)
   - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
-- [ ] WS2 text and IME
+- [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
   - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
   - [x] movement and key listeners, EditText, BaseInputConnection, IME `text` delivery
-  - [ ] Html.fromHtml, Linkify, DateUtils
+  - [x] Html.fromHtml, Linkify, DateUtils
 - [ ] WS3 widgets
 - [ ] WS4 app model
 - [ ] WS13 app test runner with screenshot goldens
@@ -151,9 +153,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS2 acceptance (text sample plus EditText `text` input) is met. Next
-   in WS2: Html.fromHtml, Linkify and DateUtils. WS3 (widgets), WS4 (app
-   model) and WS5 (animation) can start in parallel.
+1. WS2 (text and IME, including Html, Linkify and DateUtils) is done.
+   Next: WS3 (widgets), WS4 (app model) and WS5 (animation), which can
+   start in parallel.
 2. Finish WS1: context menu and action mode presentation once WS4 has
    dialogs.
 3. In parallel as agents are available: WS10 (Switch backend), WS13

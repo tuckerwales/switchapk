@@ -6,16 +6,25 @@ import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
+import android.graphics.Typeface;
 import android.text.Editable;
+import android.text.Html;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.text.Layout;
 import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.text.format.DateUtils;
+import android.text.method.LinkMovementMethod;
 import android.text.method.TextKeyListener;
+import android.text.style.BulletSpan;
 import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
+import android.text.style.URLSpan;
+import android.text.util.Linkify;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -24,6 +33,8 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.widget.EditText;
 import android.widget.TextView;
+import java.util.Calendar;
+import java.util.TimeZone;
 
 /** TextView behaviour that the layout screenshot cannot prove on its own. */
 final class WidgetChecks {
@@ -41,6 +52,7 @@ final class WidgetChecks {
         hint(ctx);
         compound(ctx);
         editor(ctx);
+        markup(ctx);
     }
 
     private static TextView tv(Context ctx) {
@@ -197,5 +209,77 @@ final class WidgetChecks {
         InputConnection ic = e.onCreateInputConnection(info);
         boolean committed = ic != null && ic.commitText("hi", 1);
         SelfTest.check("editCommit", committed && "ahi".equals(e.getText().toString()), e.getText());
+    }
+
+    private static void markup(Context ctx) {
+        Spanned bold = Html.fromHtml("<b>bold</b>");
+        StyleSpan[] styles = bold.getSpans(0, bold.length(), StyleSpan.class);
+        SelfTest.check("htmlBold", "bold".equals(bold.toString()) && styles.length == 1
+                && styles[0].getStyle() == Typeface.BOLD, bold);
+        SelfTest.check("htmlBr", "a\nb".equals(Html.fromHtml("a<br>b").toString()), Html.fromHtml("a<br>b"));
+        SelfTest.check("htmlP", "a\n\nb\n\n".equals(Html.fromHtml("<p>a</p><p>b</p>").toString()),
+                Html.fromHtml("<p>a</p><p>b</p>"));
+        Spanned compact = Html.fromHtml("<p>a</p><p>b</p>", Html.FROM_HTML_MODE_COMPACT);
+        SelfTest.check("htmlCompact", "a\nb\n".equals(compact.toString()), compact);
+        Spanned link = Html.fromHtml("<a href=\"https://e.x/a\">z</a>");
+        URLSpan[] urls = link.getSpans(0, link.length(), URLSpan.class);
+        SelfTest.check("htmlLink", "z".equals(link.toString()) && urls.length == 1
+                && "https://e.x/a".equals(urls[0].getURL()), link);
+        Spanned colored = Html.fromHtml("<font color=\"#010203\">c</font>");
+        ForegroundColorSpan[] cols = colored.getSpans(0, colored.length(), ForegroundColorSpan.class);
+        SelfTest.check("htmlColor", cols.length == 1 && (cols[0].getForegroundColor() & 0xFFFFFF) == 0x010203, colored);
+        Spanned css = Html.fromHtml("<span style=\"color:green\">g</span>", Html.FROM_HTML_OPTION_USE_CSS_COLORS);
+        ForegroundColorSpan[] greens = css.getSpans(0, css.length(), ForegroundColorSpan.class);
+        SelfTest.check("htmlCss", greens.length == 1 && greens[0].getForegroundColor() == 0xFF008000, css);
+        Spanned list = Html.fromHtml("<ul><li>item</li></ul>");
+        SelfTest.check("htmlLi", list.toString().startsWith("item")
+                && list.getSpans(0, list.length(), BulletSpan.class).length == 1, list);
+        SelfTest.check("htmlEsc", "a &lt;b&gt; &amp;".equals(Html.escapeHtml("a <b> &")), Html.escapeHtml("a <b> &"));
+        SpannableStringBuilder built = new SpannableStringBuilder("bold");
+        built.setSpan(new StyleSpan(Typeface.BOLD), 0, 4, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        String html = Html.toHtml(built);
+        SelfTest.check("htmlTo", html.contains("<b>") && html.contains("bold") && html.contains("</b>"), html);
+
+        SpannableString web = new SpannableString("see http://example.com/a today");
+        boolean added = Linkify.addLinks(web, Linkify.WEB_URLS);
+        URLSpan[] found = web.getSpans(0, web.length(), URLSpan.class);
+        SelfTest.check("linkWeb", added && found.length == 1 && "http://example.com/a".equals(found[0].getURL()),
+                added && found.length == 1 ? found[0].getURL() : "none");
+        SpannableString mail = new SpannableString("mail a@b.co please");
+        boolean mailed = Linkify.addLinks(mail, Linkify.EMAIL_ADDRESSES);
+        URLSpan[] mspans = mail.getSpans(0, mail.length(), URLSpan.class);
+        SelfTest.check("linkMail", mailed && mspans.length == 1 && "mailto:a@b.co".equals(mspans[0].getURL()),
+                mailed && mspans.length == 1 ? mspans[0].getURL() : "none");
+        SpannableString phone = new SpannableString("call 555-010-1234 now");
+        boolean ph = Linkify.addLinks(phone, Linkify.PHONE_NUMBERS);
+        URLSpan[] ps = phone.getSpans(0, phone.length(), URLSpan.class);
+        SelfTest.check("linkPhone", ph && ps.length == 1 && "tel:5550101234".equals(ps[0].getURL()),
+                ph && ps.length == 1 ? ps[0].getURL() : "none");
+        TextView linked = tv(ctx);
+        linked.setAutoLinkMask(Linkify.WEB_URLS);
+        linked.setText("go http://example.com/z");
+        URLSpan[] auto = linked.getUrls();
+        SelfTest.check("autoLink", auto.length == 1 && linked.getMovementMethod() instanceof LinkMovementMethod,
+                auto.length);
+
+        SelfTest.check("elapsed", "01:05".equals(DateUtils.formatElapsedTime(65)), DateUtils.formatElapsedTime(65));
+        String elapsedHour = DateUtils.formatElapsedTime(3661);
+        SelfTest.check("elapsedH", "1:01:01".equals(elapsedHour), elapsedHour);
+        SelfTest.check("isToday", DateUtils.isToday(System.currentTimeMillis()), 1);
+        String rel = DateUtils.getRelativeTimeSpanString(System.currentTimeMillis() - 5 * DateUtils.MINUTE_IN_MILLIS,
+                System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString();
+        SelfTest.check("relMin", "5 minutes ago".equals(rel), rel);
+        String when = DateUtils.formatDateTime(null, 0L, DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_YEAR
+                | DateUtils.FORMAT_ABBREV_MONTH | DateUtils.FORMAT_SHOW_WEEKDAY | DateUtils.FORMAT_ABBREV_WEEKDAY
+                | DateUtils.FORMAT_UTC);
+        SelfTest.check("dateFmt", "Thu, Jan 1, 1970".equals(when), when);
+        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        cal.setTimeInMillis(0L);
+        String stamp = android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", cal).toString();
+        SelfTest.check("dfmt", "1970-01-01 00:00".equals(stamp), stamp);
+        SelfTest.check("fileSize", "1.02 kB".equals(android.text.format.Formatter.formatFileSize(ctx, 1024)),
+                android.text.format.Formatter.formatFileSize(ctx, 1024));
+        SelfTest.check("ip", "1.2.3.4".equals(android.text.format.Formatter.formatIpAddress(0x01020304)),
+                android.text.format.Formatter.formatIpAddress(0x01020304));
     }
 }

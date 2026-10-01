@@ -27,9 +27,11 @@ import android.text.TextDirectionHeuristics;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.text.util.Linkify;
 import android.text.method.AllCapsTransformationMethod;
 import android.text.method.DigitsKeyListener;
 import android.text.method.KeyListener;
+import android.text.method.LinkMovementMethod;
 import android.text.method.MovementMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.text.method.SingleLineTransformationMethod;
@@ -474,6 +476,7 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         mBufferType = type;
         mText = text;
         updateTransformed();
+        applyAutoLinks();
         attachWatcher();
         if (mText instanceof Spannable) {
             Spannable sp = (Spannable) mText;
@@ -1278,6 +1281,27 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     public final int getAutoLinkMask() { return mAutoLinkMask; }
 
     public final void setAutoLinkMask(int mask) { mAutoLinkMask = mask; }
+
+    /** Linkify the current text when a mask is set. Editors keep their own movement method. */
+    private void applyAutoLinks() {
+        if (mAutoLinkMask == 0) return;
+        Spannable spannable;
+        boolean copied = false;
+        if (mText instanceof Spannable) spannable = (Spannable) mText;
+        else {
+            spannable = mSpannableFactory.newSpannable(mText);
+            copied = true;
+        }
+        if (!Linkify.addLinks(spannable, mAutoLinkMask)) return;
+        if (copied) {
+            mText = spannable;
+            if (mBufferType != BufferType.EDITABLE) mBufferType = BufferType.SPANNABLE;
+            updateTransformed();
+        }
+        if (mLinksClickable && mMovement == null && getDefaultMovementMethod() == null && mKeyListener == null) {
+            setMovementMethod(LinkMovementMethod.getInstance());
+        }
+    }
 
     public final void setLinksClickable(boolean whether) { mLinksClickable = whether; }
 

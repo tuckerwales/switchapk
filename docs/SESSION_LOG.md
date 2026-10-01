@@ -69,5 +69,9 @@ what is left in flight.
   digits) and BaseInputConnection. A focused editor asks for platform
   text; the result is committed with InputConnection.commitText.
   `tests/apps/text` types hello, A and DEL and checks the TextWatcher.
-- Left in WS2: Html.fromHtml, Linkify, DateUtils.
+- Html.fromHtml/toHtml/escapeHtml for the common tags, Linkify (web,
+  email, phone, a simple street-address pattern) and
+  DateUtils/DateFormat/Formatter. autoLink runs Linkify from setText.
+  Checked in `tests/apps/text` without moving the screenshot bands.
+  Copy and paste still need a clipboard service.
 

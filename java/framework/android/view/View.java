@@ -11,6 +11,7 @@ import android.graphics.BlendMode;
 import android.graphics.Camera;
 import android.graphics.Canvas;
 import android.graphics.Insets;
+import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Outline;
 import android.graphics.Paint;
@@ -20,6 +21,7 @@ import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Region;
+import android.graphics.Shader;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
@@ -725,6 +727,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         Drawable horizontalTrack;
         long fadeStartTime;
         int state = OFF;
+        // Fading edges: a unit black-to-clear ramp scaled per edge and drawn with DST_OUT (AOSP).
+        Paint fadePaint;
+        Matrix fadeMatrix;
+        Shader fadeShader;
         static final int OFF = 0;
         static final int ON = 1;
         static final int FADING = 2;
@@ -1176,6 +1182,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
                     break;
                 }
                 case android.R.attr.fadingEdge:
+                    // Ignored since ICS, as on Android; only requiresFadingEdge enables the fades.
+                    break;
                 case android.R.attr.requiresFadingEdge: {
                     final int fadingEdge = a.getInt(index, 0);
                     int flags = 0;
@@ -2431,11 +2439,109 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         mPrivateFlags = (mPrivateFlags & ~PFLAG_DIRTY) | PFLAG_DRAWN;
         mPrivateFlags &= ~PFLAG_INVALIDATED;
         drawBackground(canvas);
-        onDraw(canvas);
-        dispatchDraw(canvas);
+        if ((mViewFlags & (FADING_EDGE_HORIZONTAL | FADING_EDGE_VERTICAL)) == 0 || !drawWithFadingEdges(canvas)) {
+            onDraw(canvas);
+            dispatchDraw(canvas);
+        }
         if (mOverlay != null && !mOverlay.isEmpty()) mOverlay.getOverlayView().dispatchDraw(canvas);
         onDrawForeground(canvas);
         drawDefaultFocusHighlight(canvas);
+    }
+
+    /**
+     * AOSP's fading-edge path of draw(): content (not the background) goes into a layer over the padded box, each visible
+     * edge is then erased with a scaled gradient (DST_OUT), or covered with a ramp of
+     * getSolidColor() when that is not 0. AOSP uses one unclipped layer per edge; one layer over the box is
+     * equivalent. Returns false when no edge needs drawing.
+     */
+    private boolean drawWithFadingEdges(Canvas canvas) {
+        final boolean horizontalEdges = (mViewFlags & FADING_EDGE_HORIZONTAL) != 0;
+        final boolean verticalEdges = (mViewFlags & FADING_EDGE_VERTICAL) != 0;
+        final ScrollabilityCache cache = getScrollCache();
+        int paddingLeft = mPaddingLeft;
+        final boolean offsetRequired = isPaddingOffsetRequired();
+        if (offsetRequired) paddingLeft += getLeftPaddingOffset();
+        int left = mScrollX + paddingLeft;
+        int right = left + mRight - mLeft - mPaddingRight - paddingLeft;
+        int top = mScrollY + (offsetRequired ? mPaddingTop + getTopPaddingOffset() : mPaddingTop);
+        int bottom = top + (mBottom - mTop - mPaddingBottom
+                - (offsetRequired ? mPaddingTop + getTopPaddingOffset() : mPaddingTop));
+        if (offsetRequired) {
+            right += getRightPaddingOffset();
+            bottom += getBottomPaddingOffset();
+        }
+        final float fadeHeight = cache.fadingEdgeLength;
+        int length = (int) fadeHeight;
+        if (verticalEdges && (top + length > bottom - length)) length = (bottom - top) / 2;
+        if (horizontalEdges && (left + length > right - length)) length = (right - left) / 2;
+        float topFade = 0, bottomFade = 0, leftFade = 0, rightFade = 0;
+        if (verticalEdges) {
+            topFade = Math.max(0.0f, Math.min(1.0f, getTopFadingEdgeStrength()));
+            bottomFade = Math.max(0.0f, Math.min(1.0f, getBottomFadingEdgeStrength()));
+        }
+        if (horizontalEdges) {
+            leftFade = Math.max(0.0f, Math.min(1.0f, getLeftFadingEdgeStrength()));
+            rightFade = Math.max(0.0f, Math.min(1.0f, getRightFadingEdgeStrength()));
+        }
+        final boolean drawTop = topFade * fadeHeight > 1.0f;
+        final boolean drawBottom = bottomFade * fadeHeight > 1.0f;
+        final boolean drawLeft = leftFade * fadeHeight > 1.0f;
+        final boolean drawRight = rightFade * fadeHeight > 1.0f;
+        if (!(drawTop || drawBottom || drawLeft || drawRight) || length <= 0) return false;
+
+        final int saveCount = canvas.getSaveCount();
+        final int solidColor = getSolidColor();
+        final boolean layer = solidColor == 0;
+        if (layer) canvas.saveLayer(left, top, right, bottom, null);
+        onDraw(canvas);
+        dispatchDraw(canvas);
+
+        if (cache.fadePaint == null) {
+            cache.fadePaint = new Paint();
+            cache.fadeMatrix = new Matrix();
+            cache.fadeShader = new LinearGradient(0, 0, 0, 1, 0xFF000000, 0, Shader.TileMode.CLAMP);
+        }
+        final Paint p = cache.fadePaint;
+        final Matrix matrix = cache.fadeMatrix;
+        final Shader fade;
+        if (layer) {
+            fade = cache.fadeShader;
+            p.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT));
+        } else {
+            fade = new LinearGradient(0, 0, 0, 1, solidColor | 0xFF000000, solidColor & 0x00FFFFFF,
+                    Shader.TileMode.CLAMP);
+            p.setXfermode(null);
+        }
+        p.setShader(fade);
+        if (drawTop) {
+            matrix.setScale(1, fadeHeight * topFade);
+            matrix.postTranslate(left, top);
+            fade.setLocalMatrix(matrix);
+            canvas.drawRect(left, top, right, top + length, p);
+        }
+        if (drawBottom) {
+            matrix.setScale(1, fadeHeight * bottomFade);
+            matrix.postRotate(180);
+            matrix.postTranslate(left, bottom);
+            fade.setLocalMatrix(matrix);
+            canvas.drawRect(left, bottom - length, right, bottom, p);
+        }
+        if (drawLeft) {
+            matrix.setScale(1, fadeHeight * leftFade);
+            matrix.postRotate(-90);
+            matrix.postTranslate(left, top);
+            fade.setLocalMatrix(matrix);
+            canvas.drawRect(left, top, left + length, bottom, p);
+        }
+        if (drawRight) {
+            matrix.setScale(1, fadeHeight * rightFade);
+            matrix.postRotate(90);
+            matrix.postTranslate(right, top);
+            fade.setLocalMatrix(matrix);
+            canvas.drawRect(right - length, top, right, bottom, p);
+        }
+        canvas.restoreToCount(saveCount);
+        return true;
     }
 
     private void drawBackground(Canvas canvas) {
@@ -2642,6 +2748,35 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
             }, delayMilliseconds);
         }
     }
+
+    // ---------------------------------------------------------------- tween animations (applied by WS5)
+
+    /** The current tween animation. It is held and reported but not yet applied when drawing (WS5). */
+    private android.view.animation.Animation mCurrentAnimation;
+
+    public android.view.animation.Animation getAnimation() { return mCurrentAnimation; }
+
+    public void startAnimation(android.view.animation.Animation animation) {
+        animation.setStartTime(android.view.animation.Animation.START_ON_FIRST_FRAME);
+        setAnimation(animation);
+        invalidate(true);
+    }
+
+    public void clearAnimation() {
+        if (mCurrentAnimation != null) mCurrentAnimation.detach();
+        mCurrentAnimation = null;
+    }
+
+    public void setAnimation(android.view.animation.Animation animation) {
+        mCurrentAnimation = animation;
+        if (animation != null) animation.reset();
+    }
+
+    /** Called when the tween animation starts being applied (WS5 calls it from draw). */
+    protected void onAnimationStart() {}
+
+    /** Called when the tween animation ends (WS5 calls it from draw). */
+    protected void onAnimationEnd() {}
 
     public void postInvalidateOnAnimation() {
         if (mAttachInfo != null) mAttachInfo.mViewRootImpl.invalidateOnAnimation(this);

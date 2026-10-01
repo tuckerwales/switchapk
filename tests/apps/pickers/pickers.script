@@ -1,0 +1,38 @@
+idle 500
+screenshot pickers_start.png
+log tap below the middle of the first picker
+tap 120 230
+idle 800
+log drag the month wheel up by two rows, then pause so it does not fling
+down 330 200
+move 330 160
+move 330 120
+move 330 80
+move 330 40
+move 330 20
+wait 200
+up 330 20
+idle 1200
+screenshot pickers_scrolled.png
+log tap above the middle of the third picker, which is at its minimum and cannot wrap
+tap 540 45
+idle 600
+log D-pad: the first press leaves touch mode and focuses the first picker, the second steps it
+key DPAD_DOWN
+idle 300
+screenshot pickers_focus.png
+key DPAD_DOWN
+idle 600
+log right twice to the third picker and down three times: the last press is past its maximum
+key DPAD_RIGHT
+idle 100
+key DPAD_RIGHT
+idle 100
+key DPAD_DOWN
+idle 600
+key DPAD_DOWN
+idle 600
+key DPAD_DOWN
+idle 600
+screenshot pickers_dpad.png
+quit

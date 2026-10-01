@@ -107,6 +107,22 @@ public class DateFormat {
         return out.toString();
     }
 
+    /** framework-internal (hidden in AOSP): whether the format shows seconds, ignoring quoted text. */
+    public static boolean hasSeconds(CharSequence inFormat) { return hasDesignator(inFormat, 's'); }
+
+    /** framework-internal (hidden in AOSP). */
+    public static boolean hasDesignator(CharSequence inFormat, char designator) {
+        if (inFormat == null) return false;
+        final int length = inFormat.length();
+        boolean insideQuote = false;
+        for (int i = 0; i < length; i++) {
+            final char c = inFormat.charAt(i);
+            if (c == '\'') insideQuote = !insideQuote;
+            else if (!insideQuote && c == designator) return true;
+        }
+        return false;
+    }
+
     private static boolean seen(char[] order, int n, char c) {
         for (int i = 0; i < n; i++) if (order[i] == c) return true;
         return false;

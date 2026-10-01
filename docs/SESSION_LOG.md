@@ -274,4 +274,23 @@ what is left in flight.
   first arrow key. tests/apps/adapters covers the adapters, expand and
   collapse by touch, child clicks, and typing then picking a suggestion
   with the D-pad and A.
-
+- WS3 pickers and clocks. Ported NumberPicker (Material selector wheel:
+  fling and adjust scrollers, taps above or below the dividers, long-press
+  repeat, D-pad steps, wrapping, displayed values, formatters, the input
+  filter), Chronometer (ticks on second boundaries, count down, format)
+  and TextClock (12/24-hour formats, time zone, ticks scheduled on the
+  next second or minute since there is no TIME_TICK broadcast). Scroller
+  gained its Interpolator constructors. View now draws fading edges
+  (`requiresFadingEdge`; the legacy `fadingEdge` attr is ignored as on
+  ICS and later), which the wheel uses to fade its outer values. Fixed a
+  ViewRootImpl bug: the dirty rect was emptied after drawing, so an
+  invalidate() from computeScroll() during the draw was lost and
+  animations driven that way stalled after one frame. That fix exposed
+  RippleDrawable swapping a colour filter on its layers while drawing,
+  which invalidated and so redrew forever; the swap now detaches the
+  layer's callback. Also ported the ViewAnimator family (ViewAnimator,
+  ViewFlipper, ViewSwitcher, TextSwitcher, ImageSwitcher and the
+  internal DialogViewAnimator the date picker needs); View now holds
+  tween animations for WS5 to apply. tests/apps/pickers
+  covers taps, a drag with the adjust snap, wrapping, a value at its
+  limit, D-pad focus and steps, and the clocks' text.

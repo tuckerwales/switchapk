@@ -451,13 +451,15 @@ public final class ViewRootImpl implements ViewParent {
         final Canvas canvas = mCanvas;
         final int save = canvas.save();
         canvas.clipRect(mDirty);
+        // Emptied before drawing, as in AOSP drawSoftware(): an invalidate() made while drawing (from
+        // computeScroll, say) belongs to the next frame and must not be dropped.
+        mDirty.setEmpty();
         if (!isOpaque()) canvas.drawColor(0, PorterDuff.Mode.CLEAR);
         mAttachInfo.mDrawingTime = SystemClock.uptimeMillis();
         mAttachInfo.mTreeObserver.dispatchOnDraw();
         mView.mPrivateFlags |= View.PFLAG_DRAWN;
         mView.draw(canvas);
         canvas.restoreToCount(save);
-        mDirty.setEmpty();
         mDrawnOnce = true;
         WindowManagerGlobal.getInstance().windowDrawn(this);
         mAttachInfo.mTreeObserver.dispatchOnFrameCommit();

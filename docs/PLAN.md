@@ -156,9 +156,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     BaseExpandableListAdapter, SimpleExpandableListAdapter,
     TwoLineListItem, AutoCompleteTextView, MultiAutoCompleteTextView;
     tests/apps/adapters
-  - [ ] the rest (GridLayout, ViewAnimator family, clocks, pickers,
-    SearchView, TabHost, CursorTreeAdapter family, VideoView,
-    RemoteViews, ...)
+  - [x] NumberPicker (selector wheel), Chronometer, TextClock, Scroller
+    interpolators, View fading edges, ViewAnimator, ViewFlipper,
+    ViewSwitcher, TextSwitcher, ImageSwitcher, DialogViewAnimator;
+    tests/apps/pickers
+  - [ ] the rest (DatePicker/TimePicker and CalendarView, GridLayout,
+    SearchView, TabHost, CursorTreeAdapter family,
+    VideoView, RemoteViews, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,
@@ -229,8 +233,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 1. WS2 is done. WS3 is in progress: ImageView, the compound controls,
    scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
    EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
-   landed, and so have progress, popups, Toolbar and the action bar.
-   The remaining WS3 widgets are open. WS5 (animation) can start in
+   landed, and so have progress, popups, Toolbar, the action bar,
+   adapters, the expandable list, NumberPicker and the clocks. Next:
+   DatePicker/TimePicker (then WS4's picker dialogs), GridLayout, the
+   rest of the WS3 widgets. WS5 (animation) can start in
    parallel.
 2. Finish WS1: floating action modes (text selection toolbar).
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
@@ -345,3 +351,14 @@ and update ARCHITECTURE.md in the same commit.
   and ListView `drawDivider(Canvas, Rect, int)`, both overridden by
   ExpandableListView. `setSelection(INVALID_POSITION)` now clears the
   selection instead of selecting row 0. ARCHITECTURE 6.4 updated.
+- 2026-10-01 (WS3, touches WS1): `ViewRootImpl.performDraw` empties the
+  dirty rect before drawing (AOSP drawSoftware order), so an invalidate()
+  made while drawing, e.g. from `computeScroll()`, schedules the next
+  frame instead of being dropped. `View.draw` draws fading edges for
+  `requiresFadingEdge` / `setVerticalFadingEdgeEnabled` (one saveLayer and
+  a DST_OUT ramp per edge, or a ramp of `getSolidColor()`); the legacy
+  `fadingEdge` attr is ignored as on ICS and later. `Scroller` has the
+  Interpolator constructors. View holds tween animations
+  (`startAnimation` and friends, applied by WS5 later) and
+  `AnimationUtils.loadAnimation` parses `<alpha>`. ARCHITECTURE 6.4.1
+  updated.

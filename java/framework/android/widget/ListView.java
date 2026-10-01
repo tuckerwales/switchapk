@@ -17,6 +17,9 @@ import java.util.ArrayList;
  * A vertical list of adapter rows with optional headers, footers and dividers (AOSP ListView).
  */
 public class ListView extends AbsListView {
+    /** framework-internal (hidden in AOSP). */
+    static final int NO_POSITION = -1;
+
     private static final int[] LIST_ATTRS = {
         android.R.attr.entries,
         android.R.attr.divider,
@@ -248,6 +251,35 @@ public class ListView extends AbsListView {
             if (height >= maxHeight) return maxHeight;
         }
         return height;
+    }
+
+    /**
+     * framework-internal (AOSP signature). Height of the rows from startPosition to endPosition
+     * (NO_POSITION for the last), stopping at maxHeight; ListPopupWindow sizes its drop-down with it.
+     */
+    final int measureHeightOfChildren(int widthMeasureSpec, int startPosition, int endPosition, int maxHeight,
+            int disallowPartialChildPosition) {
+        final ListAdapter adapter = mAdapter;
+        if (adapter == null) return mListPadding.top + mListPadding.bottom;
+        int returnedHeight = mListPadding.top + mListPadding.bottom;
+        final int dividerHeight = childGap();
+        int prevHeightWithoutPartialChild = 0;
+        endPosition = (endPosition == -1) ? adapter.getCount() - 1 : endPosition;
+        for (int i = startPosition; i <= endPosition; ++i) {
+            View child = obtainAndMeasure(i, widthMeasureSpec);
+            mRecycler.addScrapView(child);
+            if (i > 0) returnedHeight += dividerHeight;
+            returnedHeight += child.getMeasuredHeight();
+            if (returnedHeight >= maxHeight) {
+                return (disallowPartialChildPosition >= 0) && (i > disallowPartialChildPosition)
+                        && (prevHeightWithoutPartialChild > 0) && (returnedHeight != maxHeight)
+                        ? prevHeightWithoutPartialChild : maxHeight;
+            }
+            if ((disallowPartialChildPosition >= 0) && (i >= disallowPartialChildPosition)) {
+                prevHeightWithoutPartialChild = returnedHeight;
+            }
+        }
+        return returnedHeight;
     }
 
     @Override

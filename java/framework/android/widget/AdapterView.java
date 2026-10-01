@@ -32,6 +32,10 @@ public abstract class AdapterView<T extends Adapter> extends ViewGroup {
     int mOldSelectedPosition = INVALID_POSITION;
     long mOldSelectedRowId = INVALID_ROW_ID;
     boolean mDataChanged;
+    /** True while laying out; selection callbacks are posted then, as in AOSP. */
+    boolean mInLayout;
+    boolean mBlockLayoutRequests;
+    private SelectionNotifier mSelectionNotifier;
     int mDesiredFocusableState = FOCUSABLE;
     boolean mDesiredFocusableInTouchModeState;
     ContextMenu.ContextMenuInfo mContextMenuInfo;
@@ -206,6 +210,28 @@ public abstract class AdapterView<T extends Adapter> extends ViewGroup {
     public CharSequence getAccessibilityClassName() { return AdapterView.class.getName(); }
 
     void selectionChanged() {
+        if (mOnItemSelectedListener == null) return;
+        if (mInLayout || mBlockLayoutRequests) {
+            // Listeners may change the hierarchy; let the layout finish first (AOSP SelectionNotifier).
+            if (mSelectionNotifier == null) mSelectionNotifier = new SelectionNotifier();
+            else removeCallbacks(mSelectionNotifier);
+            post(mSelectionNotifier);
+            return;
+        }
+        dispatchOnItemSelected();
+    }
+
+    private class SelectionNotifier implements Runnable {
+        public void run() {
+            if (mDataChanged) {
+                if (getAdapter() != null) post(this);
+            } else {
+                dispatchOnItemSelected();
+            }
+        }
+    }
+
+    private void dispatchOnItemSelected() {
         if (mOnItemSelectedListener == null) return;
         if (mSelectedPosition >= 0) {
             View v = getSelectedView();

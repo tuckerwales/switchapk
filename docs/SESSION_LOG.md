@@ -203,3 +203,14 @@ what is left in flight.
   BitmapDrawable clone) so RatingBar star tints survive. tests/apps/progress
   checks the bars, spinner frame, a SeekBar drag, a star tap, a
   ProgressDialog and the listener calls.
+- WS3 popups. PopupWindow, ListPopupWindow, DropDownListView, PopupMenu
+  (with an internal MenuPopupHelper over the existing MenuAdapter),
+  AbsSpinner, Spinner (drop-down and dialog) and Toast ported from AOSP.
+  The window manager now clamps windows to the screen (unless
+  FLAG_LAYOUT_NO_LIMITS) and does not treat toast windows as activity
+  leaks. AdapterView now holds mInLayout/mBlockLayoutRequests and posts
+  selection callbacks fired during layout (AOSP SelectionNotifier); the
+  first Spinner selection used to set text that never laid out.
+  tests/apps/popups covers the drop-down, the dialog spinner, a popup menu
+  with a sub menu, a toast, a popup flipping above its anchor, outside
+  dismissal and D-pad use of the drop-down.

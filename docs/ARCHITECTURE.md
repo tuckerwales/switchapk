@@ -440,6 +440,21 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   split track, tick marks, touch drag (slop in scrolling containers) and
   D-pad/plus/minus steps (`keyProgressIncrement`, about 1/20 of the
   range); RatingBar steps by stepSize and reports user changes on release.
+- Popups (AOSP ports): PopupWindow adds a TYPE_APPLICATION_PANEL window
+  (decor view dismissing on BACK and on touches outside; background view
+  with the above-anchor state); drop-downs go below the anchor, or above
+  when there is no room, and follow it when it scrolls. The window manager
+  keeps windows on screen unless FLAG_LAYOUT_NO_LIMITS. ListPopupWindow
+  sizes a DropDownListView to its rows (`ListView.measureHeightOfChildren`).
+  PopupMenu uses `MenuPopupHelper` (StandardMenuPopup folded in; a sub
+  menu replaces its parent on the same anchor). Spinner keeps AOSP's
+  AbsSpinner bookkeeping; its drop-down is a modal ListPopupWindow, its
+  dialog mode a single-choice AlertDialog. Toast queues one TYPE_TOAST
+  window at a time (2 s / 3.5 s) and logs `Toast: show: <text>`; toast
+  windows are not closed as activity leaks. Item selection callbacks
+  that fire during layout are posted (AdapterView SelectionNotifier), so
+  listeners can change other views. Transitions and window animations
+  are not run.
 
 ### 6.5 Application model (design)
 - The app runner (C, `app_run_apk`) opens the APK, sets `g_app_zip` and

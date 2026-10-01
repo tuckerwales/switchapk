@@ -1,0 +1,41 @@
+idle 500
+screenshot popups_start.png
+tap 150 42
+idle 300
+screenshot popups_dropdown.png
+tap 100 204
+idle 300
+tap 150 78
+idle 400
+screenshot popups_dialog.png
+tap 300 472
+idle 300
+tap 90 132
+idle 400
+screenshot popups_menu.png
+tap 77 348
+idle 400
+screenshot popups_submenu.png
+tap 77 276
+idle 300
+tap 222 132
+idle 400
+screenshot popups_toast.png
+tap 90 660
+idle 400
+screenshot popups_popup.png
+tap 900 300
+idle 300
+screenshot popups_end.png
+key DPAD_DOWN
+idle 200
+key BUTTON_A
+idle 400
+key DPAD_DOWN
+idle 100
+key DPAD_DOWN
+idle 100
+screenshot popups_dpad.png
+key BUTTON_A
+idle 400
+quit

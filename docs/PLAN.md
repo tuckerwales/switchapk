@@ -140,7 +140,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] RelativeLayout (landed from WS4, which needed it); tests/apps/relative
   - [x] ProgressBar (determinate, indeterminate, tints, tiling), AbsSeekBar,
     SeekBar, RatingBar, AnimationScaleListDrawable; tests/apps/progress
-  - [ ] popups (PopupWindow, ListPopupWindow, PopupMenu, Spinner), Toast
+  - [x] PopupWindow, ListPopupWindow, DropDownListView, PopupMenu
+    (MenuPopupHelper), AbsSpinner, Spinner (drop-down and dialog), Toast;
+    tests/apps/popups (touch and D-pad)
   - [ ] Toolbar, ActionMenuView, and the rest
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
@@ -277,3 +279,9 @@ and update ARCHITECTURE.md in the same commit.
   manifest (`android:permission` on `<service>`); JobScheduler requires
   BIND_JOB_SERVICE there. `Context.getSystemService(JOB_SCHEDULER_SERVICE)`
   returns `android.app.job.JobSchedulerImpl`. ARCHITECTURE 6.5 updated.
+- 2026-10-01 (WS3): ViewRootImpl clamps a window into the screen unless it
+  sets FLAG_LAYOUT_NO_LIMITS (as the window manager does); `closeAll` only
+  removes activity-token window types (application and sub windows), so
+  toasts survive their activity. AdapterView owns `mInLayout` and
+  `mBlockLayoutRequests` (moved from AbsListView) and posts selection
+  callbacks during layout. ARCHITECTURE 6.4.1 updated.

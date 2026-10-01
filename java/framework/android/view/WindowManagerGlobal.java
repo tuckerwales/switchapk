@@ -161,6 +161,9 @@ public final class WindowManagerGlobal {
             if (i >= mRoots.size()) continue;
             View view = mRoots.get(i).getView();
             if (view == null || !belongsTo(view.getContext(), activity)) continue;
+            // Only windows on the activity's token (its dialogs, panels and popups); a toast's comes from the system.
+            int type = mRoots.get(i).getWindowAttributes().type;
+            if (type > WindowManager.LayoutParams.LAST_SUB_WINDOW) continue;
             Log.e(TAG, "Activity " + activity.getClass().getName() + " has leaked window " + view);
             removeView(view);
         }

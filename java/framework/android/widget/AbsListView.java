@@ -75,8 +75,6 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
     int mSpecificPosition;
     int mWidthMeasureSpec;
     boolean mStackFromBottom;
-    boolean mInLayout;
-    boolean mBlockLayoutRequests;
     int mTouchMode = TOUCH_MODE_REST;
     int mTouchSlop;
     int mMinimumVelocity;
@@ -1268,6 +1266,12 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         if (isInTouchMode() || mSelectedPosition < 0) return;
         View sel = getChildAt(mSelectedPosition - mFirstPosition);
         if (sel != null) positionSelector(mSelectedPosition, sel);
+    }
+
+    /** framework-internal (hidden in AOSP). */
+    void hideSelector() {
+        mSelectorPosition = INVALID_POSITION;
+        invalidate();
     }
 
     private void positionSelectorIfNeeded() {

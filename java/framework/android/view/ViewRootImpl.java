@@ -431,6 +431,11 @@ public final class ViewRootImpl implements ViewParent {
                 (int) (lp.verticalMargin * screenH) + y, out);
         mWinX = out.left;
         mWinY = out.top;
+        // As the window manager does, keep the window on screen unless it asked for no limits.
+        if ((lp.flags & WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS) == 0) {
+            if (w <= screenW) mWinX = Math.max(0, Math.min(mWinX, screenW - w));
+            if (h <= screenH) mWinY = Math.max(0, Math.min(mWinY, screenH - h));
+        }
     }
 
     private void performDraw() {

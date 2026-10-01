@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 4, see SESSION_LOG.md)
+## Current state (end of session 5, see SESSION_LOG.md)
 
 Working:
 - VM core, libcore, JNI, reflection, threads; VmTest passes.
@@ -77,10 +77,15 @@ Working:
 - `tests/apps/hello`, `tests/apps/views` and `tests/apps/surface` pass their screenshot checks
   (views: XML layouts with weights, include, ViewStub, selector states,
   tap, D-pad focus, A/B buttons, long press, dim-behind second window).
+- Text engine (WS2): Spanned/Spannable, spans, TextUtils, TextPaint,
+  StaticLayout, BoringLayout, DynamicLayout. TextView measures and draws
+  through Layout (wrapping, gravity, ellipsize, hints, compound
+  drawables, password and single-line transformations). `tests/apps/text`
+  checks screenshots and in-process logic.
 
-Not started: text and TextView (WS2), most widgets (WS3), the rest of
-the app model (WS4: action bar decor, dialogs, menus on screen,
-fragments), animation (WS5) and the other post-WS0 packages.
+Not started: EditText and IME delivery (rest of WS2), most widgets
+(WS3), the rest of the app model (WS4: action bar decor, dialogs, menus
+on screen, fragments), animation (WS5) and the other post-WS0 packages.
 
 ## Checklist
 
@@ -116,6 +121,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] context menu and action mode presentation (with WS4 dialogs)
   - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
 - [ ] WS2 text and IME
+  - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
+  - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
+  - [ ] movement and key listeners, EditText, BaseInputConnection, IME `text` delivery
+  - [ ] Html.fromHtml, Linkify, DateUtils
 - [ ] WS3 widgets
 - [ ] WS4 app model
 - [ ] WS13 app test runner with screenshot goldens
@@ -141,8 +150,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS1 has pushed the public View/ViewGroup API: WS2 (text), WS3
-   (widgets), WS4 (app model) and WS5 (animation) can start now.
+1. WS2 is in progress. Next: movement and key listeners, EditText, and
+   IME delivery of scripted `text` (TextWatcher). Then Html, Linkify and
+   DateUtils. WS3 (widgets), WS4 (app model) and WS5 (animation) can
+   start in parallel.
 2. Finish WS1: context menu and action mode presentation once WS4 has
    dialogs.
 3. In parallel as agents are available: WS10 (Switch backend), WS13

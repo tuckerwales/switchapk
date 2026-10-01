@@ -54,3 +54,18 @@ what is left in flight.
 - Left in WS1: context menu and action mode presentation (needs WS4
   dialogs), clipToOutline.
 
+### Session 5 (2026-10-01, branch ccr-08dbdaa2-6llszo)
+- Text engine: Spanned/Spannable, spans, TextUtils, TextPaint,
+  StaticLayout, BoringLayout and DynamicLayout (greedy wrap, ellipsize,
+  alignment). No bidi or shaping. Checked by `tests/apps/text` SelfTest.
+- TextView measures and draws through Layout. Common XML attributes,
+  gravity, ellipsize, hints, compound drawables, selection and cursor,
+  and password, single-line and all-caps transformations. Spannable text
+  ellipsizes via a framework-internal `DynamicLayout.Builder.setMaxLines`.
+- `tests/apps/text` inflates TextViews and checks screenshots plus
+  in-process logic (wrap, ellipsis count, gravity, spans, TextWatcher,
+  password dots, length filter).
+- Left in WS2: movement and key listeners, EditText,
+  BaseInputConnection, IME delivery of scripted `text`, Html.fromHtml,
+  Linkify, DateUtils.
+

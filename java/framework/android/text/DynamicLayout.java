@@ -30,6 +30,7 @@ public class DynamicLayout extends Layout {
         private int mJustificationMode;
         private TextUtils.TruncateAt mEllipsize;
         private int mEllipsizedWidth;
+        private int mMaxLines = Integer.MAX_VALUE;
         private LineBreakConfig mLineBreakConfig = LineBreakConfig.NONE;
         private boolean mUseBoundsForWidth;
         private boolean mShiftDrawingOffsetForStartOverhang;
@@ -69,6 +70,9 @@ public class DynamicLayout extends Layout {
         public Builder setEllipsizedWidth(int ellipsizedWidth) { mEllipsizedWidth = ellipsizedWidth; return this; }
 
         public Builder setEllipsize(TextUtils.TruncateAt ellipsize) { mEllipsize = ellipsize; return this; }
+
+        /** framework-internal. The SDK Builder has no max-lines setter; TextView needs the limit. */
+        public Builder setMaxLines(int maxLines) { mMaxLines = maxLines; return this; }
 
         public Builder setBreakStrategy(int breakStrategy) { mBreakStrategy = breakStrategy; return this; }
 
@@ -148,7 +152,8 @@ public class DynamicLayout extends Layout {
         mLines = StaticLayout.Builder.obtain(text, 0, text.length(), getPaint(), getWidth())
                 .setAlignment(p.mAlignment).setTextDirection(p.mTextDir).setLineSpacing(p.mSpacingAdd, p.mSpacingMult)
                 .setIncludePad(p.mIncludePad).setUseLineSpacingFromFallbacks(p.mFallbackLineSpacing)
-                .setEllipsize(p.mEllipsize).setEllipsizedWidth(p.mEllipsizedWidth).setBreakStrategy(p.mBreakStrategy)
+                .setEllipsize(p.mEllipsize).setEllipsizedWidth(p.mEllipsizedWidth).setMaxLines(p.mMaxLines)
+                .setBreakStrategy(p.mBreakStrategy)
                 .setHyphenationFrequency(p.mHyphenationFrequency).setJustificationMode(p.mJustificationMode)
                 .setLineBreakConfig(p.mLineBreakConfig).build();
     }

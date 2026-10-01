@@ -52,6 +52,12 @@ public final class MenuItemImpl implements MenuItem {
     private CharSequence mTooltipText;
 
     MenuItemImpl(MenuBuilder menu, int group, int id, int categoryOrder, int ordering, CharSequence title) {
+        this(menu, group, id, categoryOrder, ordering, title, SHOW_AS_ACTION_NEVER);
+    }
+
+    MenuItemImpl(MenuBuilder menu, int group, int id, int categoryOrder, int ordering, CharSequence title,
+            int showAsAction) {
+        mShowAsAction = showAsAction;
         mMenu = menu;
         mId = id;
         mGroup = group;

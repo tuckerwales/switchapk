@@ -41,6 +41,22 @@ public class Resources {
     private final HashMap<Integer, ColorStateList> mColorCache = new HashMap<Integer, ColorStateList>();
     private final HashMap<Integer, Typeface> mFontCache = new HashMap<Integer, Typeface>();
 
+    /** Hidden AOSP API: the theme used when a component and its application set none. */
+    public static int selectDefaultTheme(int curTheme, int targetSdkVersion) {
+        return selectSystemTheme(curTheme, targetSdkVersion, android.R.style.Theme, android.R.style.Theme_Holo,
+                android.R.style.Theme_DeviceDefault, android.R.style.Theme_DeviceDefault_Light_DarkActionBar);
+    }
+
+    /** Hidden AOSP API. */
+    public static int selectSystemTheme(int curTheme, int targetSdkVersion, int orig, int holo, int dark,
+            int deviceDefault) {
+        if (curTheme != 0) return curTheme;
+        if (targetSdkVersion < android.os.Build.VERSION_CODES.HONEYCOMB) return orig;
+        if (targetSdkVersion < android.os.Build.VERSION_CODES.ICE_CREAM_SANDWICH) return holo;
+        if (targetSdkVersion < android.os.Build.VERSION_CODES.N) return dark;
+        return deviceDefault;
+    }
+
     public static Resources getSystem() {
         synchronized (sSync) {
             if (sSystem == null) {

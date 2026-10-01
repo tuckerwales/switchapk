@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Check a hello screenshot: dark background and the gold rectangle."""
+"""Check a hello screenshot: the default theme's action bar (the manifest sets
+no theme, so targetSdk 29 gets Theme.DeviceDefault.Light.DarkActionBar), then
+the dark content background and the gold rectangle below it."""
 import struct
 import sys
 import zlib
@@ -48,10 +50,12 @@ def main():
     if (w, h) != (1280, 720):
         raise SystemExit("size %sx%s, expected 1280x720" % (w, h))
     checks = {
-        (10, 10): 0xFF101820,
-        (100, 100): 0xFFE8C547,
-        (200, 150): 0xFFE8C547,
-        (600, 400): 0xFF101820,
+        (10, 10): 0xFF1A1B20,
+        (10, 71): 0xFF1A1B20,
+        (10, 72): 0xFF101820,
+        (100, 172): 0xFFE8C547,
+        (200, 222): 0xFFE8C547,
+        (600, 472): 0xFF101820,
     }
     failed = False
     for (x, y), expect in checks.items():
@@ -63,11 +67,20 @@ def main():
             print("ok (%d,%d) #%08X" % (x, y, got))
     # Text is anti-aliased. Require some non-background ink in the label band.
     ink = 0
-    for y in range(340, 400):
+    for y in range(412, 472):
         for x in range(80, 520):
             if pixel(px, w, x, y) != 0xFF101820:
                 ink += 1
     print("text ink pixels: %d" % ink)
+    title = 0
+    for y in range(20, 52):
+        for x in range(24, 90):
+            if pixel(px, w, x, y) != 0xFF1A1B20:
+                title += 1
+    print("title ink pixels: %d" % title)
+    if title < 50:
+        print("FAIL action bar title did not draw")
+        failed = True
     if ink < 50:
         print("FAIL text did not draw")
         failed = True

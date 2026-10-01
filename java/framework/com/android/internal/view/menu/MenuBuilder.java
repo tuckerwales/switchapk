@@ -54,13 +54,21 @@ public class MenuBuilder implements Menu {
 
     public void setCallback(Callback cb) { mCallback = cb; }
 
+    private int mDefaultShowAsAction = MenuItem.SHOW_AS_ACTION_NEVER;
+
+    /** Show-as-action flags given to items added from now on (action modes use ifRoom). */
+    public MenuBuilder setDefaultShowAsAction(int defaultShowAsAction) {
+        mDefaultShowAsAction = defaultShowAsAction;
+        return this;
+    }
+
     public Context getContext() { return mContext; }
 
     public Resources getResources() { return mResources; }
 
     protected MenuItem addInternal(int group, int id, int categoryOrder, CharSequence title) {
         final int ordering = getOrdering(categoryOrder);
-        final MenuItemImpl item = new MenuItemImpl(this, group, id, categoryOrder, ordering, title);
+        final MenuItemImpl item = new MenuItemImpl(this, group, id, categoryOrder, ordering, title, mDefaultShowAsAction);
         if (mCurrentMenuInfo != null) item.setMenuInfo(mCurrentMenuInfo);
         mItems.add(findInsertIndex(mItems, ordering), item);
         onItemsChanged(true);

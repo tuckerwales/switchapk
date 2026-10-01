@@ -107,6 +107,9 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     private MenuInflater mMenuInflater;
     private SearchEvent mSearchEvent;
     private ActionMode mActionMode;
+    private ActionBar mActionBar;
+    private boolean mEnableDefaultActionBarUp;
+    private int mActionModeTypeStarting = ActionMode.TYPE_PRIMARY;
     Configuration mCurrentConfig;
     NonConfigurationInstances mLastNonConfigurationInstances;
     private SparseArray<ManagedDialog> mManagedDialogs;
@@ -196,7 +199,47 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void onAttachFragment(Fragment fragment) {}
 
-    public ActionBar getActionBar() { return null; }
+    public ActionBar getActionBar() {
+        initWindowDecorActionBar();
+        return mActionBar;
+    }
+
+    public void setActionBar(android.widget.Toolbar toolbar) {
+        final ActionBar ab = getActionBar();
+        if (ab instanceof com.android.internal.app.WindowDecorActionBar) {
+            throw new IllegalStateException("This Activity already has an action bar supplied "
+                    + "by the window decor. Do not request Window.FEATURE_ACTION_BAR and set "
+                    + "android:windowActionBar to false in your theme to use a Toolbar instead.");
+        }
+        // The menu inflater is themed by the action bar; drop it so the next one uses the new bar.
+        mMenuInflater = null;
+        if (ab != null) ab.onDestroy();
+        if (toolbar != null) {
+            final com.android.internal.app.ToolbarActionBar tbab =
+                    new com.android.internal.app.ToolbarActionBar(toolbar, getTitle(), this);
+            mActionBar = tbab;
+            mWindow.setCallback(tbab.getWrappedWindowCallback());
+        } else {
+            mActionBar = null;
+            mWindow.setCallback(this);
+        }
+        invalidateOptionsMenu();
+    }
+
+    /** Creates the window decor's action bar once the decor exists (AOSP initWindowDecorActionBar). */
+    private void initWindowDecorActionBar() {
+        final Window window = getWindow();
+        if (window == null) return;
+        // Initializing the window decor can change window feature flags; do it before checking them.
+        window.getDecorView();
+        if (isChild() || !window.hasFeature(Window.FEATURE_ACTION_BAR) || mActionBar != null) return;
+        mActionBar = new com.android.internal.app.WindowDecorActionBar(this);
+        mActionBar.setDefaultDisplayHomeAsUpEnabled(mEnableDefaultActionBarUp);
+        if (mActivityInfo != null) {
+            window.setDefaultIcon(mActivityInfo.getIconResource());
+            window.setDefaultLogo(mActivityInfo.getLogoResource());
+        }
+    }
 
     public boolean isChangingConfigurations() { return mChangingConfigurations; }
 
@@ -433,6 +476,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     protected void onPostResume() {
         final Window win = getWindow();
         if (win != null) win.makeActive();
+        if (mActionBar != null) mActionBar.setShowHideAnimationEnabled(true);
         mCalled = true;
     }
 
@@ -463,6 +507,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     public void onProvideAssistData(Bundle data) {}
 
     protected void onStop() {
+        if (mActionBar != null) mActionBar.setShowHideAnimationEnabled(false);
         mFragments.doLoaderStop(false);
         dispatchActivityStopped();
         mCalled = true;
@@ -478,6 +523,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
             }
             mManagedDialogs = null;
         }
+        if (mActionBar != null) mActionBar.onDestroy();
         dispatchActivityDestroyed();
     }
 
@@ -485,6 +531,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         mCalled = true;
         mFragments.dispatchConfigurationChanged(newConfig);
         if (mWindow != null) mWindow.onConfigurationChanged(newConfig);
+        if (mActionBar != null) mActionBar.onConfigurationChanged(newConfig);
     }
 
     public void onLowMemory() {
@@ -789,6 +836,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     public void recreate() { ActivityThread.recreateActivity(this); }
 
     public void onBackPressed() {
+        if (mActionBar != null && mActionBar.collapseActionView()) return;
         FragmentManager fragmentManager = mFragments.getFragmentManager();
         if (!fragmentManager.isStateSaved() && fragmentManager.popBackStackImmediate()) return;
         finishAfterTransition();
@@ -938,13 +986,25 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     // ---------------------------------------------------------------- window and content
 
-    public void setContentView(View view) { getWindow().setContentView(view); }
+    public void setContentView(View view) {
+        getWindow().setContentView(view);
+        initWindowDecorActionBar();
+    }
 
-    public void setContentView(View view, ViewGroup.LayoutParams params) { getWindow().setContentView(view, params); }
+    public void setContentView(View view, ViewGroup.LayoutParams params) {
+        getWindow().setContentView(view, params);
+        initWindowDecorActionBar();
+    }
 
-    public void setContentView(int layoutResID) { getWindow().setContentView(layoutResID); }
+    public void setContentView(int layoutResID) {
+        getWindow().setContentView(layoutResID);
+        initWindowDecorActionBar();
+    }
 
-    public void addContentView(View view, ViewGroup.LayoutParams params) { getWindow().addContentView(view, params); }
+    public void addContentView(View view, ViewGroup.LayoutParams params) {
+        getWindow().addContentView(view, params);
+        initWindowDecorActionBar();
+    }
 
     @SuppressWarnings("unchecked")
     public <T extends View> T findViewById(int id) { return (T) getWindow().findViewById(id); }
@@ -1083,7 +1143,11 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     public LayoutInflater getLayoutInflater() { return getWindow().getLayoutInflater(); }
 
     public MenuInflater getMenuInflater() {
-        if (mMenuInflater == null) mMenuInflater = new MenuInflater(this);
+        if (mMenuInflater == null) {
+            initWindowDecorActionBar();
+            mMenuInflater = mActionBar != null ? new MenuInflater(mActionBar.getThemedContext(), this)
+                    : new MenuInflater(this);
+        }
         return mMenuInflater;
     }
 
@@ -1217,6 +1281,10 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public boolean dispatchKeyEvent(KeyEvent event) {
         onUserInteraction();
+        // Let the action bar open its menu in response to the menu key first.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_MENU && mActionBar != null && mActionBar.onMenuKeyEvent(event)) {
+            return true;
+        }
         Window win = getWindow();
         if (win.superDispatchKeyEvent(event)) return true;
         View decor = mDecor;
@@ -1280,7 +1348,10 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) { return false; }
 
-    public boolean onKeyShortcut(int keyCode, KeyEvent event) { return false; }
+    public boolean onKeyShortcut(int keyCode, KeyEvent event) {
+        final ActionBar actionBar = getActionBar();
+        return actionBar != null && actionBar.onKeyShortcut(keyCode, event);
+    }
 
     public boolean onTouchEvent(MotionEvent event) {
         if (mWindow != null && mWindow.shouldCloseOnTouch(this, event)) {
@@ -1314,14 +1385,23 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         return true;
     }
 
-    public boolean onMenuOpened(int featureId, Menu menu) { return true; }
+    public boolean onMenuOpened(int featureId, Menu menu) {
+        if (featureId == Window.FEATURE_ACTION_BAR) {
+            initWindowDecorActionBar();
+            if (mActionBar != null) mActionBar.dispatchMenuVisibilityChanged(true);
+        }
+        return true;
+    }
 
     public boolean onMenuItemSelected(int featureId, MenuItem item) {
         switch (featureId) {
             case Window.FEATURE_OPTIONS_PANEL:
                 if (onOptionsItemSelected(item)) return true;
                 if (mFragments.dispatchOptionsItemSelected(item)) return true;
-                if (item.getItemId() == android.R.id.home) return onNavigateUp();
+                if (item.getItemId() == android.R.id.home && mActionBar != null
+                        && (mActionBar.getDisplayOptions() & ActionBar.DISPLAY_HOME_AS_UP) != 0) {
+                    return getParent() == null ? onNavigateUp() : getParent().onNavigateUpFromChild(this);
+                }
                 return false;
             case Window.FEATURE_CONTEXT_MENU:
                 if (onContextItemSelected(item)) return true;
@@ -1340,6 +1420,10 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
             case Window.FEATURE_CONTEXT_MENU:
                 onContextMenuClosed(menu);
                 break;
+            case Window.FEATURE_ACTION_BAR:
+                initWindowDecorActionBar();
+                if (mActionBar != null) mActionBar.dispatchMenuVisibilityChanged(false);
+                break;
             default:
                 break;
         }
@@ -1353,11 +1437,19 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void onOptionsMenuClosed(Menu menu) {}
 
-    public void invalidateOptionsMenu() { getWindow().invalidatePanelMenu(Window.FEATURE_OPTIONS_PANEL); }
+    public void invalidateOptionsMenu() {
+        if (mActionBar == null || !mActionBar.invalidateOptionsMenu()) {
+            getWindow().invalidatePanelMenu(Window.FEATURE_OPTIONS_PANEL);
+        }
+    }
 
-    public void openOptionsMenu() { getWindow().openPanel(Window.FEATURE_OPTIONS_PANEL, null); }
+    public void openOptionsMenu() {
+        if (mActionBar == null || !mActionBar.openOptionsMenu()) getWindow().openPanel(Window.FEATURE_OPTIONS_PANEL, null);
+    }
 
-    public void closeOptionsMenu() { getWindow().closePanel(Window.FEATURE_OPTIONS_PANEL); }
+    public void closeOptionsMenu() {
+        if (mActionBar == null || !mActionBar.closeOptionsMenu()) getWindow().closePanel(Window.FEATURE_OPTIONS_PANEL);
+    }
 
     public boolean onContextItemSelected(MenuItem item) { return false; }
 
@@ -1417,9 +1509,23 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         return mWindow.getDecorView().startActionMode(callback, type);
     }
 
-    public ActionMode onWindowStartingActionMode(ActionMode.Callback callback) { return null; }
+    public ActionMode onWindowStartingActionMode(ActionMode.Callback callback) {
+        // Only primary action modes are shown in the action bar.
+        if (mActionModeTypeStarting == ActionMode.TYPE_PRIMARY) {
+            initWindowDecorActionBar();
+            if (mActionBar != null) return mActionBar.startActionMode(callback);
+        }
+        return null;
+    }
 
-    public ActionMode onWindowStartingActionMode(ActionMode.Callback callback, int type) { return null; }
+    public ActionMode onWindowStartingActionMode(ActionMode.Callback callback, int type) {
+        try {
+            mActionModeTypeStarting = type;
+            return onWindowStartingActionMode(callback);
+        } finally {
+            mActionModeTypeStarting = ActionMode.TYPE_PRIMARY;
+        }
+    }
 
     public void onActionModeStarted(ActionMode mode) { mActionMode = mode; }
 

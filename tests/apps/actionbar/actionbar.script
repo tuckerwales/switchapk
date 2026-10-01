@@ -1,0 +1,47 @@
+idle 500
+screenshot actionbar_start.png
+tap 42 36
+idle 200
+tap 1090 36
+idle 200
+tap 1173 36
+idle 200
+tap 1246 36
+idle 400
+screenshot actionbar_overflow.png
+tap 1040 36
+idle 300
+key MENU
+idle 400
+screenshot actionbar_menukey.png
+key BUTTON_B
+idle 300
+tap 90 132
+idle 400
+screenshot actionbar_mode.png
+tap 1097 36
+idle 300
+tap 90 132
+idle 300
+key BUTTON_B
+idle 300
+screenshot actionbar_modeend.png
+tap 224 132
+idle 400
+screenshot actionbar_hidden.png
+tap 224 60
+idle 300
+tap 402 132
+idle 600
+screenshot actionbar_toolbar.png
+tap 1180 36
+idle 300
+tap 90 132
+idle 400
+screenshot actionbar_standalone.png
+key BUTTON_B
+idle 300
+tap 42 36
+idle 600
+screenshot actionbar_end.png
+quit

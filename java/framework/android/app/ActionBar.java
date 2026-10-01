@@ -199,6 +199,30 @@ public abstract class ActionBar {
     /** Hidden AOSP API. */
     public void dispatchMenuVisibilityChanged(boolean visible) {}
 
+    /** Hidden AOSP API. */
+    public void setShowHideAnimationEnabled(boolean enabled) {}
+
+    /** Hidden AOSP API. */
+    public void onConfigurationChanged(android.content.res.Configuration config) {}
+
+    /** Hidden AOSP API. */
+    public android.view.ActionMode startActionMode(android.view.ActionMode.Callback callback) { return null; }
+
+    /** Hidden AOSP API. */
+    public void setWindowTitle(CharSequence title) {}
+
+    /** Hidden AOSP API. */
+    public void setDefaultDisplayHomeAsUpEnabled(boolean enabled) {}
+
+    /** Hidden AOSP API. */
+    public boolean onKeyShortcut(int keyCode, android.view.KeyEvent event) { return false; }
+
+    /** Hidden AOSP API. */
+    public boolean requestFocus() { return false; }
+
+    /** Hidden AOSP API. Called when the action bar is replaced or its activity destroyed. */
+    public void onDestroy() {}
+
     public interface OnNavigationListener {
         boolean onNavigationItemSelected(int itemPosition, long itemId);
     }

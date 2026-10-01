@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical">
+    <Toolbar android:id="@+id/toolbar" android:layout_width="match_parent"
+        android:layout_height="?android:attr/actionBarSize" android:background="#FF00796B"
+        android:titleTextColor="#FFFFFFFF" />
+    <Button android:id="@+id/mode" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:text="Select" android:layout_margin="16dp" />
+    <TextView android:id="@+id/status" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:textSize="18sp" android:padding="16dp" />
+</LinearLayout>

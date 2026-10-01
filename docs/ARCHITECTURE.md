@@ -374,10 +374,29 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `Window.superDispatch*`.
 - Decor: `PhoneWindow` reads the theme's window attributes (background,
   floating, translucent, dim, min width for floating windows, close on
-  touch outside, soft input mode) and inflates the framework layout
-  `screen_simple` (LinearLayout + action mode ViewStub + FrameLayout
-  `android:id/content`). Action bar and title decors are not implemented
-  yet (WS4/WS2); such themes fall back to screen_simple with a warning.
+  touch outside, soft input mode) and inflates the framework decor layout
+  chosen as in AOSP generateLayout: the action bar decor
+  (windowActionBarFullscreenDecorLayout, `screen_toolbar` on Material:
+  ActionBarOverlayLayout `decor_content_parent` holding the content and an
+  ActionBarContainer with a Toolbar `action_bar` and an
+  ActionBarContextView `action_context_bar`), `dialogTitleDecorLayout` for
+  floating windows with a title, `screen_title`, or `screen_simple`
+  (LinearLayout + action mode ViewStub + FrameLayout `android:id/content`).
+  The decor content parent (DecorContentParent) takes the window title,
+  features, icon/logo and the options menu (MenuBuilder themed with
+  actionBarTheme/actionBarWidgetTheme, presenters from the toolbar). The
+  activity's ActionBar is a WindowDecorActionBar over that decor, or a
+  ToolbarActionBar after setActionBar(Toolbar), which wraps the window
+  callback. DecorView owns the primary ActionMode: the window callback
+  may supply it (the action bar's context bar), else DecorView inflates
+  `action_mode_bar_stub` for a StandaloneActionMode. BACK finishes it.
+- Default theme: a context whose component and application set no theme
+  uses `Resources.selectDefaultTheme(0, targetSdk)` (DeviceDefault Light
+  DarkActionBar for targetSdk 24+), as AOSP ContextImpl and
+  ContextThemeWrapper do.
+- Private framework resources: `InternalRes` resolves
+  com.android.internal ids by name; private attrs live under the
+  "^attr-private" type in framework-res and are found there.
 - Display metrics: `android.view.Display.nGetInfo(int[] out)` returns
   width, height, dpi, refresh rate x 1000, has-touch. 1280x720 at 240 dpi
   in handheld mode, 1920x1080 at 360 dpi docked (same 853x480 dp).

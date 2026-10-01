@@ -59,7 +59,10 @@ public class ContextThemeWrapper extends ContextWrapper {
 
     @Override
     public Resources.Theme getTheme() {
-        if (mTheme == null) initializeTheme();
+        if (mTheme != null) return mTheme;
+        final android.content.pm.ApplicationInfo info = getApplicationInfo();
+        if (info != null) mThemeResource = Resources.selectDefaultTheme(mThemeResource, info.targetSdkVersion);
+        initializeTheme();
         return mTheme;
     }
 

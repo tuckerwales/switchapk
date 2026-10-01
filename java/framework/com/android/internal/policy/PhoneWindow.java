@@ -25,6 +25,8 @@ import com.android.internal.view.menu.ContextMenuBuilder;
 import com.android.internal.view.menu.MenuBuilder;
 import com.android.internal.view.menu.MenuDialogHelper;
 import com.android.internal.view.menu.MenuPanel;
+import com.android.internal.view.menu.MenuPresenter;
+import com.android.internal.widget.DecorContentParent;
 
 /**
  * framework-internal. The standard window (AOSP PhoneWindow): builds the decor
@@ -50,7 +52,17 @@ public class PhoneWindow extends Window {
     private int mStatusBarColor;
     private int mNavigationBarColor;
     private boolean mTakeKeyEvents = true;
-    private static boolean sLoggedActionBar;
+    private static boolean sLoggedCustomTitle;
+    private static final String ACTION_BAR_TAG = "android:ActionBar";
+
+    /** The action bar decor (ActionBarOverlayLayout), or null when the window has none. */
+    DecorContentParent mDecorContentParent;
+    private android.widget.TextView mTitleView;
+    private ActionMenuPresenterCallback mActionMenuPresenterCallback;
+    private boolean mInvalidatePanelMenuPosted;
+    private int mUiOptions;
+    private int mIconRes;
+    private int mLogoRes;
 
     final TypedValue mMinWidthMajor = new TypedValue();
     final TypedValue mMinWidthMinor = new TypedValue();
@@ -136,6 +148,11 @@ public class PhoneWindow extends Window {
 
     @Override
     public void setTitle(CharSequence title) {
+        if (mTitleView != null) {
+            mTitleView.setText(title);
+        } else if (mDecorContentParent != null) {
+            mDecorContentParent.setWindowTitle(title);
+        }
         mTitle = title;
         WindowManager.LayoutParams params = getAttributes();
         if (!android.text.TextUtils.equals(title, params.getTitle())) {
@@ -149,7 +166,42 @@ public class PhoneWindow extends Window {
 
     @Override
     @Deprecated
-    public void setTitleColor(int textColor) { mTitleColor = textColor; }
+    public void setTitleColor(int textColor) {
+        if (mTitleView != null) mTitleView.setTextColor(textColor);
+        mTitleColor = textColor;
+    }
+
+    @Override
+    public void setUiOptions(int uiOptions) { mUiOptions = uiOptions; }
+
+    @Override
+    public void setUiOptions(int uiOptions, int mask) { mUiOptions = (mUiOptions & ~mask) | (uiOptions & mask); }
+
+    @Override
+    public void setIcon(int resId) {
+        mIconRes = resId;
+        if (mDecorContentParent != null) mDecorContentParent.setIcon(resId);
+    }
+
+    @Override
+    public void setDefaultIcon(int resId) {
+        if (mIconRes != 0) return;
+        mIconRes = resId;
+        if (mDecorContentParent != null && !mDecorContentParent.hasIcon() && resId != 0) mDecorContentParent.setIcon(resId);
+    }
+
+    @Override
+    public void setLogo(int resId) {
+        mLogoRes = resId;
+        if (mDecorContentParent != null) mDecorContentParent.setLogo(resId);
+    }
+
+    @Override
+    public void setDefaultLogo(int resId) {
+        if (mLogoRes != 0) return;
+        mLogoRes = resId;
+        if (mDecorContentParent != null && !mDecorContentParent.hasLogo() && resId != 0) mDecorContentParent.setLogo(resId);
+    }
 
     // ---------------------------------------------------------------- panels (options menu, context menu)
 
@@ -174,18 +226,99 @@ public class PhoneWindow extends Window {
     private boolean prepareOptionsMenu() {
         final Callback cb = getCallback();
         if (cb == null || isDestroyed()) return false;
+        final boolean actionBar = mDecorContentParent != null;
+        if (actionBar) mDecorContentParent.setMenuPrepared();
         if (mOptionsMenu == null || mOptionsMenuInvalid) {
-            MenuBuilder menu = new MenuBuilder(getContext());
+            MenuBuilder menu = new MenuBuilder(actionBar ? actionBarMenuContext() : getContext());
             menu.setCallback(menuCallback(FEATURE_OPTIONS_PANEL));
+            if (actionBar) {
+                if (mActionMenuPresenterCallback == null) mActionMenuPresenterCallback = new ActionMenuPresenterCallback();
+                mDecorContentParent.setMenu(menu, mActionMenuPresenterCallback);
+            }
+            menu.stopDispatchingItemsChanged();
             if (!cb.onCreatePanelMenu(FEATURE_OPTIONS_PANEL, menu)) {
                 mOptionsMenu = null;
+                if (actionBar) mDecorContentParent.setMenu(null, mActionMenuPresenterCallback);
                 return false;
             }
             mOptionsMenu = menu;
             mOptionsMenuInvalid = false;
         }
-        return cb.onPreparePanel(FEATURE_OPTIONS_PANEL, null, mOptionsMenu);
+        mOptionsMenu.stopDispatchingItemsChanged();
+        if (!cb.onPreparePanel(FEATURE_OPTIONS_PANEL, null, mOptionsMenu)) {
+            if (actionBar) mDecorContentParent.setMenu(null, mActionMenuPresenterCallback);
+            mOptionsMenu.startDispatchingItemsChanged();
+            return false;
+        }
+        mOptionsMenu.startDispatchingItemsChanged();
+        return true;
     }
+
+    /** The action bar menu inflates its views with actionBarTheme and actionBarWidgetTheme (AOSP initializePanelMenu). */
+    private Context actionBarMenuContext() {
+        final Context context = getContext();
+        final TypedValue outValue = new TypedValue();
+        final android.content.res.Resources.Theme baseTheme = context.getTheme();
+        baseTheme.resolveAttribute(android.R.attr.actionBarTheme, outValue, true);
+        android.content.res.Resources.Theme widgetTheme = null;
+        if (outValue.resourceId != 0) {
+            widgetTheme = context.getResources().newTheme();
+            widgetTheme.setTo(baseTheme);
+            widgetTheme.applyStyle(outValue.resourceId, true);
+            widgetTheme.resolveAttribute(android.R.attr.actionBarWidgetTheme, outValue, true);
+        } else {
+            baseTheme.resolveAttribute(android.R.attr.actionBarWidgetTheme, outValue, true);
+        }
+        if (outValue.resourceId != 0) {
+            if (widgetTheme == null) {
+                widgetTheme = context.getResources().newTheme();
+                widgetTheme.setTo(baseTheme);
+            }
+            widgetTheme.applyStyle(outValue.resourceId, true);
+        }
+        if (widgetTheme == null) return context;
+        final android.view.ContextThemeWrapper wrapper = new android.view.ContextThemeWrapper(context, 0);
+        wrapper.getTheme().setTo(widgetTheme);
+        return wrapper;
+    }
+
+    private boolean usesActionBarOverflow() {
+        return mDecorContentParent != null && mDecorContentParent.canShowOverflowMenu()
+                && !android.view.ViewConfiguration.get(getContext()).hasPermanentMenuKey();
+    }
+
+    /** Presenter callback for the action bar's menu (AOSP ActionMenuPresenterCallback). */
+    private final class ActionMenuPresenterCallback implements MenuPresenter.Callback {
+        private boolean mClosingActionMenu;
+
+        public boolean onOpenSubMenu(MenuBuilder subMenu) {
+            final Callback cb = getCallback();
+            if (cb != null && !isDestroyed()) {
+                cb.onMenuOpened(FEATURE_ACTION_BAR, subMenu);
+                return true;
+            }
+            return false;
+        }
+
+        public void onCloseMenu(MenuBuilder menu, boolean allMenusAreClosing) {
+            if (mClosingActionMenu) return;
+            mClosingActionMenu = true;
+            mDecorContentParent.dismissPopups();
+            final Callback cb = getCallback();
+            if (cb != null && !isDestroyed()) cb.onPanelClosed(FEATURE_ACTION_BAR, menu);
+            mClosingActionMenu = false;
+        }
+    }
+
+    private final Runnable mInvalidatePanelMenuRunnable = new Runnable() {
+        public void run() {
+            mInvalidatePanelMenuPosted = false;
+            if (mDecorContentParent != null && !isDestroyed()) {
+                mOptionsMenuInvalid = true;
+                prepareOptionsMenu();
+            }
+        }
+    };
 
     private final MenuBuilder.CloseListener mOptionsClosed = new MenuBuilder.CloseListener() {
         public void onMenuClosed(MenuBuilder menu, boolean allMenusAreClosing) {
@@ -207,6 +340,10 @@ public class PhoneWindow extends Window {
 
     @Override
     public void openPanel(int featureId, KeyEvent event) {
+        if (featureId == FEATURE_OPTIONS_PANEL && usesActionBarOverflow()) {
+            if (!mDecorContentParent.isOverflowMenuShowing() && prepareOptionsMenu()) mDecorContentParent.showOverflowMenu();
+            return;
+        }
         if (featureId != FEATURE_OPTIONS_PANEL || mOptionsPanel != null) return;
         if (!prepareOptionsMenu() || !mOptionsMenu.hasVisibleItems()) return;
         final Callback cb = getCallback();
@@ -221,7 +358,9 @@ public class PhoneWindow extends Window {
 
     @Override
     public void closePanel(int featureId) {
-        if (featureId == FEATURE_OPTIONS_PANEL) {
+        if (featureId == FEATURE_OPTIONS_PANEL && usesActionBarOverflow()) {
+            mDecorContentParent.hideOverflowMenu();
+        } else if (featureId == FEATURE_OPTIONS_PANEL) {
             if (mOptionsPanel != null && mOptionsMenu != null) mOptionsMenu.close(true);
         } else if (featureId == FEATURE_CONTEXT_MENU) {
             if (mContextMenuHelper != null && mContextMenu != null) mContextMenu.close(true);
@@ -230,13 +369,21 @@ public class PhoneWindow extends Window {
 
     @Override
     public void togglePanel(int featureId, KeyEvent event) {
-        if (featureId == FEATURE_OPTIONS_PANEL && mOptionsPanel != null) closePanel(featureId);
+        if (featureId == FEATURE_OPTIONS_PANEL && usesActionBarOverflow()) {
+            if (mDecorContentParent.isOverflowMenuShowing()) closePanel(featureId);
+            else openPanel(featureId, event);
+        } else if (featureId == FEATURE_OPTIONS_PANEL && mOptionsPanel != null) closePanel(featureId);
         else openPanel(featureId, event);
     }
 
     @Override
     public void invalidatePanelMenu(int featureId) {
-        if (featureId == FEATURE_OPTIONS_PANEL) mOptionsMenuInvalid = true;
+        if (featureId == FEATURE_OPTIONS_PANEL || featureId == FEATURE_ACTION_BAR) mOptionsMenuInvalid = true;
+        // With an action bar the menu is visible, so rebuild it soon (AOSP doInvalidatePanelMenu).
+        if (mDecorContentParent != null && mDecor != null && !mInvalidatePanelMenuPosted) {
+            mInvalidatePanelMenuPosted = true;
+            mDecor.postOnAnimation(mInvalidatePanelMenuRunnable);
+        }
     }
 
     @Override
@@ -256,6 +403,7 @@ public class PhoneWindow extends Window {
 
     @Override
     public void closeAllPanels() {
+        if (mDecorContentParent != null) mDecorContentParent.dismissPopups();
         closePanel(FEATURE_OPTIONS_PANEL);
         closePanel(FEATURE_CONTEXT_MENU);
     }
@@ -369,6 +517,11 @@ public class PhoneWindow extends Window {
         outState.putSparseParcelableArray(VIEWS_TAG, states);
         final View focusedView = mContentParent.findFocus();
         if (focusedView != null && focusedView.getId() != View.NO_ID) outState.putInt(FOCUSED_ID_TAG, focusedView.getId());
+        if (mDecorContentParent != null) {
+            SparseArray<Parcelable> actionBarStates = new SparseArray<Parcelable>();
+            mDecorContentParent.saveToolbarHierarchyState(actionBarStates);
+            outState.putSparseParcelableArray(ACTION_BAR_TAG, actionBarStates);
+        }
         return outState;
     }
 
@@ -381,6 +534,10 @@ public class PhoneWindow extends Window {
         if (focusedViewId != View.NO_ID) {
             View needsFocus = mContentParent.findViewById(focusedViewId);
             if (needsFocus != null) needsFocus.requestFocus();
+        }
+        if (mDecorContentParent != null) {
+            SparseArray<Parcelable> actionBarStates = savedInstanceState.getSparseParcelableArray(ACTION_BAR_TAG);
+            if (actionBarStates != null) mDecorContentParent.restoreToolbarHierarchyState(actionBarStates);
         }
     }
 
@@ -436,7 +593,36 @@ public class PhoneWindow extends Window {
             mDecor.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
             mDecor.setIsRootNamespace(true);
         }
-        if (mContentParent == null) mContentParent = generateLayout(mDecor);
+        if (mContentParent == null) {
+            mContentParent = generateLayout(mDecor);
+            final View dcp = mDecor.findViewById(com.android.internal.util.InternalRes.viewId("decor_content_parent"));
+            if (dcp instanceof DecorContentParent) {
+                mDecorContentParent = (DecorContentParent) dcp;
+                mDecorContentParent.setWindowCallback(getCallback());
+                if (mDecorContentParent.getTitle() == null) mDecorContentParent.setWindowTitle(mTitle);
+                final int localFeatures = getLocalFeatures();
+                for (int i = 0; i < 32; i++) {
+                    if ((localFeatures & (1 << i)) != 0) mDecorContentParent.initFeature(i);
+                }
+                mDecorContentParent.setUiOptions(mUiOptions);
+                if (mIconRes != 0 && !mDecorContentParent.hasIcon()) mDecorContentParent.setIcon(mIconRes);
+                if (mLogoRes != 0 && !mDecorContentParent.hasLogo()) mDecorContentParent.setLogo(mLogoRes);
+                if (!isDestroyed() && mOptionsMenu == null) invalidatePanelMenu(FEATURE_ACTION_BAR);
+            } else {
+                final View title = mDecor.findViewById(android.R.id.title);
+                mTitleView = title instanceof android.widget.TextView ? (android.widget.TextView) title : null;
+                if (mTitleView != null) {
+                    if ((getLocalFeatures() & (1 << FEATURE_NO_TITLE)) != 0) {
+                        final View titleContainer = mDecor.findViewById(
+                                com.android.internal.util.InternalRes.viewId("title_container"));
+                        if (titleContainer != null) titleContainer.setVisibility(View.GONE);
+                        else mTitleView.setVisibility(View.GONE);
+                    } else {
+                        mTitleView.setText(mTitle);
+                    }
+                }
+            }
+        }
     }
 
     private static int internalId(Context context, String name, String type) {
@@ -495,20 +681,44 @@ public class PhoneWindow extends Window {
         mStatusBarColor = a.getColor(STYLE_STATUS_BAR_COLOR_INDEX, 0xff000000);
         mNavigationBarColor = a.getColor(STYLE_NAVIGATION_BAR_COLOR_INDEX, 0xff000000);
 
-        // Decor layout: the action bar and title decors need ActionBar and TextView (TODO(WS4), TODO(WS2)),
-        // so every window uses screen_simple for now.
-        int features = getLocalFeatures();
-        if ((features & ((1 << FEATURE_ACTION_BAR) | (1 << FEATURE_CUSTOM_TITLE))) != 0 && !sLoggedActionBar) {
-            sLoggedActionBar = true;
-            Log.w(TAG, "action bar and title decors are not implemented yet; using screen_simple");
+        // Decor layout (AOSP generateLayout; progress and left/right icon decors are not ported).
+        final int features = getLocalFeatures();
+        int layoutResource;
+        String layoutName;
+        if ((features & (1 << FEATURE_CUSTOM_TITLE)) != 0 && !sLoggedCustomTitle) {
+            sLoggedCustomTitle = true;
+            Log.w(TAG, "custom title decors are not implemented yet; using the plain title");
         }
-        int layoutResource = internalId(context, "screen_simple", "layout");
+        if ((features & (1 << FEATURE_NO_TITLE)) == 0) {
+            if (mIsFloating) {
+                final TypedValue res = new TypedValue();
+                context.getTheme().resolveAttribute(com.android.internal.util.InternalRes.attr("dialogTitleDecorLayout"),
+                        res, true);
+                layoutResource = res.resourceId;
+                layoutName = "dialogTitleDecorLayout";
+            } else if ((features & (1 << FEATURE_ACTION_BAR)) != 0) {
+                final TypedValue res = new TypedValue();
+                final int attr = com.android.internal.util.InternalRes.attr("windowActionBarFullscreenDecorLayout");
+                layoutResource = attr != 0 && context.getTheme().resolveAttribute(attr, res, true) && res.resourceId != 0
+                        ? res.resourceId : internalId(context, "screen_action_bar", "layout");
+                layoutName = "action bar decor";
+            } else {
+                layoutResource = internalId(context, "screen_title", "layout");
+                layoutName = "screen_title";
+            }
+        } else if ((features & (1 << FEATURE_ACTION_MODE_OVERLAY)) != 0) {
+            layoutResource = internalId(context, "screen_simple_overlay_action_mode", "layout");
+            layoutName = "screen_simple_overlay_action_mode";
+        } else {
+            layoutResource = internalId(context, "screen_simple", "layout");
+            layoutName = "screen_simple";
+        }
         View root = null;
         if (layoutResource != 0) {
             try {
                 root = mLayoutInflater.inflate(layoutResource, null);
             } catch (RuntimeException e) {
-                Log.w(TAG, "Could not inflate screen_simple", e);
+                Log.w(TAG, "Could not inflate " + layoutName, e);
             }
         }
         if (root == null) {

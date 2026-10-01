@@ -147,6 +147,7 @@ public class ContextImpl extends Context {
             mTheme = mResources.newTheme();
             int resid = mThemeRes;
             if (resid == 0 && mInfo != null) resid = mInfo.theme;
+            if (mInfo != null) resid = Resources.selectDefaultTheme(resid, mInfo.targetSdkVersion);
             if (resid != 0) mTheme.applyStyle(resid, true);
         }
         return mTheme;

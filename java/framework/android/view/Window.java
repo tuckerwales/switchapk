@@ -496,6 +496,12 @@ public abstract class Window {
 
     public void setLogo(int resId) {}
 
+    /** Hidden AOSP API: the activity's icon, used unless setIcon was called. */
+    public void setDefaultIcon(int resId) {}
+
+    /** Hidden AOSP API: the activity's logo, used unless setLogo was called. */
+    public void setDefaultLogo(int resId) {}
+
     public void setLocalFocus(boolean hasFocus, boolean inTouchMode) {}
 
     public void injectInputEvent(InputEvent event) {}

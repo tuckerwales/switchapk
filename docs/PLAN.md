@@ -122,7 +122,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] tests/apps/views acceptance sample
   - [x] SurfaceView/SurfaceHolder (software lockCanvas, paced producers), TextureView (software)
   - [x] context menu presentation (MenuDialogHelper, from WS4)
-  - [ ] action mode presentation (needs the action bar decor)
+  - [x] action mode presentation: primary modes in the action bar's
+    context bar (WindowDecorActionBar) or standalone in the decor's
+    action_mode_bar stub; floating (text selection) modes are not done
   - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
@@ -155,7 +157,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] DatePicker/TimePicker dialogs
   - [x] options menu (+ button falls back to MENU) as an overflow-style
     popup, context menus and sub menus as dialogs
-  - [ ] action bar decor (Theme.Material with title and overflow)
+  - [x] action bar decor: screen_toolbar (ActionBarOverlayLayout,
+    ActionBarContainer, ActionBarContextView), WindowDecorActionBar
+    (title, subtitle, up, action items, overflow, MENU key, hide/show,
+    overlay mode, action modes; tabs dispatched but not drawn),
+    setActionBar(Toolbar) through ToolbarActionBar, screen_title and the
+    floating dialog title decor, default theme selection by targetSdk;
+    tests/apps/actionbar
   - [x] lifecycle in AOSP order, results, launch modes and flags, saved
     state, recreation on docked/handheld switch (lazy for stopped
     activities), ActivityLifecycleCallbacks with pre/post;
@@ -200,10 +208,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 1. WS2 is done. WS3 is in progress: ImageView, the compound controls,
    scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
    EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
-   landed. Progress, popups and Toolbar are still open. WS4 (app model)
-   and WS5 (animation) can start in parallel.
-2. Finish WS1: context menu and action mode presentation once WS4 has
-   dialogs.
+   landed, and so have progress, popups, Toolbar and the action bar.
+   The remaining WS3 widgets are open. WS5 (animation) can start in
+   parallel.
+2. Finish WS1: floating action modes (text selection toolbar).
 3. In parallel as agents are available: WS10 (Switch backend), WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
 4. WS8 once WS10 can present.
@@ -224,9 +232,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   must be written to not need it (ours keep memory in Java arrays).
 - `tools/api_check.py <class...>` (or `-p <package>`) lists android.jar
   members our framework lacks: run it on every class you touch.
-- Themes with an action bar or title (Theme.Material, Theme.Holo) use the
-  screen_simple decor until WS4 adds the action bar, so their content
-  starts at the top of the window.
+- Apps whose manifest sets no theme get Theme.DeviceDefault.Light.DarkActionBar
+  (AOSP selectDefaultTheme for targetSdk 24+), so they now show an action
+  bar with the activity label. Action bar show/hide and action mode
+  transitions are immediate until WS5 animators land.
 - The headless `idle` script command now waits until queued input is
   consumed and nothing was presented for the quiet time since the command
   started.
@@ -235,6 +244,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-01 (WS3/WS4): `PhoneWindow` picks its decor like AOSP
+  generateLayout: the theme's windowActionBarFullscreenDecorLayout
+  (screen_toolbar on Material) for FEATURE_ACTION_BAR, the
+  dialogTitleDecorLayout for floating windows with a title, screen_title
+  for other titled windows, screen_simple(_overlay_action_mode) otherwise.
+  With an action bar the options menu is the decor toolbar's menu
+  (rebuilt, posted, on invalidatePanelMenu) and MENU toggles its
+  overflow. `DecorView` starts action modes (Window.Callback
+  onWindowStartingActionMode, then a StandaloneActionMode) and BACK ends
+  the primary mode. `Activity.getActionBar/setActionBar` are real.
+  Contexts with no theme get `Resources.selectDefaultTheme`.
+  `InternalRes.attr` also looks up the "^attr-private" type.
 
 - 2026-09-30: the app runner loads `framework-res.apk` from the first
   readable path of `build/toolchains/framework-res.apk`,

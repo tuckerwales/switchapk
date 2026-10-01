@@ -117,7 +117,9 @@ public class Dialog implements DialogInterface, Window.Callback, KeyEvent.Callba
 
     public final Context getContext() { return mContext; }
 
-    public ActionBar getActionBar() { return null; }
+    private ActionBar mActionBar;
+
+    public ActionBar getActionBar() { return mActionBar; }
 
     public final void setOwnerActivity(Activity activity) { mOwnerActivity = activity; }
 
@@ -145,6 +147,14 @@ public class Dialog implements DialogInterface, Window.Callback, KeyEvent.Callba
         }
         onStart();
         mDecor = mWindow.getDecorView();
+        if (mActionBar == null && mWindow.hasFeature(Window.FEATURE_ACTION_BAR)) {
+            final android.content.pm.ApplicationInfo info = mContext.getApplicationInfo();
+            if (info != null) {
+                mWindow.setDefaultIcon(info.icon);
+                mWindow.setDefaultLogo(info.logo);
+            }
+            mActionBar = new com.android.internal.app.WindowDecorActionBar(this);
+        }
         WindowManager.LayoutParams l = mWindow.getAttributes();
         if ((l.softInputMode & WindowManager.LayoutParams.SOFT_INPUT_IS_FORWARD_NAVIGATION) == 0) {
             WindowManager.LayoutParams nl = new WindowManager.LayoutParams();

@@ -226,3 +226,18 @@ what is left in flight.
   so they used to resolve to 0 and silently drop their styles.
   tests/apps/toolbar checks layout, nav/action/overflow clicks and the
   overflow popup.
+- WS4 action bar decor and WS1 action modes. PhoneWindow now inflates the
+  decor AOSP would (screen_toolbar for action bar themes, the dialog
+  title decor, screen_title, screen_simple) and drives the options menu
+  through the decor toolbar (posted rebuild, overflow on MENU). Ported
+  ActionBarOverlayLayout, ActionBarContainer, AbsActionBarView,
+  ActionBarContextView, DecorContentParent, WindowDecorActionBar (with
+  ActionModeImpl; tabs dispatched, no tab strip), ToolbarActionBar,
+  WindowCallbackWrapper and StandaloneActionMode; DecorView starts
+  action modes and BACK ends them. Activity getActionBar, setActionBar,
+  getMenuInflater (themed), home-as-up, menu visibility and MENU key
+  routing follow AOSP. Contexts with no theme now get
+  Resources.selectDefaultTheme, so tests/apps/hello (no theme) shows an
+  action bar like on Android; its checks moved down by 72px.
+  tests/apps/actionbar covers the bar, items, overflow, MENU, both kinds
+  of action mode, hide/show and setActionBar(Toolbar).

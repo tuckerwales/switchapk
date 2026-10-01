@@ -6,11 +6,19 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
+import android.view.ActionMode;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewStub;
 import android.view.Window;
 import android.widget.FrameLayout;
+import com.android.internal.util.InternalRes;
+import com.android.internal.view.StandaloneActionMode;
+import com.android.internal.widget.ActionBarContextView;
 
 /**
  * framework-internal. Root view of a PhoneWindow (AOSP DecorView): routes input
@@ -21,6 +29,10 @@ public class DecorView extends FrameLayout {
     private final PhoneWindow mWindow;
     private final Rect mFramePadding = new Rect();
     private final Rect mBackgroundPadding = new Rect();
+
+    /** The primary action mode, whether shown by the action bar or by mPrimaryActionModeView. */
+    ActionMode mPrimaryActionMode;
+    private ActionBarContextView mPrimaryActionModeView;
 
     DecorView(Context context, PhoneWindow window) {
         super(context);
@@ -69,7 +81,14 @@ public class DecorView extends FrameLayout {
                 : super.dispatchGenericMotionEvent(ev);
     }
 
-    public boolean superDispatchKeyEvent(KeyEvent event) { return super.dispatchKeyEvent(event); }
+    public boolean superDispatchKeyEvent(KeyEvent event) {
+        // Back cancels action modes first.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && mPrimaryActionMode != null) {
+            if (event.getAction() == KeyEvent.ACTION_UP) mPrimaryActionMode.finish();
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
 
     public boolean superDispatchKeyShortcutEvent(KeyEvent event) { return super.dispatchKeyShortcutEvent(event); }
 
@@ -171,6 +190,118 @@ public class DecorView extends FrameLayout {
 
     @Override
     public String toString() { return "DecorView@" + Integer.toHexString(hashCode()); }
+
+    // ---------------------------------------------------------------- action modes (AOSP DecorView)
+
+    @Override
+    public ActionMode startActionModeForChild(View originalView, ActionMode.Callback callback) {
+        return startActionModeForChild(originalView, callback, ActionMode.TYPE_PRIMARY);
+    }
+
+    @Override
+    public ActionMode startActionModeForChild(View child, ActionMode.Callback callback, int type) {
+        return startActionMode(child, callback, type);
+    }
+
+    @Override
+    public ActionMode startActionMode(ActionMode.Callback callback) { return startActionMode(callback, ActionMode.TYPE_PRIMARY); }
+
+    @Override
+    public ActionMode startActionMode(ActionMode.Callback callback, int type) { return startActionMode(this, callback, type); }
+
+    private ActionMode startActionMode(View originatingView, ActionMode.Callback callback, int type) {
+        final ActionModeCallbackWrapper wrappedCallback = new ActionModeCallbackWrapper(callback);
+        ActionMode mode = null;
+        final Window.Callback cb = mWindow.getCallback();
+        if (cb != null && !mWindow.isDestroyed()) mode = cb.onWindowStartingActionMode(wrappedCallback, type);
+        if (mode != null) {
+            if (mode.getType() == ActionMode.TYPE_PRIMARY) {
+                cleanupPrimaryActionMode();
+                mPrimaryActionMode = mode;
+            }
+        } else {
+            // Floating action modes (text selection toolbars) are not supported yet.
+            mode = type == ActionMode.TYPE_PRIMARY ? createStandaloneActionMode(wrappedCallback) : null;
+            if (mode != null && wrappedCallback.onCreateActionMode(mode, mode.getMenu())) {
+                setHandledPrimaryActionMode(mode);
+            } else {
+                mode = null;
+            }
+        }
+        if (mode != null && cb != null && !mWindow.isDestroyed()) cb.onActionModeStarted(mode);
+        return mode;
+    }
+
+    private void cleanupPrimaryActionMode() {
+        if (mPrimaryActionMode != null) {
+            mPrimaryActionMode.finish();
+            mPrimaryActionMode = null;
+        }
+        if (mPrimaryActionModeView != null) mPrimaryActionModeView.killMode();
+    }
+
+    private ActionMode createStandaloneActionMode(ActionMode.Callback callback) {
+        cleanupPrimaryActionMode();
+        if (mPrimaryActionModeView == null || !mPrimaryActionModeView.isAttachedToWindow()) {
+            final View stub = findViewById(InternalRes.viewId("action_mode_bar_stub"));
+            if (stub instanceof ViewStub) {
+                final View inflated = ((ViewStub) stub).inflate();
+                if (inflated instanceof ActionBarContextView) mPrimaryActionModeView = (ActionBarContextView) inflated;
+            }
+        }
+        if (mPrimaryActionModeView != null) {
+            mPrimaryActionModeView.killMode();
+            return new StandaloneActionMode(mPrimaryActionModeView.getContext(), mPrimaryActionModeView, callback, true);
+        }
+        return null;
+    }
+
+    private void setHandledPrimaryActionMode(ActionMode mode) {
+        mPrimaryActionMode = mode;
+        mode.invalidate();
+        mPrimaryActionModeView.initForMode(mode);
+        mPrimaryActionModeView.setVisibility(View.VISIBLE);
+        requestFitSystemWindows();
+    }
+
+    /** Clears the decor's mode when it ends and tells the window callback (AOSP ActionModeCallback2Wrapper). */
+    private class ActionModeCallbackWrapper extends ActionMode.Callback2 {
+        private final ActionMode.Callback mWrapped;
+
+        ActionModeCallbackWrapper(ActionMode.Callback wrapped) { mWrapped = wrapped; }
+
+        public boolean onCreateActionMode(ActionMode mode, Menu menu) { return mWrapped.onCreateActionMode(mode, menu); }
+
+        public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+            requestFitSystemWindows();
+            return mWrapped.onPrepareActionMode(mode, menu);
+        }
+
+        public boolean onActionItemClicked(ActionMode mode, MenuItem item) { return mWrapped.onActionItemClicked(mode, item); }
+
+        public void onDestroyActionMode(ActionMode mode) {
+            mWrapped.onDestroyActionMode(mode);
+            if (mode == mPrimaryActionMode) {
+                if (mPrimaryActionModeView != null) {
+                    mPrimaryActionModeView.setVisibility(GONE);
+                    mPrimaryActionModeView.killMode();
+                }
+                mPrimaryActionMode = null;
+            }
+            final Window.Callback cb = mWindow.getCallback();
+            if (cb != null && !mWindow.isDestroyed()) cb.onActionModeFinished(mode);
+            requestFitSystemWindows();
+        }
+
+        @Override
+        public void onGetContentRect(ActionMode mode, View view, Rect outRect) {
+            if (mWrapped instanceof ActionMode.Callback2) {
+                ((ActionMode.Callback2) mWrapped).onGetContentRect(mode, view, outRect);
+            } else {
+                super.onGetContentRect(mode, view, outRect);
+            }
+        }
+    }
 
     @Override
     public boolean showContextMenuForChild(View originalView) { return mWindow.showContextMenuForChild(originalView); }

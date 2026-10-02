@@ -41,8 +41,10 @@ Early and experimental. It has not yet been confirmed on real hardware.
 - Sound
 - OpenGL ES on the Switch itself (GL is built in but untested on
   hardware). Native libraries can be mapped as executable code there,
-  but that path is not yet run on hardware, and NativeActivity games are
-  not implemented, so most games do not run on device yet
+  but that path is not yet run on hardware. NativeActivity with
+  ANativeWindow and native EGL window surfaces works on the host
+  (tests/apps/native); it has not been run on device, and there is no
+  ALooper input queue yet, so most games do not run on device yet
 - AndroidX/AppCompat apps are not targeted yet
 - Networking and SQLite
 

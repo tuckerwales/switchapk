@@ -70,7 +70,9 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   SurfaceView buffer queue (tests/apps/gles on Mesa llvmpipe).
 - Native libraries (WS9): ELF loader and bionic shim; JNI libraries from
   the APK load with their dependencies and JNI_OnLoad (tests/apps/ndk on
-  x86-64 and AArch64).
+  x86-64 and AArch64). NativeActivity loads a library, wraps its
+  SurfaceView as an ANativeWindow, and native EGL window surfaces post
+  into that queue (tests/apps/native on host Mesa).
 - Switch (WS10): the NRO boots on hardware; launcher with APK labels and
   icons; the build links Mesa when switch-mesa is installed. CI packages
   the NRO and sample APKs (`.github/workflows/package.yml`).
@@ -78,8 +80,9 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 
 Not yet: sound (WS7), GL on the Switch (Mesa linked but not run on
 hardware), running a native library on hardware (code memory is mapped;
-newlib struct translation remains), NativeActivity, SQLite natives
-(WS6), networking (WS11), AndroidX (WS14), sensors (WS15).
+newlib struct translation remains), ALooper/AInputQueue (NativeActivity
+does not deliver an input queue), SQLite natives (WS6), networking
+(WS11), AndroidX (WS14), sensors (WS15).
 
 ## Checklist
 
@@ -272,8 +275,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     svcSetProcessMemoryPermission on the alias region; application
     launches only). newlib struct translation (stat, dirent, O_* flags,
     clock ids) remains
-  - [ ] NativeActivity, ANativeWindow + native EGL window surfaces,
-    ALooper/AInputQueue, OpenSL ES/AAudio (with WS7)
+  - [x] NativeActivity and ANativeWindow; native eglCreateWindowSurface
+    posts through the same Surface queue as Java (tests/apps/native:
+    red EGL clear, gold rect from ANativeWindow_lock)
+  - [ ] ALooper/AInputQueue, OpenSL ES/AAudio (with WS7)
   - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
 
 ### M6
@@ -317,10 +322,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    SurfaceTexture external textures.
 5. WS9: JNI libraries load on the host and on AArch64 (qemu), and the
    Switch loader maps executable pages with svcMapProcessCodeMemory
-   (application launches; not yet run on hardware). Next: NativeActivity
-   with ANativeWindow and native EGL window surfaces (shares the WS8
-   window path), then OpenSL ES with WS7. newlib struct translation
-   (stat, dirent, O_* flags, clock ids) is still open.
+   (application launches; not yet run on hardware). NativeActivity,
+   ANativeWindow and native EGL window surfaces are in
+   (tests/apps/native, host Mesa). Next: OpenSL ES with WS7. Still
+   open: ALooper/AInputQueue, and newlib struct translation (stat,
+   dirent, O_* flags, clock ids).
 
 ## Known issues and gotchas
 
@@ -348,7 +354,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - Native libraries map executable pages on the Switch only when hbloader
   hints code-memory syscalls (an application launch, not an applet). That
   path is not yet run on hardware. newlib struct layouts still differ
-  from bionic.
+  from bionic. NativeActivity does not call onInputQueueCreated: there
+  is no ALooper or AInputQueue yet, and a dummy queue would crash apps
+  that attach it. Native EGL window surfaces are pbuffers read back into
+  the Surface queue, the same path as Java, and have not been run on
+  hardware.
 - Host GL tests need Mesa's EGL and GLES libraries (`libegl1`,
   `libgles2`; `libegl-dev`/`libgles-dev` to regenerate the bindings).
   Ubuntu's Mesa cannot create ES1 contexts, so GLES1 rendering is not
@@ -364,6 +374,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-02 (WS9, touches WS8): `android.app.NativeActivity` loads
+  `lib/<abi>/lib<name>.so` (meta-data `android.app.lib_name`, default
+  entry `ANativeActivity_onCreate`) and installs a full-bleed
+  SurfaceView, because `PhoneWindow.takeSurface` does not deliver a
+  surface. `ANativeWindow_*` locks that Surface as RGBA bytes and posts
+  ARGB through `Surface.lockGlBuffer`. The NDK shim's
+  `eglCreateWindowSurface` accepts an ANativeWindow, makes a pbuffer,
+  and `eglSwapBuffers` reads it back with the same conversion as
+  `EGLNative.nReadWindow` (`sa_egl_native_proc` in front of `sa_gl_proc`).
+  ALooper and AInputQueue are not called. ARCHITECTURE 6.6.1 and 6.7.
 - 2026-10-02 (WS9, touches WS4, WS13, libcore): `src/nativeloader/loader_stub.c`
   is replaced by the ELF loader and shim (same `nativeloader_load_library`
   / `nativeloader_find_symbol` contract, ARCHITECTURE 6.7). `os.arch` comes

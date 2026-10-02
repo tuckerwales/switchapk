@@ -839,6 +839,19 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   therefore show GL frames with no special casing, and views over a
   GLSurfaceView composite normally. A direct NWindow path for fullscreen
   GL on the Switch is a later optimisation.
+- Native EGL: the NDK shim resolves `egl*` through `sa_egl_native_proc`
+  before the driver (`sa_gl_proc`). `eglGetDisplay` uses the same
+  surfaceless display as Java. `eglChooseConfig` rewrites
+  EGL_WINDOW_BIT to EGL_PBUFFER_BIT and drops the two Android-only
+  attributes; `eglGetConfigAttrib` reports the window bit again.
+  `eglCreateWindowSurface` accepts an `ANativeWindow` (magic `SANW`),
+  makes a pbuffer of that window's size and wraps it in an `SaSurf`
+  (magic `SASU`, first field, plus the window pointer). `eglSwapBuffers`
+  on that surface reads pixels with the same conversion as
+  `nReadWindow` (GIL released around the GL call) and posts them with
+  `anw_post_argb`. Config handles stay raw driver pointers. Java's
+  `EGLNative` path is unchanged: it still readbacks in Java and does
+  not go through these wrappers.
 - GLSurfaceView is AOSP's (GLThread state machine, EglHelper, the default
   config, context and window surface factories). If the GL thread cannot
   bring EGL up, it logs the exception and the view draws an "OpenGL ES
@@ -898,7 +911,10 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   and the recursive initializer work), bionic pthread_attr_t, liblog
   (to sa_log), AAssetManager (reads `assets/` from the APK; no file
   descriptors), `__system_property_get` (SDK 29 values), zlib, and GL/EGL
-  names resolved from the driver (`sa_gl_proc`, 6.6.1). Struct layouts
+  names resolved from the driver (`sa_gl_proc`, 6.6.1), with the EGL
+  calls in 6.6.1 intercepted first. `ANativeWindow_*` and
+  `ANativeActivity_finish` / `setWindowFormat` / `setWindowFlags` /
+  `showSoftInput` / `hideSoftInput` are real symbols. Struct layouts
   (stat, dirent, tm, timespec) match bionic on 64-bit Linux hosts; the
   Switch needs translation wrappers for newlib's. newlib also has no
   getpagesize, posix_memalign or pipe: the shim provides the first two
@@ -916,10 +932,24 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   only for an application launch; an applet fails the load with that
   reason in the error string. newlib struct layouts (stat, dirent, O_*
   flags, clock ids) still need translation wrappers.
-- Not yet: NativeActivity (`ANativeActivity_onCreate`, ALooper,
-  AInputQueue, ANativeWindow and EGL window surfaces from native code),
-  OpenSL ES and AAudio (WS7), AConfiguration, ASensorManager, libc++_shared
-  coverage checks, socket APIs.
+- NativeActivity (`android.app.NativeActivity`): public API matches
+  android.jar, including the hidden natives `loadNativeCode` and the
+  lifecycle/surface forwards. `PhoneWindow.takeSurface` is a no-op, so
+  the content view is a full-bleed SurfaceView (format RGBA_8888, set
+  before the first `updateSurface`). `loadNativeCode` dlopens
+  `ApplicationInfo.nativeLibraryDir`/`lib<name>.so` (the loader falls
+  back to `lib/<abi>/` in the APK) and calls the entry, default
+  `ANativeActivity_onCreate`, with the NDK `ANativeActivity` layout
+  (sdkVersion at offset 48, instance at 56, 80 bytes). The entry runs
+  before the surface exists. `surfaceCreated` wraps the Surface as an
+  ANativeWindow and calls `onNativeWindowCreated`;
+  `onNativeWindowResized` fires only when the size changes. Lock returns
+  RGBA bytes (R, G, B, A); the queue stores ARGB, so unlock converts.
+  The previous posted frame is copied into the next lock. Input-queue
+  callbacks are not invoked.
+- Not yet: ALooper and AInputQueue, OpenSL ES and AAudio (WS7),
+  AConfiguration, ASensorManager, libc++_shared coverage checks, socket
+  APIs. NativeActivity and native EGL have not been run on hardware.
 
 ## 7. Platform layer (src/platform/platform.h)
 
@@ -986,7 +1016,7 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   hardware.
 - Not yet: audio (samples are drained like the headless backend), rumble,
   1080p docked rendering. Native libraries can be mapped (6.7) but have
-  not been run on hardware.
+  not been run on hardware, and neither has a NativeActivity.
 
 ## 8. Testing strategy
 

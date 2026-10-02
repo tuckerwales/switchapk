@@ -521,3 +521,15 @@ what is left in flight.
   reason. The NRO links again: newlib has no getpagesize, posix_memalign
   or pipe, so the shim provides the first two and pipe returns ENOSYS.
   newlib struct translation is still open. Not run on hardware.
+- WS9 NativeActivity. `android.app.NativeActivity` matches the jar,
+  including the hidden load and lifecycle natives. The content view is
+  a full-bleed SurfaceView (PhoneWindow.takeSurface does not install a
+  surface) with format RGBA_8888. The entry, default
+  ANativeActivity_onCreate, runs before that surface exists.
+  ANativeWindow locks the Surface as RGBA bytes and posts ARGB through
+  lockGlBuffer. The NDK shim's eglCreateWindowSurface takes an
+  ANativeWindow, backs it with a pbuffer, and eglSwapBuffers reads the
+  frame back the same way Java does. tests/apps/native clears red and
+  paints a gold rectangle; the screenshot checks both. ndk, gles and
+  VmTest still pass. ALooper and AInputQueue are not delivered, so
+  onInputQueueCreated is intentionally not called. Not run on hardware.

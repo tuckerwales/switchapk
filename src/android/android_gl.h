@@ -77,6 +77,8 @@ extern SaEgl sa_egl;
 bool sa_gl_load(void);
 /* Resolves any GL ES or EGL entry point by name (for the NDK shim). */
 void *sa_gl_proc(const char *name);
+/* Our eglCreateWindowSurface and the EGL calls that must agree with it, or NULL. */
+void *sa_egl_native_proc(const char *name);
 
 /* Address of element 0 of an array argument plus offset, with AOSP's checks (IllegalArgumentException). */
 static inline void *gles_array(VMThread *t, ArrayObject *a, int32_t offset, int elem, const char *what) {

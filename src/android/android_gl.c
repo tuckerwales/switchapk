@@ -12,10 +12,13 @@
  * queue's size; on eglSwapBuffers the Java side asks nReadWindow to read the
  * finished frame back into the queue's back buffer and posts it, so GL
  * content goes through the same consumer path as lockCanvas (SurfaceView,
- * TextureView). This works with surfaceless Mesa on the host (screenshots)
- * and on the Switch; a direct NWindow path for fullscreen GL is a later step.
+ * TextureView). Native eglCreateWindowSurface takes an ANativeWindow and
+ * posts the same way (sa_egl_native_proc). This works with surfaceless Mesa
+ * on the host (screenshots) and on the Switch; a direct NWindow path for
+ * fullscreen GL is a later step.
  */
 #include "android_gl.h"
+#include "nativeloader/native_window.h"
 
 #if defined(__SWITCH__) && defined(SA_HAVE_EGL)
 #include <EGL/egl.h>
@@ -28,6 +31,12 @@
 SaGl sa_gl;
 SaEgl sa_egl;
 
+#define EGL_SUCCESS 0x3000
+#define EGL_NOT_INITIALIZED 0x3001
+#define EGL_BAD_ACCESS 0x3002
+#define EGL_BAD_ALLOC 0x3003
+#define EGL_BAD_NATIVE_WINDOW 0x300B
+#define EGL_BAD_SURFACE 0x300D
 #define EGL_SURFACE_TYPE 0x3033
 #define EGL_PBUFFER_BIT 0x0001
 #define EGL_WINDOW_BIT 0x0004
@@ -50,13 +59,23 @@ SaEgl sa_egl;
 #define GL_RGBA 0x1908
 #define GL_UNSIGNED_BYTE 0x1401
 
+#define SA_SURF_MAGIC 0x53415355u /* 'SASU' */
+
 typedef struct {
+    uint32_t magic; /* first, so a native pointer can be told from a Mesa surface */
     SaEGLSurface real;
     SaEGLDisplay dpy;
     SaEGLConfig cfg;
     int w, h;
     bool window;
+    ANativeWindow *anw; /* set for surfaces created from native code; Java path is NULL */
 } SaSurf;
+
+static SaSurf *as_surf(const void *p) {
+    if (!p || ((uintptr_t)p & (sizeof(void *) - 1)) != 0) return NULL;
+    const SaSurf *s = p;
+    return s->magic == SA_SURF_MAGIC ? (SaSurf *)s : NULL;
+}
 
 static _Thread_local SaSurf *tl_draw, *tl_read;
 static pthread_mutex_t g_load_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -353,6 +372,7 @@ NATIVE(EGLNative_nCreateSurface) {
         return;
     }
     SaSurf *s = sa_calloc(1, sizeof *s);
+    s->magic = SA_SURF_MAGIC;
     s->real = real;
     s->dpy = dpy;
     s->cfg = cfg;
@@ -371,6 +391,10 @@ NATIVE(EGLNative_nDestroySurface) {
         return;
     }
     bool ok = sa_egl.eglDestroySurface(P(A_LONG(0)), s->real);
+    if (s->anw) {
+        anw_release(s->anw);
+        s->anw = NULL;
+    }
     if (tl_draw == s) tl_draw = NULL;
     if (tl_read == s) tl_read = NULL;
     /* EGL defers destruction of a current surface; the record is small, so a current one is leaked */
@@ -474,28 +498,15 @@ NATIVE(EGLNative_nSwapBuffers) {
 
 static inline uint32_t unpremul(uint32_t a, uint32_t c) { return a ? (c * 255 + a / 2) / a : 0; }
 
-/*
- * nReadWindow(long surf, int[] dst, boolean opaque): reads the current frame of a window surface (which must be
- * the current draw surface) into dst as unpremultiplied ARGB rows, top row first.
- */
-NATIVE(EGLNative_nReadWindow) {
-    UNUSED_ARGS();
-    SaSurf *s = P(A_LONG(0));
-    ArrayObject *dst = A_ARR(2);
-    bool opaque = A_BOOL(3);
-    if (!s || !dst || !sa_gl.glReadPixels || tl_draw != s || dst->length < s->w * s->h) {
-        R_BOOL(false);
-        return;
-    }
+/* Reads the current draw surface into out as unpremultiplied ARGB, top row first. Caller holds the GIL. */
+static bool read_surf_argb(VMThread *t, SaSurf *s, uint32_t *out, bool opaque) {
+    if (!s || !out || !sa_gl.glReadPixels || tl_draw != s || s->w < 1 || s->h < 1) return false;
     int w = s->w, h = s->h;
-    uint32_t *out = ARRAY_DATA(dst, uint32_t);
     uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
-    if (!rgba) {
-        R_BOOL(false);
-        return;
-    }
+    if (!rgba) return false;
     int32_t version = 1;
-    sa_egl.eglQueryContext(s->dpy, sa_egl.eglGetCurrentContext(), EGL_CONTEXT_CLIENT_VERSION, &version);
+    if (sa_egl.eglQueryContext && sa_egl.eglGetCurrentContext)
+        sa_egl.eglQueryContext(s->dpy, sa_egl.eglGetCurrentContext(), EGL_CONTEXT_CLIENT_VERSION, &version);
     vm_gil_release(t);
     int32_t fbo = 0, pack = 4, pbo = 0;
     if (version >= 2 && sa_gl.glBindFramebuffer) {
@@ -527,12 +538,28 @@ NATIVE(EGLNative_nReadWindow) {
                 if (g > 255) g = 255;
                 if (b > 255) b = 255;
             }
-            row[x] = a << 24 | r << 16 | g << 8 | b;
+            row[x] = (a << 24) | (r << 16) | (g << 8) | b;
         }
     }
     vm_gil_acquire(t);
     free(rgba);
-    R_BOOL(true);
+    return true;
+}
+
+/*
+ * nReadWindow(long surf, int[] dst, boolean opaque): reads the current frame of a window surface (which must be
+ * the current draw surface) into dst as unpremultiplied ARGB rows, top row first.
+ */
+NATIVE(EGLNative_nReadWindow) {
+    UNUSED_ARGS();
+    SaSurf *s = P(A_LONG(0));
+    ArrayObject *dst = A_ARR(2);
+    bool opaque = A_BOOL(3);
+    if (!s || !dst || dst->length < s->w * s->h) {
+        R_BOOL(false);
+        return;
+    }
+    R_BOOL(read_surf_argb(t, s, ARRAY_DATA(dst, uint32_t), opaque));
 }
 
 NATIVE(EGLNative_nBindAPI) {
@@ -673,6 +700,247 @@ NATIVE(GLUtils_nUpload) {
     sa_gl.glPixelStorei(GL_UNPACK_ALIGNMENT, align);
     free(buf);
     R_INT(0);
+}
+
+/* ---- native EGL (NDK eglCreateWindowSurface takes an ANativeWindow) ----------------------------------------- */
+
+static _Thread_local int32_t tl_egl_error;
+
+static void set_egl_error(int32_t err) { tl_egl_error = err; }
+
+static int32_t wrap_eglGetError(void) {
+    int32_t err = tl_egl_error;
+    tl_egl_error = 0;
+    if (err) {
+        if (sa_egl.eglGetError) sa_egl.eglGetError();
+        return err;
+    }
+    return sa_egl.eglGetError ? sa_egl.eglGetError() : EGL_NOT_INITIALIZED;
+}
+
+static void *wrap_eglGetDisplay(void *native_display) {
+    SA_UNUSED(native_display);
+    SaEGLDisplay d = NULL;
+#ifndef __SWITCH__
+    if (sa_egl.eglGetPlatformDisplayEXT) d = sa_egl.eglGetPlatformDisplayEXT(EGL_PLATFORM_SURFACELESS_MESA, NULL, NULL);
+#endif
+    if (!d && sa_egl.eglGetDisplay) d = sa_egl.eglGetDisplay(NULL);
+    return d;
+}
+
+static uint32_t wrap_eglInitialize(void *dpy, int32_t *major, int32_t *minor) {
+    return sa_egl.eglInitialize ? sa_egl.eglInitialize(dpy, major, minor) : 0;
+}
+
+static uint32_t wrap_eglTerminate(void *dpy) { return sa_egl.eglTerminate ? sa_egl.eglTerminate(dpy) : 0; }
+
+static const char *wrap_eglQueryString(void *dpy, int32_t name) {
+    return sa_egl.eglQueryString ? sa_egl.eglQueryString(dpy, name) : NULL;
+}
+
+static uint32_t wrap_eglBindAPI(uint32_t api) { return sa_egl.eglBindAPI ? sa_egl.eglBindAPI(api) : 0; }
+
+static uint32_t wrap_eglSwapInterval(void *dpy, int32_t interval) {
+    return sa_egl.eglSwapInterval ? sa_egl.eglSwapInterval(dpy, interval) : 0;
+}
+
+/* Copies an attribute list, asking for pbuffers instead of windows and dropping Android-only attributes. */
+static int32_t *native_config_attribs(const int32_t *src) {
+    int n = 0;
+    if (src)
+        while (src[n] != EGL_NONE && n < 128) n++;
+    int32_t *out = sa_malloc(sizeof(int32_t) * (size_t)(n + 4));
+    int o = 0;
+    bool have_type = false;
+    for (int i = 0; i + 1 < n; i += 2) {
+        int32_t k = src[i], v = src[i + 1];
+        if (k == EGL_RECORDABLE_ANDROID || k == EGL_FRAMEBUFFER_TARGET_ANDROID) continue;
+        if (k == EGL_SURFACE_TYPE) {
+            have_type = true;
+            if (v != -1 && (v & EGL_WINDOW_BIT)) v = (v & ~EGL_WINDOW_BIT) | EGL_PBUFFER_BIT;
+        }
+        out[o++] = k;
+        out[o++] = v;
+    }
+    if (!have_type) {
+        out[o++] = EGL_SURFACE_TYPE;
+        out[o++] = EGL_PBUFFER_BIT;
+    }
+    out[o] = EGL_NONE;
+    return out;
+}
+
+static uint32_t wrap_eglChooseConfig(void *dpy, const int32_t *attribs, void **configs, int32_t size, int32_t *num) {
+    int32_t *rewritten = native_config_attribs(attribs);
+    uint32_t ok = 0;
+    if (sa_egl.eglChooseConfig) ok = sa_egl.eglChooseConfig(dpy, rewritten, (SaEGLConfig *)configs, size, num);
+    free(rewritten);
+    return ok;
+}
+
+static uint32_t wrap_eglGetConfigAttrib(void *dpy, void *config, int32_t attr, int32_t *value) {
+    if (attr == EGL_RECORDABLE_ANDROID || attr == EGL_FRAMEBUFFER_TARGET_ANDROID) {
+        if (value) *value = 1;
+        return 1;
+    }
+    uint32_t ok = sa_egl.eglGetConfigAttrib ? sa_egl.eglGetConfigAttrib(dpy, config, attr, value) : 0;
+    if (ok && attr == EGL_SURFACE_TYPE && value && (*value & EGL_PBUFFER_BIT)) *value |= EGL_WINDOW_BIT;
+    return ok;
+}
+
+static SaSurf *surf_wrap(void *dpy, void *cfg, SaEGLSurface real, bool window, int w, int h, ANativeWindow *win) {
+    if (!real) return NULL;
+    SaSurf *s = sa_calloc(1, sizeof *s);
+    s->magic = SA_SURF_MAGIC;
+    s->real = real;
+    s->dpy = dpy;
+    s->cfg = cfg;
+    s->window = window;
+    int32_t v = 0;
+    s->w = sa_egl.eglQuerySurface && sa_egl.eglQuerySurface(dpy, real, EGL_WIDTH, &v) ? v : w;
+    s->h = sa_egl.eglQuerySurface && sa_egl.eglQuerySurface(dpy, real, EGL_HEIGHT, &v) ? v : h;
+    if (s->w < 1) s->w = 1;
+    if (s->h < 1) s->h = 1;
+    if (win) {
+        s->anw = win;
+        anw_acquire(win);
+    }
+    return s;
+}
+
+static void *wrap_eglCreateWindowSurface(void *dpy, void *config, void *win, const int32_t *attribs) {
+    SA_UNUSED(attribs);
+    if (!anw_is(win)) {
+        set_egl_error(EGL_BAD_NATIVE_WINDOW);
+        return NULL;
+    }
+    int w = anw_width(win);
+    int h = anw_height(win);
+    if (w < 1) w = 1;
+    if (h < 1) h = 1;
+    return surf_wrap(dpy, config, make_pbuffer(dpy, config, w, h), true, w, h, win);
+}
+
+static void *wrap_eglCreatePbufferSurface(void *dpy, void *config, const int32_t *attribs) {
+    int32_t none = EGL_NONE;
+    const int32_t *list = attribs ? attribs : &none;
+    SaEGLSurface real = NULL;
+    if (sa_egl.eglCreatePbufferSurface) real = sa_egl.eglCreatePbufferSurface(dpy, config, list);
+    return surf_wrap(dpy, config, real, false, 1, 1, NULL);
+}
+
+static uint32_t wrap_eglDestroySurface(void *dpy, void *surface) {
+    SaSurf *s = as_surf(surface);
+    if (!s) return sa_egl.eglDestroySurface ? sa_egl.eglDestroySurface(dpy, surface) : 0;
+    if (s->anw) {
+        anw_release(s->anw);
+        s->anw = NULL;
+    }
+    uint32_t ok = sa_egl.eglDestroySurface ? sa_egl.eglDestroySurface(dpy, s->real) : 0;
+    if (tl_draw == s) tl_draw = NULL;
+    if (tl_read == s) tl_read = NULL;
+    free(s);
+    return ok;
+}
+
+static uint32_t wrap_eglQuerySurface(void *dpy, void *surface, int32_t attr, int32_t *value) {
+    SaSurf *s = as_surf(surface);
+    if (s && (attr == EGL_WIDTH || attr == EGL_HEIGHT)) {
+        if (value) *value = attr == EGL_WIDTH ? s->w : s->h;
+        return 1;
+    }
+    void *real = s ? s->real : surface;
+    return sa_egl.eglQuerySurface ? sa_egl.eglQuerySurface(dpy, real, attr, value) : 0;
+}
+
+static void *wrap_eglCreateContext(void *dpy, void *config, void *share, const int32_t *attribs) {
+    if (sa_egl.eglBindAPI) sa_egl.eglBindAPI(EGL_OPENGL_ES_API);
+    return sa_egl.eglCreateContext ? sa_egl.eglCreateContext(dpy, config, share, attribs) : NULL;
+}
+
+static uint32_t wrap_eglDestroyContext(void *dpy, void *ctx) {
+    return sa_egl.eglDestroyContext ? sa_egl.eglDestroyContext(dpy, ctx) : 0;
+}
+
+static uint32_t wrap_eglMakeCurrent(void *dpy, void *draw, void *read, void *ctx) {
+    SaSurf *ds = as_surf(draw);
+    SaSurf *rs = as_surf(read);
+    void *dreal = ds ? ds->real : draw;
+    void *rreal = rs ? rs->real : read;
+    uint32_t ok = sa_egl.eglMakeCurrent ? sa_egl.eglMakeCurrent(dpy, dreal, rreal, ctx) : 0;
+    if (ok) {
+        tl_draw = ds;
+        tl_read = rs;
+    }
+    return ok;
+}
+
+static void *wrap_eglGetCurrentSurface(int32_t which) { return which == EGL_READ ? (void *)tl_read : (void *)tl_draw; }
+
+static uint32_t wrap_eglSwapBuffers(void *dpy, void *surface) {
+    SaSurf *s = as_surf(surface);
+    if (!s) return sa_egl.eglSwapBuffers ? sa_egl.eglSwapBuffers(dpy, surface) : 0;
+    if (!s->anw) return sa_egl.eglSwapBuffers ? sa_egl.eglSwapBuffers(dpy, s->real) : 0;
+    VMThread *t = vm_current_thread();
+    if (!t || !t->has_gil) {
+        LOGE("posting a native window frame requires the VM thread");
+        set_egl_error(EGL_BAD_ACCESS);
+        return 0;
+    }
+    size_t n = (size_t)s->w * (size_t)s->h;
+    uint32_t *argb = malloc(n * 4);
+    if (!argb) {
+        set_egl_error(EGL_BAD_ALLOC);
+        return 0;
+    }
+    bool ok = read_surf_argb(t, s, argb, anw_opaque(s->anw));
+    if (ok) ok = anw_post_argb(s->anw, argb, s->w, s->h);
+    free(argb);
+    if (!ok) {
+        set_egl_error(EGL_BAD_SURFACE);
+        return 0;
+    }
+    return 1;
+}
+
+static void *wrap_eglGetProcAddress(const char *name);
+
+static const struct {
+    const char *name;
+    void *fn;
+} g_egl_wrap[] = {
+    {"eglGetError", wrap_eglGetError},
+    {"eglGetDisplay", wrap_eglGetDisplay},
+    {"eglInitialize", wrap_eglInitialize},
+    {"eglTerminate", wrap_eglTerminate},
+    {"eglQueryString", wrap_eglQueryString},
+    {"eglBindAPI", wrap_eglBindAPI},
+    {"eglSwapInterval", wrap_eglSwapInterval},
+    {"eglChooseConfig", wrap_eglChooseConfig},
+    {"eglGetConfigAttrib", wrap_eglGetConfigAttrib},
+    {"eglCreateWindowSurface", wrap_eglCreateWindowSurface},
+    {"eglCreatePbufferSurface", wrap_eglCreatePbufferSurface},
+    {"eglDestroySurface", wrap_eglDestroySurface},
+    {"eglQuerySurface", wrap_eglQuerySurface},
+    {"eglCreateContext", wrap_eglCreateContext},
+    {"eglDestroyContext", wrap_eglDestroyContext},
+    {"eglMakeCurrent", wrap_eglMakeCurrent},
+    {"eglGetCurrentSurface", wrap_eglGetCurrentSurface},
+    {"eglSwapBuffers", wrap_eglSwapBuffers},
+    {"eglGetProcAddress", wrap_eglGetProcAddress},
+};
+
+void *sa_egl_native_proc(const char *name) {
+    if (!name) return NULL;
+    for (size_t i = 0; i < SA_ARRAY_LEN(g_egl_wrap); i++)
+        if (strcmp(g_egl_wrap[i].name, name) == 0) return g_egl_wrap[i].fn;
+    return NULL;
+}
+
+static void *wrap_eglGetProcAddress(const char *name) {
+    void *ours = sa_egl_native_proc(name);
+    if (ours) return ours;
+    return sa_egl.eglGetProcAddress ? sa_egl.eglGetProcAddress(name) : NULL;
 }
 
 static const NativeMethodReg g_regs[] = {

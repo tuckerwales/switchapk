@@ -9,4 +9,5 @@ void natives_android_register(void) {
     android_graphics_register();
     android_os_register();
     android_opengl_register();
+    native_activity_register();
 }

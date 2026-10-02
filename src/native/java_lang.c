@@ -220,6 +220,9 @@ NATIVE(Class_getModifiers) {
         AnnCtx ctx = {"Ldalvik/annotation/InnerClass;", NULL, t, false, -1};
         dex_class_annotations(c->dex, &cd, inner_class_ann, &ctx);
         if (ctx.found && ctx.flags != -1) flags = ctx.flags & 0xffff;
+        /* class_def keeps ACC_ANNOTATION / ACC_ENUM / ACC_INTERFACE even when
+         * the InnerClass access flags drop them. */
+        flags |= (int32_t)(c->access & (ACC_ANNOTATION | ACC_ENUM | ACC_INTERFACE));
     }
     R_INT(flags);
 }

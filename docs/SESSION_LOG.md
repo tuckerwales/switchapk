@@ -428,4 +428,12 @@ what is left in flight.
   and shadows are not drawn. tests/apps/outline has 3 logic checks: a
   48dp corner is the page color, and the inside of the arc stays the
   child's yellow.
-- In flight: WS1 ViewDebug annotations, DisplayCutout, WS5 animation.
+- WS1 ViewDebug annotations. `android.view.ViewDebug` carries
+  ExportedProperty, CapturedViewProperty, IntToString and FlagToString.
+  The VM now returns RUNTIME annotations from `Class`, `Field` and
+  `Method` `getAnnotation`, including defaults, nested annotations,
+  arrays, enums and class literals. `dumpCapturedView` logs captured
+  fields and no-arg methods. Hierarchy tracing stays a no-op.
+  tests/apps/viewdbg has 11 logic checks, and VmTest covers the
+  reflection against the reference JVM.
+- In flight: WS1 DisplayCutout, WS5 animation.

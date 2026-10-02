@@ -120,6 +120,14 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
   signature in our framework silently turns a real call into a no-op.
   Missing classes are NOT stubbed (they throw NoClassDefFoundError).
   Grep app logs for `STUB:` to find coverage gaps.
+- Runtime annotations: `Class`, `Field`, and `Method` `getAnnotation`
+  read `VISIBILITY_RUNTIME` annotations from the dex, including nested
+  annotations, arrays, enums, class literals, and `AnnotationDefault`
+  for omitted elements. d8 stores that default as one class annotation
+  whose value lists every member; a per-method `AnnotationDefault` is
+  also accepted. CLASS and SOURCE retention are not returned.
+  Parameter annotations are not. `@Inherited` on a class annotation is
+  visible through `getAnnotation` on subclasses.
 
 ### 4.3 Interpreter
 - Non-recursive switch interpreter over a per-thread register stack
@@ -434,6 +442,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   the editor that called showSoftInput, via InputConnection.commitText.
 
 ### 6.4.1 View system notes for widget authors
+- `ViewDebug` is the public annotation set (`ExportedProperty`,
+  `CapturedViewProperty`, `IntToString`, `FlagToString`) plus
+  `dumpCapturedView`, which logs fields and no-arg methods marked
+  `@CapturedViewProperty`. Hierarchy and recycler tracing are no-ops.
+  Hardware capture and the view server are not implemented.
 - `View.setClipToOutline(true)` clips the view, its background, and its
   children to the outline from `getOutlineProvider()`. Only a round rect
   clips (`Outline.canClip()` is false for a path). The rect is in view

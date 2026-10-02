@@ -130,7 +130,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     (tests/apps/select)
   - [x] clipToOutline: a round-rect outline clips the view and its
     children (tests/apps/outline). Path outlines do not clip
-  - [ ] ViewDebug annotations, DisplayCutout
+  - [x] ViewDebug annotations: runtime reflection of class, field and
+    method annotations (defaults, nested annotations, arrays, enums,
+    class literals) and ViewDebug.dumpCapturedView (tests/dex/VmTest,
+    tests/apps/viewdbg)
+  - [ ] DisplayCutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
   - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
@@ -264,11 +268,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    RemoteViews (inflate, actions and reapply; notification content
    views stay unsupported). Text selection opens the floating toolbar
    (tests/apps/select).
-   Next: the rest of WS1 (ViewDebug annotations, DisplayCutout).
+   Next: the rest of WS1 (DisplayCutout).
    WS5 (animation) can start in parallel.
-2. Finish WS1: ViewDebug annotations and DisplayCutout. The floating
-   toolbar (tests/apps/floating), text selection (tests/apps/select),
-   and clipToOutline (tests/apps/outline) have landed.
+2. Finish WS1: DisplayCutout. ViewDebug annotations have landed
+   (tests/apps/viewdbg). The floating toolbar (tests/apps/floating),
+   text selection (tests/apps/select), and clipToOutline
+   (tests/apps/outline) have landed.
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
@@ -463,3 +468,11 @@ and update ARCHITECTURE.md in the same commit.
   Only round rects clip. A path outline (`Outline.canClip()` is false)
   does not. `invalidateOutline()` invalidates the view. Shadows are not
   drawn. ARCHITECTURE 6.4.1 updated.
+- 2026-10-02 (WS1, touches the VM and libcore): `Class`, `Field` and
+  `Method` `getAnnotation` return RUNTIME annotations from the dex,
+  including defaults, nested annotations, arrays, enums and class
+  literals. CLASS and SOURCE retention stay invisible.
+  `ViewDebug.dumpCapturedView` logs `@CapturedViewProperty` fields and
+  no-arg methods. `RemoteViews.onLoadClass` still allows framework View
+  packages by name and does not require `@RemoteView`. ARCHITECTURE 4.2
+  and 6.4.1 updated.

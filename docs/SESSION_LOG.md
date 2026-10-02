@@ -415,5 +415,13 @@ what is left in flight.
   floating mode before a primary one. Text selection does not open one
   yet. tests/apps/floating has 9 logic checks: Copy and Share sit above
   a yellow selection, and tapping Copy finishes the mode.
-- In flight: WS1 text selection on the floating toolbar, clipToOutline,
-  ViewDebug annotations, DisplayCutout, WS5 animation.
+- WS1 text selection toolbar. A long press on selectable or editable
+  text selects the word and opens the floating action mode on the
+  selection bounds. Cut, Copy, Paste, and Select all use
+  onTextContextMenuItem. Copy, cut, and paste finish the mode; Select
+  all updates the rect. Context.CLIPBOARD_SERVICE is a process-wide
+  ClipboardManager. tests/apps/select has 7 logic checks: "beta" is
+  highlighted, Copy is the first toolbar item, and tapping it clears
+  the selection.
+- In flight: WS1 clipToOutline, ViewDebug annotations, DisplayCutout,
+  WS5 animation.

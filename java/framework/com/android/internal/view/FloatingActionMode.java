@@ -15,7 +15,7 @@ import java.lang.ref.WeakReference;
 /**
  * framework-internal. Port of AOSP FloatingActionMode: a {@link ActionMode#TYPE_FLOATING}
  * shown in a {@link FloatingToolbar} next to the content rect from
- * {@link Callback2#onGetContentRect}. Text selection does not open one yet.
+ * {@link Callback2#onGetContentRect}. TextView opens one for a text selection.
  */
 public class FloatingActionMode extends ActionMode implements MenuBuilder.Callback {
     private final Context mContext;

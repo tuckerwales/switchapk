@@ -393,8 +393,15 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   creates a FloatingActionMode: a popup row of the menu items above the
   content rect from Callback2.onGetContentRect, or below it when the row
   does not fit. hide dismisses the popup without finishing the mode.
-  Text selection does not open one yet. BACK finishes a floating mode
-  before a primary one.
+  A long press on selectable or editable text selects the word under
+  the finger and starts that floating mode. The menu is Cut, Copy,
+  Paste, and Select all. Copy, cut, and paste finish the mode; Select
+  all updates the content rect. Destroying the mode clears a
+  non-editable selection and collapses an editable one to a cursor.
+  Context.CLIPBOARD_SERVICE is one process-wide ClipboardManager, which
+  is what those items read and write. An anchored long press calls
+  performLongClick() with the point stored, so a no-arg override sees
+  it. BACK finishes a floating mode before a primary one.
 - Default theme: a context whose component and application set no theme
   uses `Resources.selectDefaultTheme(0, targetSdk)` (DeviceDefault Light
   DarkActionBar for targetSdk 24+), as AOSP ContextImpl and

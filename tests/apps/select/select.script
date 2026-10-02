@@ -1,0 +1,10 @@
+idle 800
+down 302 235
+wait 700
+up 302 235
+idle 500
+screenshot select_bar.png
+tap 313 156
+idle 500
+screenshot select_done.png
+quit

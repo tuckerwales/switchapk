@@ -1,6 +1,7 @@
 package android.app;
 
 import android.content.BroadcastReceiver;
+import android.content.ClipboardManager;
 import android.content.ComponentCallbacks;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -358,9 +359,14 @@ public class ContextImpl extends Context {
             return mSearchManager;
         }
         if (AUDIO_SERVICE.equals(name)) return AudioManager.getInstance();
+        if (CLIPBOARD_SERVICE.equals(name)) {
+            if (sClipboard == null) sClipboard = new ClipboardManager();
+            return sClipboard;
+        }
         return null;
     }
 
+    private static ClipboardManager sClipboard;
     private android.view.LayoutInflater mLayoutInflater;
     private SearchManager mSearchManager;
 
@@ -376,6 +382,7 @@ public class ContextImpl extends Context {
         if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;
         if (serviceClass == SearchManager.class) return SEARCH_SERVICE;
         if (serviceClass == AudioManager.class) return AUDIO_SERVICE;
+        if (serviceClass == ClipboardManager.class) return CLIPBOARD_SERVICE;
         return null;
     }
 

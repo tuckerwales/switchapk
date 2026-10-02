@@ -4104,11 +4104,23 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         return false;
     }
 
-    public boolean performLongClick() { return performLongClickInternal(-1f, -1f); }
+    // The touch path calls the anchored overload. Keep the point so a subclass
+    // override of the no-arg method (TextView selection) still sees it.
+    private float mLongClickX = Float.NaN;
+    private float mLongClickY = Float.NaN;
+
+    public boolean performLongClick() { return performLongClickInternal(mLongClickX, mLongClickY); }
 
     public boolean performLongClick(float x, float y) {
         if (Float.isNaN(x) || Float.isNaN(y)) return performLongClick();
-        return performLongClickInternal(x, y);
+        float oldX = mLongClickX;
+        float oldY = mLongClickY;
+        mLongClickX = x;
+        mLongClickY = y;
+        boolean handled = performLongClick();
+        mLongClickX = oldX;
+        mLongClickY = oldY;
+        return handled;
     }
 
     private boolean performLongClickInternal(float x, float y) {

@@ -125,8 +125,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] action mode presentation: primary modes in the action bar's
     context bar (WindowDecorActionBar) or standalone in the decor's
     action_mode_bar stub; floating toolbar (TYPE_FLOATING) shows the menu
-    above the content rect (tests/apps/floating). Text selection does not
-    open it yet
+    above the content rect (tests/apps/floating). A long press on
+    selectable text selects a word and opens that toolbar
+    (tests/apps/select)
   - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
@@ -259,11 +260,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    SearchView, TabHost, the CursorTreeAdapter family, VideoView
    (transport controls and the error dialog; decoding is WS7) and
    RemoteViews (inflate, actions and reapply; notification content
-   views stay unsupported).
-   Next: WS1 text selection, which should open the floating toolbar.
-   WS5 (animation) can start in parallel.
-2. Finish WS1: floating action modes. The toolbar is in
-   (tests/apps/floating); text selection does not open it yet.
+   views stay unsupported). Text selection opens the floating toolbar
+   (tests/apps/select).
+   Next: the rest of WS1 (clipToOutline, ViewDebug annotations,
+   DisplayCutout). WS5 (animation) can start in parallel.
+2. Finish WS1: clipToOutline, ViewDebug annotations, DisplayCutout.
+   The floating toolbar (tests/apps/floating) and text selection
+   (tests/apps/select) have landed.
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
@@ -445,3 +448,11 @@ and update ARCHITECTURE.md in the same commit.
   the content rect from `Callback2.onGetContentRect` (below it when the
   row does not fit). `hide` dismisses the popup without finishing the
   mode. Text selection does not open one yet. ARCHITECTURE 6.4 updated.
+- 2026-10-02 (WS1): A long press on selectable or editable text selects
+  the word and starts a TYPE_FLOATING action mode on the selection
+  bounds. Copy, cut, and paste call onTextContextMenuItem and finish
+  the mode. Select all keeps it and updates the rect.
+  Context.CLIPBOARD_SERVICE returns one process-wide ClipboardManager.
+  View.performLongClick(float, float) stores the point and calls
+  performLongClick(), so a no-arg override sees an anchored press.
+  ARCHITECTURE 6.4 updated.

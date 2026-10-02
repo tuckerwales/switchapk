@@ -1,6 +1,8 @@
 #!/bin/sh
 # Builds an unsigned APK from an app directory.
-# The directory holds AndroidManifest.xml, java/ sources, and an optional res/ tree.
+# The directory holds AndroidManifest.xml, java/ sources, and optional res/ and assets/ trees.
+# An optional native/build.sh is run with an output directory; the libraries it writes
+# (lib/<abi>/*.so under that directory) are packaged into the APK.
 #   tools/build_apk.sh tests/apps/hello [build/apps/hello/hello.apk]
 set -e
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -31,10 +33,19 @@ if [ -d "$APP/res" ] && [ -n "$(find "$APP/res" -type f | head -1)" ]; then
     "$AAPT2" compile --dir "$APP/res" -o "$BUILD/res.zip"
     RES_ARG=$BUILD/res.zip
 fi
+ASSETS_ARG=
+if [ -d "$APP/assets" ]; then
+    ASSETS_ARG="-A $APP/assets"
+fi
 # shellcheck disable=SC2086
 "$AAPT2" link -I "$SDK/android.jar" --manifest "$APP/AndroidManifest.xml" \
     -o "$BUILD/base.apk" --java "$BUILD/gen" --auto-add-overlay \
-    --min-sdk-version 24 --target-sdk-version 29 $RES_ARG
+    --min-sdk-version 24 --target-sdk-version 29 $RES_ARG $ASSETS_ARG
+rm -rf "$BUILD/native"
+if [ -x "$APP/native/build.sh" ]; then
+    mkdir -p "$BUILD/native"
+    "$APP/native/build.sh" "$BUILD/native"
+fi
 
 find "$APP/java" "$BUILD/gen" -name '*.java' > "$BUILD/sources.list"
 javac -source 8 -target 8 -encoding UTF-8 -nowarn -Xlint:-options \
@@ -44,4 +55,7 @@ java -cp "$R8" com.android.tools.r8.D8 --lib "$SDK/android.jar" --min-api 24 \
     --output "$BUILD" @"$BUILD/classes.list"
 cp "$BUILD/base.apk" "$OUT"
 (cd "$BUILD" && zip -q -j "$OUT" classes.dex)
+if [ -d "$BUILD/native/lib" ]; then
+    (cd "$BUILD/native" && zip -q -r "$OUT" lib)
+fi
 echo "wrote $OUT"

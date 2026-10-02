@@ -791,6 +791,9 @@ public final class ActivityThread {
         sAppInfo.publicSourceDir = sApkPath;
         sAppInfo.dataDir = "/data/data/" + sPackageName;
         sAppInfo.deviceProtectedDataDir = sAppInfo.dataDir;
+        // Android's layout; the native loader serves lib<name>.so under it from the APK's lib/<abi>/
+        sAppInfo.nativeLibraryDir = "/data/app/" + sPackageName + "/lib/"
+                + ("x86_64".equals(android.os.Build.CPU_ABI) ? "x86_64" : "arm64");
         sAppInfo.uid = Process.myUid();
         sAppInfo.enabled = true;
         sAppInfo.flags |= ApplicationInfo.FLAG_HAS_CODE;

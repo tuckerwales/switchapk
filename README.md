@@ -32,11 +32,16 @@ Early and experimental. It has not yet been confirmed on real hardware.
 - Several activities, dialogs, options and context menus, fragments
 - Services, broadcasts, alarms, notifications, JobScheduler
 - Touch and controller navigation (focus moves with the D-pad)
+- View tween and property animations
+- OpenGL ES 1.x to 3.2 through GLSurfaceView (on the host with Mesa)
+- NDK JNI libraries (`lib/<abi>/*.so`) on Linux hosts
 
 **Not yet:**
 
 - Sound
-- OpenGL ES and NDK (native `.so`) code, so most games do not run
+- OpenGL ES and native `.so` code on the Switch itself (GL is built in
+  but untested on hardware; native code needs code memory support), and
+  NativeActivity games, so most games do not run on device yet
 - AndroidX/AppCompat apps are not targeted yet
 - Networking and SQLite
 

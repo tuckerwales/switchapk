@@ -26,7 +26,7 @@ application (NRO). There is no Android OS underneath. Instead we provide:
 +------------------------------+--------------------------------------------+
 | android.* framework (java/framework)  | NDK shim: libc/libm/libdl/liblog/  |
 | java.* libcore       (java/libcore)   | libandroid/libEGL/libGLESv2/       |
-|                                       | OpenSLES  (src/nativeloader) [todo]|
+|                                       | OpenSLES  (src/nativeloader)       |
 +---------------------------------------+-----------------------------------+
 | Dalvik VM (src/vm): interpreter, class linker, GC, threads/GIL, JNI       |
 +---------------------------------------------------------------------------+
@@ -34,7 +34,7 @@ application (NRO). There is no Android OS underneath. Instead we provide:
 | 2D renderer: src/gfx       resource/zip/dex parsing: src/core             |
 +---------------------------------------------------------------------------+
 | platform: src/platform/platform.h                                         |
-|   platform_headless.c (host tests)  |  platform_switch.c (libnx) [todo]   |
+|   platform_headless.c (host tests)  |  platform_switch.c (libnx)          |
 +---------------------------------------------------------------------------+
 ```
 
@@ -57,18 +57,24 @@ src/native/      natives for java.* (java_lang.c, java_io.c incl. Android
                  (argument/return macros), natives.c (registers all tables),
                  android_stub.c (placeholder, replaced by src/android)
 src/android/     natives for android.*: android.h (shared helpers),
-                 android_res.c, android_graphics.c, [todo] android_os.c,
-                 android_media.c, android_opengl.c, android_sqlite.c
+                 android_res.c, android_graphics.c, android_os.c,
+                 android_gl.c + android_gl.h (EGL, GLUtils, GL loader),
+                 android_gles_gen.c + gles_funcs.h (generated GLES
+                 bindings), android_gles_special.c, [todo]
+                 android_media.c, android_sqlite.c
 src/gfx/         gfx.h, raster.c (AA rasterizer/compositor), font.c
                  (stb_truetype text), image.c (stb_image decode, PNG encode)
-src/platform/    platform.h, platform_headless.c, [todo] platform_switch.c
-src/nativeloader/ loader_stub.c (placeholder), [todo] ELF loader + bionic shim
-src/app/         main_host.c (host driver), app_stub.c (placeholder for the
-                 APK runner), [todo] app_runner.c, main_switch.c
+src/platform/    platform.h, platform_headless.c, platform_switch.c
+src/nativeloader/ nativeloader.h, elf_loader.c (ELF loader, dl*), shim_libc.c
+                 (libc/libm), shim_android.c (liblog, libdl, assets,
+                 properties, zlib, GL lookup)
+src/app/         main_host.c (host driver), app_runner.c (APK runner),
+                 main_switch.c (Switch launcher), apk_info.c (labels/icons)
 java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
 java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
 tools/           build_java.sh, fetch_toolchains.py, make_framework_res.py,
+                 gen_gles.py (GLES bindings generator),
                  genr/GenR.java (android.R generator), dexdump.py,
                  build_apk.sh (test APKs), api_check.py (API diff vs android.jar)
 tests/           run_dex_test.sh + tests/dex (VM conformance vs OpenJDK),
@@ -84,7 +90,7 @@ docs/            this documentation
 | `build/host/switchapk-host` | `make` | host driver, headless platform |
 | `build/java/framework.dex` | `tools/build_java.sh` (via `make`) | libcore + framework in one dex |
 | `build/toolchains/framework-res.apk` | `tools/fetch_toolchains.py sdk` | framework resources from SDK android.jar |
-| `switchapk.nro` | `make -f Makefile.switch` [todo] | NRO with romfs: framework.dex, framework-res.apk, fonts |
+| `switchapk.nro` | `make -f Makefile.switch` | NRO with romfs: framework.dex, framework-res.apk, fonts |
 
 The Java side is compiled with `javac -source 8 -target 8` against our own
 libcore as bootclasspath (never against the JDK), then dexed with d8
@@ -208,7 +214,7 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
   x86-64 SysV).
 - Contract with the native loader (src/nativeloader):
   - `const char *nativeloader_load_library(VMThread *t, const char *name, bool is_libname)`:
-    load from the APK's `lib/arm64-v8a/` (or an absolute path), run
+    load from the APK's `lib/<abi>/` (or an absolute path; 6.7), run
     constructors and `JNI_OnLoad`; return NULL or an error message.
   - `void *nativeloader_find_symbol(const char *name)`: search all loaded
     libraries.
@@ -567,7 +573,8 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   its own draw pass (scaled when `setFixedSize` was used) and runs the
   `SurfaceHolder.Callback`s on the UI thread when it is attached, visible
   and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
-  backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
+  backs `TextureView` and `new Surface(surfaceTexture)`. EGL window
+  surfaces post into the same queue (6.6.1).
 - `View.animate()` returns a `ViewPropertyAnimator`. `ValueAnimator` and
   `ObjectAnimator` advance on Choreographer frames and set view
   properties (translation, scale, rotation, alpha, x/y/z). A translation
@@ -783,35 +790,124 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (mpg123 on Switch portlibs). Switch output via audren or audout. Until
   that lands, the Java MediaPlayer and AudioManager are the placeholders
   in 6.4.1 and produce no samples.
-- OpenGL ES 2/3: GLES20/GLES30 Java bindings generated from the Khronos
-  headers into natives that call the real GLES (mesa/nouveau on Switch via
-  portlibs). EGL14 and `javax.microedition.khronos.egl` map to real EGL
-  with the NWindow from libnx. While a GL surface is active the platform
-  presents through EGL instead of the software framebuffer; views drawn on
-  top of a GLSurfaceView are composited by uploading the software layer as
-  a texture (or unsupported in the first version).
+- OpenGL ES (WS8, built): see 6.6.1.
 
-### 6.7 Native libraries (design)
-- ELF64 loader for `lib/arm64-v8a/*.so` from the APK: map segments,
-  apply relocations (AArch64: RELATIVE, GLOB_DAT, JUMP_SLOT, ABS64,
-  TLSDESC; x86-64 equivalents for host tests), resolve imports against
-  (1) other loaded app libraries, (2) our shim libraries, run
-  `.init_array`, then `JNI_OnLoad`.
-- Shim ("bionic on newlib"): exported symbol tables for libc, libm, libdl,
-  liblog, libandroid (ANativeWindow, AAssetManager, ALooper, AInputQueue,
-  AConfiguration, ANativeActivity), libEGL, libGLESv2, libOpenSLES,
-  libaaudio, libz. Most libc symbols forward to newlib/libnx; bionic
-  struct layouts that differ (FILE, pthread types, stat, dirent, sigaction)
-  need translation wrappers.
-- TLS: bionic keeps the stack protector guard at `tpidr_el0 + 40` and uses
-  fixed TLS slots; the loader must provide a compatible TLS block per
-  thread.
-- Switch executable memory: map code with `svcMapProcessCodeMemory` +
-  `svcSetProcessMemoryPermission` (needs the process handle; works on
-  homebrew with JIT-capable environments, e.g. when launched as an
-  application rather than an applet). Host builds use mmap/mprotect.
-- NativeActivity: implement `ANativeActivity_onCreate` callbacks and the
-  input queue/window lifecycle expected by `android_native_app_glue`.
+### 6.6.1 OpenGL ES and EGL
+
+- Bindings: `tools/gen_gles.py` reads the exact Java signatures of
+  `android.opengl.GLES10/10Ext/11/11Ext/20/30/31/31Ext/32` from android.jar
+  (javap) and the C prototypes from the Khronos headers, pairs each method
+  with its C function (array + offset, java.nio buffer at its position,
+  String, int/long offset into a bound buffer) and writes the Java classes,
+  `src/android/android_gles_gen.c` and `src/android/gles_funcs.h`
+  (X-macro of every entry point). It also writes the
+  `javax.microedition.khronos.opengles` GL10/GL11 interfaces and
+  `com.google.android.gles_jni.GLImpl`, which forwards to the GLES10/11
+  statics. Methods that do not pair (sized string outputs, String[]
+  inputs, mapped buffers) are hand-written in `android_gles_special.c`;
+  the generator reads its registration table and emits a logging fallback
+  for the rest (the KHR debug callbacks and message logs). Regenerate after
+  changing the generator; never edit the outputs.
+- Entry points: every GL ES and EGL function is called through the `sa_gl`
+  / `sa_egl` pointer tables (`android_gl.h`). The host dlopens libEGL,
+  libGLESv2 and libGLESv1_CM the first time an EGL display is requested,
+  so the binary does not link GL and a machine without it reports
+  EGL_NO_DISPLAY. The Switch links Mesa statically when the switch-mesa
+  portlib is installed (`SA_HAVE_EGL`, set by Makefile.switch); otherwise
+  GL reports itself unavailable. A GL call with no resolved entry point
+  logs once and returns 0. glFinish, glReadPixels and glClientWaitSync
+  release the GIL; other GL calls hold it.
+- EGL: `EGL14` and the EGL10 implementation (`com.google.android.gles_jni.EGLImpl`,
+  returned by `EGLContext.getEGL()`) are Java over the framework-internal
+  `android.opengl.EGLNative`. Display, config and context handles are the
+  real EGL handles as longs; a surface handle is a pointer to a C `SaSurf`
+  record (real surface, size, window flag), so window surfaces can be
+  replaced under the app. Configs are chosen as pbuffer configs
+  (EGL_WINDOW_BIT is rewritten to EGL_PBUFFER_BIT, and reported back on
+  query); EGL_RECORDABLE_ANDROID and EGL_FRAMEBUFFER_TARGET_ANDROID are
+  dropped. The host uses the surfaceless Mesa platform.
+- Window surfaces: `eglCreateWindowSurface` accepts a Surface,
+  SurfaceView, SurfaceHolder or SurfaceTexture (as AOSP) and creates a
+  pbuffer the size of the Surface's software buffer queue. On
+  `eglSwapBuffers` the frame is read back (`EGLNative.nReadWindow`: default
+  framebuffer, any bound FBO or pixel pack buffer restored, rows flipped,
+  RGBA to unpremultiplied ARGB, alpha forced for opaque queues) into the
+  queue's back buffer through `Surface.lockGlBuffer` /
+  `unlockGlBufferAndPost`, which posts and paces it like
+  `unlockCanvasAndPost`. When the queue size changed, the pbuffer is
+  replaced after the swap (kept current). SurfaceView and TextureView
+  therefore show GL frames with no special casing, and views over a
+  GLSurfaceView composite normally. A direct NWindow path for fullscreen
+  GL on the Switch is a later optimisation.
+- GLSurfaceView is AOSP's (GLThread state machine, EglHelper, the default
+  config, context and window surface factories). If the GL thread cannot
+  bring EGL up, it logs the exception and the view draws an "OpenGL ES
+  unavailable" panel (#202020) instead of crashing the app.
+- GLUtils uploads Bitmaps (unpremultiplied ARGB in Java, D10) as
+  premultiplied data like Android, converting to RGBA/RGB/ALPHA/LUMINANCE
+  bytes or 565/4444/5551 shorts. `android.opengl.Matrix` and `GLU` are
+  full ports. Not yet: EGL15 syncs and images, eglCreatePbufferFromClientBuffer,
+  pixmaps, ETC1/ETC1Util, GLDebugHelper, SurfaceTexture.updateTexImage
+  (external textures).
+- Java fields read from C: `java.nio.Buffer.position`, `limit` and
+  `elementSizeShift` (by `gles_buffer`), besides `backing` and
+  `byteOffset` (by `vm_buffer_address`, declared in vm.h).
+
+### 6.7 Native libraries
+
+- `System.loadLibrary("foo")` / `System.load(path)` reach
+  `nativeloader_load_library` (src/nativeloader/elf_loader.c). Libraries
+  come from the APK's `lib/<abi>/` (`x86_64` on the host, `arm64-v8a` on
+  AArch64 and the Switch; `SA_NATIVE_ABI`). Absolute paths are read from
+  the file system when they exist, else by file name from the APK, so
+  `ApplicationInfo.nativeLibraryDir` (`/data/app/<pkg>/lib/<x86_64|arm64>`)
+  paths work. `os.arch` (and so `Build.CPU_ABI`) reports the real CPU.
+  A library already loaded is not loaded again and its JNI_OnLoad does
+  not rerun; a missing one gives Android's message
+  (`dlopen failed: library "libx.so" not found`) as UnsatisfiedLinkError.
+- Loading: PT_LOAD segments are copied into an anonymous mapping,
+  DT_NEEDED libraries load first (shim names are skipped), relocations
+  are applied (RELR / DT_ANDROID_RELR, Android packed APS2
+  (DT_ANDROID_RELA), RELA, JMPREL; AArch64 ABS64, GLOB_DAT, JUMP_SLOT,
+  RELATIVE, IRELATIVE and their x86-64 equivalents), segments get their
+  final protections (RELRO read-only), then DT_INIT and DT_INIT_ARRAY run,
+  then JNI_OnLoad (with a JNI frame) whose version is checked like ART.
+  Constructors and JNI_OnLoad run with the GIL released, like JNI calls.
+  ELF TLS is not supported (TLS relocations fail the load); NDK code for
+  minSdk < 29 uses emulated TLS, which needs nothing from us.
+- Symbol resolution follows Android's linker: the shim first (standing in
+  for the global group: libc, libm, libdl, liblog, libandroid, libz, GL),
+  then the library's local group breadth-first (itself, then its
+  DT_NEEDED tree). Weak undefined imports become 0. An import nothing
+  provides is bound to a generated stub (x86-64 or AArch64 code in a
+  per-library page) that logs `native code called X, which no library
+  provides` once and returns 0; the load succeeds with a warning listing
+  the unresolved names. This trades Android's load failure for partial
+  coverage, like framework auto-stubbing.
+- `nativeloader_find_symbol` (JNI binding) searches every loaded library.
+  libdl's dlopen/dlsym/dladdr go through the same loader; dlopen of a
+  system library name returns a handle whose dlsym searches the shim.
+- Shim (`shim_libc.c`, `shim_android.c`): bionic names mapped to the host
+  C library where the ABI matches, with wrappers where bionic differs:
+  Android path mapping for open/fopen/stat/opendir/..., bionic sysconf
+  numbering, `__errno`, fortify `_chk` entry points, `__sF`
+  (stdin/stdout/stderr for code built before API 23) and FILE* translation,
+  stack protector, `__cxa_atexit` (native destructors never run), pthread
+  mutexes and condition variables (bionic's 40/48-byte objects hold a
+  pointer to a lazily created host object, so zeroed static initializers
+  and the recursive initializer work), bionic pthread_attr_t, liblog
+  (to sa_log), AAssetManager (reads `assets/` from the APK; no file
+  descriptors), `__system_property_get` (SDK 29 values), zlib, and GL/EGL
+  names resolved from the driver (`sa_gl_proc`, 6.6.1). Struct layouts
+  (stat, dirent, tm, timespec) match bionic on 64-bit Linux hosts; the
+  Switch needs translation wrappers for newlib's.
+- Code memory: mmap/mprotect on the host. On the Switch loading fails with
+  a message until `svcMapProcessCodeMemory` + `svcSetProcessMemoryPermission`
+  are wired in (application launches, not applets).
+- Not yet: NativeActivity (`ANativeActivity_onCreate`, ALooper,
+  AInputQueue, ANativeWindow and EGL window surfaces from native code),
+  OpenSL ES and AAudio (WS7), AConfiguration, ASensorManager, libc++_shared
+  coverage checks, socket APIs.
 
 ## 7. Platform layer (src/platform/platform.h)
 
@@ -874,8 +970,10 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   ending in `.apk` skips the list (nxlink). When the app ends the NRO
   reloads itself through hbloader (`envSetNextLoad`). A non-zero exit
   shows the last 48 INFO+ log lines (`sa_log_recent`) on an error screen.
+- GL: Mesa (switch-mesa) is linked when installed (6.6.1); not yet run on
+  hardware.
 - Not yet: audio (samples are drained like the headless backend), rumble,
-  native .so loading, 1080p docked rendering.
+  native .so loading (needs code memory, 6.7), 1080p docked rendering.
 
 ## 8. Testing strategy
 

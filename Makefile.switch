@@ -24,6 +24,12 @@ CFLAGS := -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-missing-fie
 ASFLAGS := $(ARCH) -D__SWITCH__
 LDFLAGS := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(BUILD)/switchapk.map
 LIBS := -L$(DEVKITPRO)/portlibs/switch/lib -L$(DEVKITPRO)/libnx/lib -lz -lnx -lm
+# OpenGL ES (WS8) through Mesa (switch-mesa portlib, C++: needs libstdc++) when installed; without it GL
+# reports itself unavailable
+ifneq ($(wildcard $(DEVKITPRO)/portlibs/switch/lib/libEGL.a),)
+CFLAGS += -DSA_HAVE_EGL
+LIBS := -L$(DEVKITPRO)/portlibs/switch/lib -L$(DEVKITPRO)/libnx/lib -lEGL -lglapi -ldrm_nouveau -lstdc++ -lz -lnx -lm
+endif
 
 SRCS := $(filter-out src/app/main_host.c src/platform/platform_headless.c, \
           $(wildcard src/core/*.c src/vm/*.c src/native/*.c src/nativeloader/*.c src/android/*.c src/gfx/*.c \

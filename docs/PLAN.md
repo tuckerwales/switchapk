@@ -50,45 +50,35 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 5, see SESSION_LOG.md)
+## Current state (end of session 9, see SESSION_LOG.md)
 
-Working:
-- VM core, libcore, JNI, reflection, threads; VmTest passes.
-- `src/gfx` renderer, fonts, images, clip masks (visual test in
-  `tests/c/gfx_test.c`).
-- Multi-package resource table; AssetManager and graphics natives (C).
-- Headless platform with scripted input and screenshots.
-- `tools/fetch_toolchains.py` fetches aapt2, android.jar, builds
-  framework-res.apk, fetches SQLite; devkitPro fetch implemented (Docker
-  Hub may rate-limit: retries built in).
-- `java/framework` compiles to `build/java/framework.dex`; resource,
-  graphics and OS natives are registered; `app_runner` opens an APK and
-  enters `ActivityThread.main`.
-- View system core (WS1, most of it): AOSP ports of View, ViewGroup,
-  MotionEvent/KeyEvent/InputDevice/KeyCharacterMap, ViewConfiguration,
-  VelocityTracker, GestureDetector, ScaleGestureDetector, FocusFinder,
-  ViewTreeObserver, LayoutInflater (include, merge, ViewStub, themes),
-  Choreographer, ViewRootImpl (dirty-rect redraw, touch mode, focus
-  navigation, synthetic D-pad), WindowManagerGlobal (window stack,
-  input routing, A/B fallbacks, dim, compositing), PhoneWindow/DecorView
-  (theme window attributes, screen_simple decor), MenuInflater and an
-  internal menu model, Activity as Window.Callback. FrameLayout and
-  LinearLayout are ported (needed by the decor).
-- `tests/apps/hello`, `tests/apps/views` and `tests/apps/surface` pass their screenshot checks
-  (views: XML layouts with weights, include, ViewStub, selector states,
-  tap, D-pad focus, A/B buttons, long press, dim-behind second window).
-- Text engine (WS2): Spanned/Spannable, spans, TextUtils, TextPaint,
-  StaticLayout, BoringLayout, DynamicLayout. TextView measures and draws
-  through Layout (wrapping, gravity, ellipsize, hints, compound
-  drawables, password and single-line transformations). EditText takes
-  hardware keys and scripted `text` through InputConnection.commitText.
-  Html.fromHtml (basic tags), Linkify and DateUtils/DateFormat/Formatter
-  are in place. autoLink runs Linkify when text is set. `tests/apps/text`
-  checks screenshots and in-process logic.
+Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
+- VM core, libcore, JNI, reflection (including RUNTIME annotations),
+  threads; VmTest passes.
+- Renderer, fonts, images; resource tables with the real framework-res.apk.
+- View system (WS1, done): views, input, focus, windows, decor, menus,
+  action modes and the floating toolbar, clipToOutline, ViewDebug,
+  DisplayCutout.
+- Text and IME (WS2, done) and widgets (WS3, done), including lists,
+  pickers, popups, Toolbar, SearchView, TabHost, VideoView controls and
+  RemoteViews.
+- App model (WS4): lifecycle, configuration changes, dialogs, action bar,
+  fragments, services, broadcasts, notifications, JobScheduler.
+- Animation (WS5): view tweens and property animators.
+- OpenGL ES (WS8): GLES 1.x to 3.2 bindings, EGL14/EGL10, GLUtils,
+  Matrix, GLU and GLSurfaceView; GL frames reach the screen through the
+  SurfaceView buffer queue (tests/apps/gles on Mesa llvmpipe).
+- Native libraries (WS9): ELF loader and bionic shim; JNI libraries from
+  the APK load with their dependencies and JNI_OnLoad (tests/apps/ndk on
+  x86-64 and AArch64).
+- Switch (WS10): the NRO boots on hardware; launcher with APK labels and
+  icons; the build links Mesa when switch-mesa is installed. CI packages
+  the NRO and sample APKs (`.github/workflows/package.yml`).
+- 35 sample apps in `tests/apps` pass their screenshot checks.
 
-Not started: most widgets (WS3), the rest of the app model (WS4: action
-bar decor, ProgressDialog), animation (WS5) and the other
-post-WS0 packages.
+Not yet: sound (WS7), GL and native code on the Switch (Mesa linked but
+not run on hardware; native code needs code memory), NativeActivity,
+SQLite natives (WS6), networking (WS11), AndroidX (WS14), sensors (WS15).
 
 ## Checklist
 
@@ -252,10 +242,36 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] layout animation and AnimatedVectorDrawable
 - [ ] WS7 audio/media
 - [ ] WS8 OpenGL ES/EGL
+  - [x] GLES10/11/20/30/31/32 (+Ext) bindings generated from android.jar and
+    the Khronos headers (tools/gen_gles.py), GL10/GL11 interfaces and GLImpl
+  - [x] EGL14, EGL10/EGL11 (javax.microedition), EGLExt constants, GLUtils,
+    Matrix, GLU, GLSurfaceView (AOSP port) with a graceful failure panel
+  - [x] window surfaces as pbuffers read back into the Surface buffer
+    queue on swap (SurfaceView/TextureView consume GL frames);
+    tests/apps/gles (GLES2 textured cube on host Mesa llvmpipe)
+  - [ ] GLES1 rendering verified (Ubuntu's Mesa has no ES1 contexts; the
+    sample checks the failure panel there)
+  - [x] Switch build links switch-mesa (with -lstdc++) and builds without it
+  - [ ] Switch: verify GL on hardware; direct NWindow presentation for
+    fullscreen GL
+  - [ ] EGL15 syncs/images, SurfaceTexture.updateTexImage, ETC1Util
 - [ ] WS15 sensors and system services
 
 ### M5
 - [ ] WS9 native loader, bionic shim, NativeActivity
+  - [x] ELF64 loader (x86-64 and AArch64; RELA, APS2, RELR; DT_NEEDED from
+    the APK; constructors; JNI_OnLoad), unresolved imports bound to
+    logging stubs, System.load/loadLibrary and nativeLibraryDir
+  - [x] shim: libc/libm subset with bionic wrappers (paths, sysconf,
+    pthread objects, __sF, fortify), liblog, libdl, AAssetManager,
+    system properties, zlib, GL/EGL lookup
+  - [x] tests/apps/ndk (19 JNI checks; passes on x86-64 and on the
+    AArch64 host build under qemu with arm64-v8a libraries)
+  - [ ] Switch code memory (svcMapProcessCodeMemory) and newlib struct
+    translation (stat, dirent, O_* flags, clock ids)
+  - [ ] NativeActivity, ANativeWindow + native EGL window surfaces,
+    ALooper/AInputQueue, OpenSL ES/AAudio (with WS7)
+  - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
 
 ### M6
 - [ ] WS6 SQLite natives and storage
@@ -283,17 +299,23 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    labels and icons. View tween animations apply while drawing
    (tests/apps/tween). Property animators run on Choreographer
    (tests/apps/prop). StateListAnimator, layout animation and animated
-   vectors are the rest of WS5. WS8 can start now that the device
-   presents a frame.
+   vectors are the rest of WS5.
 2. WS1 is done. DisplayCutout has landed (tests/apps/cutout), and so
    have ViewDebug (tests/apps/viewdbg), the floating toolbar
    (tests/apps/floating), text selection (tests/apps/select), and
    clipToOutline (tests/apps/outline).
 3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
    as agents are available: the rest of WS5 (StateListAnimator, layout
-   animation, animated vectors), WS8, WS13
+   animation, animated vectors), WS13
    (test runner around the app scripts; packaging CI is
-   `.github/workflows/package.yml`), WS6/WS7/WS9/WS11/WS12/WS15.
+   `.github/workflows/package.yml`), WS6/WS7/WS11/WS12/WS15.
+4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
+   next is the Switch build with switch-mesa and a device run, then
+   SurfaceTexture external textures.
+5. WS9: JNI libraries load on the host and on AArch64 (qemu). Next:
+   Switch code memory, then NativeActivity with ANativeWindow and native
+   EGL window surfaces (shares the WS8 window path), then OpenSL ES with
+   WS7.
 
 ## Known issues and gotchas
 
@@ -318,6 +340,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   PhoneWindow does not use them. View tweens (translate, scale, rotate,
   alpha, set) and property animators (ValueAnimator, ObjectAnimator,
   ViewPropertyAnimator) already run.
+- Native libraries load on the host and AArch64 Linux only; the Switch
+  build reports that code memory is not implemented yet.
+- Host GL tests need Mesa's EGL and GLES libraries (`libegl1`,
+  `libgles2`; `libegl-dev`/`libgles-dev` to regenerate the bindings).
+  Ubuntu's Mesa cannot create ES1 contexts, so GLES1 rendering is not
+  verified on the host; tests/apps/gles checks the failure panel instead.
 - The headless `idle` script command now waits until queued input is
   consumed and nothing was presented for the quiet time since the command
   started.
@@ -328,6 +356,27 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-02 (WS9, touches WS4, WS13, libcore): `src/nativeloader/loader_stub.c`
+  is replaced by the ELF loader and shim (same `nativeloader_load_library`
+  / `nativeloader_find_symbol` contract, ARCHITECTURE 6.7). `os.arch` comes
+  from the new `System.nativeArch()` native ("x86_64" on x86-64 hosts,
+  "aarch64" otherwise), so `Build.CPU_ABI` matches the loader's ABI.
+  `ApplicationInfo.nativeLibraryDir` is set to
+  `/data/app/<pkg>/lib/<x86_64|arm64>`. `tools/build_apk.sh` packages an
+  app's `assets/` and runs an optional `native/build.sh <out>` whose
+  `lib/<abi>/*.so` go into the APK. Makefile.switch adds `-lstdc++` with
+  Mesa (switch-mesa is C++).
+- 2026-10-02 (WS8, touches WS1 and the VM): `Surface` gained
+  framework-internal `lockGlBuffer(w, h)`, `unlockGlBufferAndPost()` and
+  `isOpaqueBuffer()` so EGL window surfaces post frames through the
+  software buffer queue (posting shares `unlockCanvasAndPost`'s pacing).
+  `vm_buffer_address(Object *buf)` (jni.c) is now declared in vm.h; the
+  GL natives also read `Buffer.position`, `limit` and `elementSizeShift`.
+  `natives_android_register` registers `android_opengl_register`.
+  Makefile.switch links Mesa (`-lEGL -lglapi -ldrm_nouveau`, defines
+  `SA_HAVE_EGL`) only when the switch-mesa portlib is installed.
+  ARCHITECTURE 6.6.1 added.
 
 - 2026-10-01 (WS10): Switch backend. `platform_switch_pump()` and
   `platform_switch_buttons_down()` are Switch-only extras used by

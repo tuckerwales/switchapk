@@ -262,7 +262,11 @@ public class MenuBuilder implements Menu {
         MenuItemImpl itemImpl = (MenuItemImpl) item;
         if (itemImpl == null || !itemImpl.isEnabled()) return false;
         boolean invoked = itemImpl.invoke();
-        if (itemImpl.hasSubMenu()) {
+        if (itemImpl.hasCollapsibleActionView()) {
+            // Tapping an item with a collapsible action view (a SearchView) expands it in place.
+            invoked |= itemImpl.expandActionView();
+            if (invoked) close(true);
+        } else if (itemImpl.hasSubMenu()) {
             // A presenter (the action bar) may show the sub menu; otherwise the menu closes.
             boolean shown = dispatchSubMenuSelected((SubMenuBuilder) itemImpl.getSubMenu(), preferredPresenter);
             invoked |= shown;

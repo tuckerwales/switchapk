@@ -474,6 +474,19 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `requestLayout`) are invalidated. Subclasses of ViewGroup outside
   android.view can override the hidden `onSetLayoutParams` hook, which
   View.setLayoutParams calls after storing the params.
+- SearchView is the AOSP port on the framework `search_view` layout, with
+  the package-private SuggestionsAdapter querying a searchable's
+  suggestions provider through `SearchManager.getSuggestions`.
+  SearchManager finds searchables among the app's own activities that
+  handle ACTION_SEARCH and carry `android.app.searchable` meta-data
+  (directly or through `android.app.default_searchable`); global and web
+  search report none and voice search never resolves, so the voice button
+  stays hidden. `Activity.onSearchRequested` opens the AOSP SearchDialog
+  (the `search_bar` layout) at the top of the activity. A suggestions
+  drop-down anchors to the first `search_edit_frame` in its window, as on
+  Android, so several SearchViews in one window share an anchor.
+  `ListPopupWindow.show` does nothing until an anchor is set (a posted
+  show can run before one exists).
 - CompoundButton draws only its button drawable; with none (an explicit
   `@null`) nothing is drawn, as on Android. Dates format through
   `DateFormat.getBestDateTimePattern`, which maps skeletons to en-US
@@ -540,7 +553,8 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - `ActivityThread` parses `AndroidManifest.xml` with `XmlBlock` (package,
   application class, activities with intent filters and themes and
   screenOrientation/configChanges, services, receivers, providers,
-  meta-data, uses-feature), creates `LoadedApk`/`ContextImpl`/
+  meta-data into `PackageItemInfo.metaData` as PackageParser stores it,
+  uses-feature), creates `LoadedApk`/`ContextImpl`/
   `Application` (via `AppComponentFactory` when declared), installs
   content providers **before** `Application.onCreate` (as Android does;
   androidx startup relies on it), then launches the MAIN/LAUNCHER activity.

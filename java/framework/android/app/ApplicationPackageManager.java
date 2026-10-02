@@ -227,7 +227,16 @@ public class ApplicationPackageManager extends PackageManager {
         }
     }
 
-    @Override public XmlResourceParser getXml(String packageName, int resid, ApplicationInfo appInfo) { return null; }
+    @Override
+    public XmlResourceParser getXml(String packageName, int resid, ApplicationInfo appInfo) {
+        if (resid == 0 || ActivityThread.sResources == null) return null;
+        if (!ours(packageName) && (appInfo == null || !ours(appInfo.packageName))) return null;
+        try {
+            return ActivityThread.sResources.getXml(resid);
+        } catch (Resources.NotFoundException e) {
+            return null;
+        }
+    }
 
     @Override
     public Resources getResourcesForApplication(ApplicationInfo app) throws NameNotFoundException {

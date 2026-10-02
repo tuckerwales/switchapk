@@ -336,3 +336,21 @@ what is left in flight.
   hook it. tests/apps/gridlayout has 29 logic checks and a calculator
   grid with row and column spans, a weighted row that re-splits when a
   cell goes GONE, and an alignment column with a row-weighted cell.
+- WS3 SearchView. Ported SearchView (with SearchAutoComplete and the
+  updatable touch delegate), the package-private SuggestionsAdapter,
+  SearchManager (searchables from the app's ACTION_SEARCH activities,
+  `getSuggestions`, the search dialog, global search reporting none),
+  SearchableInfo (searchable XML with actionkey children), SearchDialog
+  on the framework `search_bar` layout, and the RecognizerIntent
+  constants. Activity gained onSearchRequested, startSearch,
+  triggerSearch, type-to-search key modes and a per-activity
+  SearchManager. Fixes found on the way: the manifest parser now stores
+  `<meta-data>` and `PackageManager.getXml` works; TextView handles Enter
+  in single-line editors before its key listener (Enter was being
+  inserted as a newline); MenuBuilder expands collapsible action views on
+  tap; Filter supports the hidden Delayer; AutoCompleteTextView's hidden
+  doBefore/AfterTextChanged do real work; ListPopupWindow.show waits for
+  an anchor. tests/apps/search has 41 logic checks and covers the action
+  bar SearchView with provider suggestions and refine arrow, launching
+  ResultsActivity from a suggestion, the search dialog, an in-place list
+  filter and an iconified SearchView expanding and closing.

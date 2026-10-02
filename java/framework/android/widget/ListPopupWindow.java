@@ -209,6 +209,9 @@ public class ListPopupWindow {
     public void postShow() { mHandler.post(new Runnable() { public void run() { show(); } }); }
 
     public void show() {
+        // A posted show (AutoCompleteTextView.showDropDownAfterLayout) can run before any anchor
+        // was set; there is nothing to position against, so stay hidden instead of crashing.
+        if (getAnchorView() == null) return;
         int height = buildDropDown();
         final boolean noInputMethod = isInputMethodNotNeeded();
         mPopup.setAllowScrollingAnchorParent(!noInputMethod);

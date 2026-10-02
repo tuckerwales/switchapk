@@ -20,11 +20,19 @@ public abstract class Filter {
     private Handler mThreadHandler;
     private final Handler mResultHandler;
     private final Object mLock = new Object();
+    private Delayer mDelayer;
 
     public Filter() {
         Looper looper = Looper.myLooper();
         if (looper == null) looper = Looper.getMainLooper();
         mResultHandler = new ResultsHandler(looper);
+    }
+
+    /** framework-internal (hidden in AOSP). Delays posting filter requests, for example after deletes. */
+    public void setDelayer(Delayer delayer) {
+        synchronized (mLock) {
+            mDelayer = delayer;
+        }
     }
 
     public final void filter(CharSequence constraint) { filter(constraint, null); }
@@ -41,10 +49,11 @@ public abstract class Filter {
             // Copy the constraint: the caller may change a mutable CharSequence while the worker runs.
             args.constraint = constraint != null ? constraint.toString() : null;
             args.listener = listener;
+            final long delay = (mDelayer == null) ? 0 : mDelayer.getPostingDelay(constraint);
             message.obj = args;
             mThreadHandler.removeMessages(FILTER_TOKEN);
             mThreadHandler.removeMessages(FINISH_TOKEN);
-            mThreadHandler.sendMessage(message);
+            mThreadHandler.sendMessageDelayed(message, delay);
         }
     }
 
@@ -62,6 +71,12 @@ public abstract class Filter {
         public Object values;
 
         public FilterResults() {}
+    }
+
+    /** framework-internal (hidden in AOSP). Chooses how long to wait before posting a request. */
+    public interface Delayer {
+        /** Milliseconds to wait before filtering with this constraint. */
+        long getPostingDelay(CharSequence constraint);
     }
 
     /** Told how many values survived a filter pass. */

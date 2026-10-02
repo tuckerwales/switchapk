@@ -352,10 +352,15 @@ public class ContextImpl extends Context {
         if (ACCESSIBILITY_SERVICE.equals(name)) {
             return android.view.accessibility.AccessibilityManager.getInstance(this);
         }
+        if (SEARCH_SERVICE.equals(name)) {
+            if (mSearchManager == null) mSearchManager = new SearchManager(getOuterContext(), null);
+            return mSearchManager;
+        }
         return null;
     }
 
     private android.view.LayoutInflater mLayoutInflater;
+    private SearchManager mSearchManager;
 
     @Override
     public String getSystemServiceName(Class<?> serviceClass) {
@@ -367,6 +372,7 @@ public class ContextImpl extends Context {
         if (serviceClass == InputMethodManager.class) return INPUT_METHOD_SERVICE;
         if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;
         if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;
+        if (serviceClass == SearchManager.class) return SEARCH_SERVICE;
         return null;
     }
 

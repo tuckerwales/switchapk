@@ -366,3 +366,11 @@ what is left in flight.
   tabs, two embedded activities (only the current one resumed), a result
   delivered to an embedded activity, recreation on the same tab with
   retained instances, and BACK finishing the group through its child.
+- WS3 CursorTreeAdapter family. Ported CursorTreeAdapter (a group
+  cursor plus lazily fetched children cursors per group, closed when the
+  group collapses or the data set changes, null children cursors filled
+  later by setChildrenCursor, the group Filter), ResourceCursorTreeAdapter
+  (collapsed, expanded, child and last child layouts) and
+  SimpleCursorTreeAdapter (column to view binding with a ViewBinder).
+  tests/apps/adapters gained 13 logic checks (40 in all), including an
+  ExpandableListView collapse closing the children cursor.

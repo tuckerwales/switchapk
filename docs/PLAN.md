@@ -225,6 +225,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     latency, deadlines, constraints, periodic, backoff, enqueue/dequeue
     work, JobServiceEngine binder for AndroidX JobIntentService)
 - [ ] WS13 app test runner with screenshot goldens
+  - [x] GitHub Actions workflow builds the NRO and packages the sample
+    APKs (`.github/workflows/package.yml`, artifact `switchapk-sd`)
 
 ### M3
 - [ ] WS10 Switch platform, NRO, launcher
@@ -290,7 +292,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
    as agents are available: the rest of WS5 (StateListAnimator, layout
    animation, animated vectors), WS8, WS13
-   (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
+   (test runner around the app scripts; packaging CI is
+   `.github/workflows/package.yml`), WS6/WS7/WS9/WS11/WS12/WS15.
 
 ## Known issues and gotchas
 

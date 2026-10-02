@@ -1,0 +1,107 @@
+# Builds switchapk.nro and the sample APKs, then uploads the SD card zip.
+# Locally the same steps are: fetch sdk + devkitpro, make, make -f Makefile.switch dist.
+# ubuntu-24.04 matches the glibc the fetched devkitA64 host tools expect.
+
+name: Package NRO
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A push and the pull request it opens would otherwise build twice.
+# Fork pull requests still run, because no push lands on this repo.
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build NRO and sample APKs
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      DEVKITPRO: ${{ github.workspace }}/build/toolchains/devkitpro/opt/devkitpro
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install host packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential zlib1g-dev zip unzip curl
+
+      - name: Restore toolchain cache
+        id: toolchains
+        uses: actions/cache/restore@v6
+        with:
+          path: build/toolchains
+          key: toolchains-${{ runner.os }}-${{ hashFiles('tools/fetch_toolchains.py', 'tools/make_framework_res.py', 'tools/build_java.sh') }}
+
+      - name: Fetch SDK and devkitPro
+        if: steps.toolchains.outputs.cache-hit != 'true'
+        run: |
+          python3 tools/fetch_toolchains.py sdk
+          python3 tools/fetch_toolchains.py devkitpro
+
+      - name: Check toolchains
+        run: |
+          test -x build/toolchains/sdk/aapt2
+          test -f build/toolchains/sdk/android.jar
+          test -f build/toolchains/framework-res.apk
+          test -x "$DEVKITPRO/devkitA64/bin/aarch64-none-elf-gcc"
+          test -x "$DEVKITPRO/tools/bin/elf2nro"
+          "$DEVKITPRO/devkitA64/bin/aarch64-none-elf-gcc" --version
+
+      - name: Save toolchain cache
+        if: steps.toolchains.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        continue-on-error: true
+        with:
+          path: build/toolchains
+          key: ${{ steps.toolchains.outputs.cache-primary-key }}
+
+      - name: Build host binary and framework.dex
+        run: make -j"$(nproc)"
+
+      - name: Package NRO and sample APKs
+        run: make -j"$(nproc)" -f Makefile.switch dist
+
+      - name: Check the SD zip
+        run: |
+          unzip -t build/switch/switchapk-sd.zip
+          unzip -l build/switch/switchapk-sd.zip > /tmp/sd-list.txt
+          grep -q 'switch/switchapk/switchapk.nro' /tmp/sd-list.txt
+          grep -q 'switch/switchapk/apks/hello.apk' /tmp/sd-list.txt
+          ls -lh build/switch/switchapk.nro build/switch/switchapk-sd.zip
+          {
+            echo "## SD card package"
+            echo
+            echo "Unzip \`switchapk-sd.zip\` at the root of the SD card."
+            echo "That creates \`switch/switchapk/switchapk.nro\` and \`switch/switchapk/apks/\`."
+            echo
+            echo '```'
+            cat /tmp/sd-list.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload SD package
+        uses: actions/upload-artifact@v7
+        with:
+          name: switchapk-sd
+          path: build/switch/switchapk-sd.zip
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

@@ -85,7 +85,10 @@ make -f Makefile.switch                      # build/switch/switchapk.nro
 make -f Makefile.switch dist                 # build/switch/switchapk-sd.zip
 ```
 
-Toolchains are downloaded into `build/toolchains` and are never committed.
+The same zip is built by the Package NRO GitHub Actions workflow
+(`.github/workflows/package.yml`). Download the `switchapk-sd` artifact
+from a run. Toolchains are downloaded into `build/toolchains` and are
+never committed.
 To send an app straight to a Switch with live logs:
 
 ```

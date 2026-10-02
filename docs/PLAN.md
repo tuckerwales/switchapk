@@ -235,10 +235,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] main_switch.c: APK launcher, VM thread, error screen, log file,
     nxlink, relaunch to the list
   - [x] VM and samples verified on AArch64 (qemu-user host build)
-  - [ ] first boot on hardware (untested: no device in the dev
-    environment)
-  - [ ] audio (audren/audout), rumble, 1080p docked, APK labels and icons
-    in the launcher
+  - [x] first boot on hardware (confirmed 2026-10-02)
+  - [x] APK labels and icons in the launcher (tests/apps/labeled,
+    switchapk-host --apk-info)
+  - [ ] audio (audren/audout), rumble, 1080p docked
 
 ### M4
 - [ ] WS5 animation
@@ -270,16 +270,17 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    RemoteViews (inflate, actions and reapply; notification content
    views stay unsupported). Text selection opens the floating toolbar
    (tests/apps/select).
-   Next: boot the WS10 NRO on hardware and fix what breaks.
-   WS5 (animation) can start in parallel.
+   Next: audio (audren/audout), rumble, and 1080p docked rendering.
+   The NRO boots on hardware, and the launcher shows APK labels and icons.
+   WS5 (animation) can start in parallel. WS8 can start now that the
+   device presents a frame.
 2. WS1 is done. DisplayCutout has landed (tests/apps/cutout), and so
    have ViewDebug (tests/apps/viewdbg), the floating toolbar
    (tests/apps/floating), text selection (tests/apps/select), and
    clipToOutline (tests/apps/outline).
-3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
-   launcher labels/icons. In parallel as agents are available: WS13
-   (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
-4. WS8 once WS10 can present.
+3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
+   as agents are available: WS5, WS8, WS13 (test runner around the app
+   scripts), WS6/WS7/WS9/WS11/WS12/WS15.
 
 ## Known issues and gotchas
 
@@ -304,6 +305,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - The headless `idle` script command now waits until queued input is
   consumed and nothing was presented for the quiet time since the command
   started.
+- The launcher draws bitmap icons from the APK. Adaptive-icon and vector
+  XML drawables are skipped, and that row shows the label only.
 
 ## Interface changes log
 

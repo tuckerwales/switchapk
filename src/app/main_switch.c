@@ -1,8 +1,9 @@
 /*
  * Nintendo Switch entry point (switchapk.nro).
  *
- * Without arguments it shows a launcher listing the .apk files in sdmc:/switch/switchapk/apks;
- * with an APK path as argv[1] (nxlink, forwarders) it runs that APK directly.
+ * Without arguments it shows a launcher listing the .apk files in sdmc:/switch/switchapk/apks,
+ * each row the APK's label and icon. With an APK path as argv[1] (nxlink, forwarders) it runs
+ * that APK directly.
  * The chosen APK runs on a VM thread with a large stack while this thread
  * pumps the applet loop, input and the software keyboard. When the app ends
  * the NRO reloads itself (through hbloader) so the user returns to the list.
@@ -12,10 +13,12 @@
 #include "../vm/vm.h"
 #include "../gfx/gfx.h"
 #include "../platform/platform.h"
+#include "apk_info.h"
 
 #include <switch.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <strings.h>
 #include <sys/stat.h>
 
 #define LOG_TAG "main"
@@ -61,20 +64,53 @@ static void fill_rect(int l, int t, int r, int b, uint32_t color) {
     gfx_draw_rect(&tg, &m, &clip, (float)l, (float)t, (float)r, (float)b, &p);
 }
 
+/* One Unicode scalar, BMP only. The text painter takes UTF-16 code units and this screen has no pairs. */
+static int utf8_next(const char *s, size_t n, size_t *i) {
+    unsigned char c = (unsigned char)s[*i];
+    if (c < 0x80) {
+        (*i)++;
+        return c;
+    }
+    size_t need = 0;
+    unsigned cp = 0;
+    if ((c & 0xE0) == 0xC0) {
+        need = 2;
+        cp = c & 0x1F;
+    } else if ((c & 0xF0) == 0xE0) {
+        need = 3;
+        cp = c & 0x0F;
+    } else if ((c & 0xF8) == 0xF0) {
+        need = 4;
+        cp = c & 0x07;
+    } else {
+        (*i)++;
+        return '?';
+    }
+    if (n - *i < need) {
+        (*i)++;
+        return '?';
+    }
+    for (size_t k = 1; k < need; k++) {
+        unsigned char cc = (unsigned char)s[*i + k];
+        if ((cc & 0xC0) != 0x80) {
+            (*i)++;
+            return '?';
+        }
+        cp = (cp << 6) | (cc & 0x3F);
+    }
+    *i += need;
+    if ((need == 2 && cp < 0x80) || (need == 3 && cp < 0x800) || (need == 4 && cp < 0x10000)) return '?';
+    if (cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0xFFFF) return '?';
+    return (int)cp;
+}
+
 static void draw_text(const char *utf8, float x, float baseline, float size, uint32_t color, bool bold) {
     GfxFont *f = gfx_font_default(bold);
     if (!f || !utf8) return;
     size_t n = strlen(utf8);
     uint16_t *u = sa_malloc((n + 1) * sizeof *u);
     size_t len = 0;
-    /* ASCII / Latin-1 is enough for file names and log lines; other bytes show as '?'. */
-    for (size_t i = 0; i < n; i++) {
-        unsigned char ch = (unsigned char)utf8[i];
-        u[len++] = ch < 0x80 ? ch : '?';
-        if (ch >= 0xC0) {
-            while (i + 1 < n && ((unsigned char)utf8[i + 1] & 0xC0) == 0x80) i++;
-        }
-    }
+    for (size_t i = 0; i < n;) u[len++] = (uint16_t)utf8_next(utf8, n, &i);
     GfxTarget tg = screen_target();
     GfxClip clip = screen_clip();
     GfxMatrix m;
@@ -94,11 +130,23 @@ static void present_screen(void) { platform_present(g_screen, SCREEN_W, SCREEN_H
 /* ---- launcher ------------------------------------------------------------------ */
 
 typedef struct {
-    char **names;
+    char *name;
+    char *label;
+    uint32_t *icon;
+    int icon_w, icon_h;
+} ApkEntry;
+
+typedef struct {
+    ApkEntry *items;
     int count;
 } ApkList;
 
-static int cmp_names(const void *a, const void *b) { return strcasecmp(*(char *const *)a, *(char *const *)b); }
+static int cmp_entries(const void *a, const void *b) {
+    const ApkEntry *ea = a, *eb = b;
+    int c = strcasecmp(ea->label ? ea->label : "", eb->label ? eb->label : "");
+    if (c) return c;
+    return strcasecmp(ea->name ? ea->name : "", eb->name ? eb->name : "");
+}
 
 static ApkList list_apks(void) {
     ApkList l = {NULL, 0};
@@ -107,19 +155,60 @@ static ApkList list_apks(void) {
     struct dirent *e;
     while ((e = readdir(d)) != NULL) {
         size_t n = strlen(e->d_name);
-        if (n > 4 && !strcasecmp(e->d_name + n - 4, ".apk")) {
-            l.names = sa_realloc(l.names, (size_t)(l.count + 1) * sizeof *l.names);
-            l.names[l.count++] = sa_strdup(e->d_name);
-        }
+        if (n <= 4 || strcasecmp(e->d_name + n - 4, ".apk") != 0) continue;
+        l.items = sa_realloc(l.items, (size_t)(l.count + 1) * sizeof *l.items);
+        ApkEntry *it = &l.items[l.count++];
+        memset(it, 0, sizeof *it);
+        it->name = sa_strdup(e->d_name);
+        char *path = sa_sprintf("%s/%s", APK_DIR, e->d_name);
+        ApkIdentity id;
+        apk_read_identity(path, APK_ICON_DENSITY, &id);
+        it->label = id.label;
+        it->icon = id.icon;
+        it->icon_w = id.icon_w;
+        it->icon_h = id.icon_h;
+        free(path);
     }
     closedir(d);
-    if (l.count > 1) qsort(l.names, (size_t)l.count, sizeof *l.names, cmp_names);
+    if (l.count > 1) qsort(l.items, (size_t)l.count, sizeof *l.items, cmp_entries);
     return l;
 }
 
 #define ROW_H 64
 #define LIST_TOP 120
 #define VISIBLE_ROWS 8
+#define ICON_BOX 40
+#define ICON_X 48
+#define LABEL_X 104
+
+static void draw_icon(const uint32_t *px, int w, int h, int box_x, int box_y, int box) {
+    if (!px || w <= 0 || h <= 0) return;
+    int dw, dh;
+    if (w >= h) {
+        dw = box;
+        dh = (int)((int64_t)h * box / w);
+        if (dh < 1) dh = 1;
+    } else {
+        dh = box;
+        dw = (int)((int64_t)w * box / h);
+        if (dw < 1) dw = 1;
+    }
+    int x = box_x + (box - dw) / 2;
+    int y = box_y + (box - dh) / 2;
+    GfxTarget src = {(uint32_t *)px, w, h, w};
+    GfxTarget tg = screen_target();
+    GfxClip clip = screen_clip();
+    GfxMatrix m;
+    gfx_matrix_identity(&m);
+    GfxPaint p;
+    memset(&p, 0, sizeof p);
+    p.color = 0xFFFFFFFF;
+    p.style = GFX_FILL;
+    p.filter = true;
+    p.xfer = GFX_XFER_SRC_OVER;
+    gfx_draw_bitmap(&tg, &m, &clip, &src, 0, 0, (float)w, (float)h, (float)x, (float)y, (float)(x + dw),
+                    (float)(y + dh), &p);
+}
 
 static void draw_launcher(const ApkList *l, int sel, int top) {
     fill_rect(0, 0, SCREEN_W, SCREEN_H, 0xFF202124);
@@ -138,11 +227,9 @@ static void draw_launcher(const ApkList *l, int sel, int top) {
         const int i = top + row;
         const int y = LIST_TOP + row * ROW_H;
         if (i == sel) fill_rect(32, y, SCREEN_W - 32, y + ROW_H - 8, 0xFF37474F);
-        char label[256];
-        snprintf(label, sizeof label, "%s", l->names[i]);
-        size_t n = strlen(label);
-        if (n > 4) label[n - 4] = 0; /* drop .apk */
-        draw_text(label, 56, (float)(y + 38), 28, 0xFFFFFFFF, i == sel);
+        const ApkEntry *it = &l->items[i];
+        draw_icon(it->icon, it->icon_w, it->icon_h, ICON_X, y + 8, ICON_BOX);
+        draw_text(it->label ? it->label : it->name, LABEL_X, (float)(y + 38), 28, 0xFFFFFFFF, i == sel);
     }
     char footer[64];
     snprintf(footer, sizeof footer, "%d of %d", sel + 1, l->count);
@@ -175,15 +262,19 @@ static char *run_launcher(void) {
             if (sel < top) top = sel;
             if (sel >= top + VISIBLE_ROWS) top = sel - VISIBLE_ROWS + 1;
             if ((down & HidNpadButton_A) || tapped) {
-                chosen = sa_sprintf("%s/%s", APK_DIR, l.names[sel]);
+                chosen = sa_sprintf("%s/%s", APK_DIR, l.items[sel].name);
                 break;
             }
         }
         draw_launcher(&l, sel, top);
         present_screen();
     }
-    for (int i = 0; i < l.count; i++) free(l.names[i]);
-    free(l.names);
+    for (int i = 0; i < l.count; i++) {
+        free(l.items[i].name);
+        free(l.items[i].label);
+        free(l.items[i].icon);
+    }
+    free(l.items);
     return chosen;
 }
 

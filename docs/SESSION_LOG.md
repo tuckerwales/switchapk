@@ -444,4 +444,12 @@ what is left in flight.
   stays null. tests/apps/cutout has 15 logic checks: shortEdges comes
   from the theme, an inset notch moves, and the live window insets
   have no cutout.
-- In flight: WS5 animation. Next on device: boot the WS10 NRO.
+- WS10 launcher labels and icons. The NRO boot on hardware works. The
+  launcher reads each APK's MAIN/LAUNCHER label and bitmap icon (else the
+  application's, else the file name) at 240 dpi, and draws them on the
+  row. XML drawables are skipped. `switchapk-host --apk-info` checks this
+  without the VM: tests/apps/labeled (a @string label and an hdpi PNG that
+  beats the application icon and the mdpi bucket), the hello APK's literal
+  label, and a zip with no manifest. Audio, rumble, and 1080p stay open.
+- In flight: WS5 animation. Next on device: audio (audren/audout), rumble,
+  and 1080p docked.

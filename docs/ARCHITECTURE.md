@@ -857,11 +857,16 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
 - Files: `romfs:/framework.dex`, `romfs:/framework-res.apk`; APKs in
   `sdmc:/switch/switchapk/apks`, app data in `sdmc:/switch/switchapk/data`,
   log in `sdmc:/switch/switchapk/log.txt` (flushed on warnings and errors).
-- Launcher: a C screen listing the APKs (D-pad, stick or touch, A runs,
-  + exits); `argv[1]` ending in .apk skips it (nxlink). When the app ends
-  the NRO reloads itself through hbloader (`envSetNextLoad`). A non-zero
-  exit shows the last 48 INFO+ log lines (`sa_log_recent`) on an error
-  screen.
+- Launcher: a C screen listing the APKs in `sdmc:/switch/switchapk/apks`
+  (D-pad, stick or touch, A runs, + exits). Each row shows the launcher
+  activity's `android:label` and `android:icon` when the APK has them
+  (else the application's, else the file name without `.apk`). Labels and
+  icons are read with the zip, binary XML and resource table code, at
+  240 dpi (`apk_read_identity` in `src/app/apk_info.c`). Bitmap icons are
+  drawn; XML drawables (adaptive icons, vectors) are skipped. `argv[1]`
+  ending in `.apk` skips the list (nxlink). When the app ends the NRO
+  reloads itself through hbloader (`envSetNextLoad`). A non-zero exit
+  shows the last 48 INFO+ log lines (`sa_log_recent`) on an error screen.
 - Not yet: audio (samples are drained like the headless backend), rumble,
   native .so loading, 1080p docked rendering.
 
@@ -876,5 +881,8 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   res), built with aapt2 + javac + d8 against android.jar, run headless
   with a `.script`; screenshots compared with goldens; logcat output
   checked for exceptions and `STUB:` lines.
+- Launcher identity (`apk_read_identity`) is checked on the host with
+  `switchapk-host --apk-info` (`tests/apps/labeled/check_info.sh`), without
+  booting the VM.
 - Real-world APKs: keep a local (not committed) corpus of open-source APKs
   (F-Droid) and track results in `docs/COMPATIBILITY.md` (to be created).

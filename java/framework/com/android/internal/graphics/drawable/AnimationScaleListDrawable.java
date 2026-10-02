@@ -110,7 +110,7 @@ public class AnimationScaleListDrawable extends DrawableContainer implements Ani
         @Override
         public Drawable newDrawable(Resources res) { return new AnimationScaleListDrawable(this, res); }
 
-        /** AOSP shows the static child when the animator duration scale is 0; until WS5 animators never run. */
+        /** The animatable child waits on AnimatedVectorDrawable. Until then the static child is shown. */
         int getCurrentDrawableIndexBasedOnScale() {
             // TODO(WS5) the animatable child once AnimatedVectorDrawable animates.
             return mStaticDrawableIndex >= 0 ? mStaticDrawableIndex : mAnimatableDrawableIndex;

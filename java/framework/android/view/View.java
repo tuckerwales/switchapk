@@ -548,6 +548,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
     private int mSourceLayoutId;
 
     TransformationInfo mTransformationInfo;
+    private ViewPropertyAnimator mAnimator;
 
 
     private static final String TAG = "View";
@@ -2377,23 +2378,52 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
 
     /**
      * framework-internal (AOSP package-private). Draws this child of parent: applies position,
-     * scroll, transform, alpha and clipping, then draw() or dispatchDraw() when SKIP_DRAW.
+     * scroll, transform, tween animation, alpha and clipping, then draw() or dispatchDraw() when
+     * SKIP_DRAW.
      */
     boolean draw(Canvas canvas, ViewGroup parent, long drawingTime) {
         if ((mViewFlags & VISIBILITY_MASK) != VISIBLE && !isAnimatingTransitionHack()) return false;
-        final boolean identity = hasIdentityMatrix();
+        final android.view.animation.Animation anim = mCurrentAnimation;
+        android.view.animation.Transformation animXform = null;
+        boolean dropAnim = false;
+        if (anim != null) {
+            if (!anim.isInitialized()) {
+                int pw = parent != null ? parent.getWidth() : (mRight - mLeft);
+                int ph = parent != null ? parent.getHeight() : (mBottom - mTop);
+                anim.initialize(mRight - mLeft, mBottom - mTop, pw, ph);
+                onAnimationStart();
+            }
+            if (mAnimTransform == null) mAnimTransform = new android.view.animation.Transformation();
+            mAnimTransform.clear();
+            long time = drawingTime != 0 ? drawingTime : SystemClock.uptimeMillis();
+            boolean animMore = anim.getTransformation(time, mAnimTransform);
+            animXform = mAnimTransform;
+            // Invalidate the parent, not this view. A translation draws outside our layout rect,
+            // and the root clips this frame to the dirty rect from the previous one.
+            if (animMore) {
+                if (parent != null) parent.invalidate();
+                else invalidate();
+            } else if (anim.hasEnded() && !anim.getFillAfter()) {
+                dropAnim = true;
+            }
+        }
+        final boolean animMatrix = animXform != null && !animXform.getMatrix().isIdentity();
+        final boolean identity = hasIdentityMatrix() && !animMatrix;
         final boolean clip = parent != null && parent.getClipChildren();
         if (identity && clip && mClipBounds == null
                 && canvas.quickReject(mLeft, mTop, mRight, mBottom)) {
             mPrivateFlags &= ~PFLAG_DIRTY;
+            if (dropAnim) endTweenAnimation(parent);
             return false;
         }
         computeScroll();
         final int sx = mScrollX;
         final int sy = mScrollY;
         float alpha = getAlpha() * getTransitionAlpha();
+        if (animXform != null) alpha *= animXform.getAlpha();
         if (alpha <= 0f) {
             mPrivateFlags &= ~(PFLAG_DIRTY | PFLAG_INVALIDATED);
+            if (dropAnim) endTweenAnimation(parent);
             return false;
         }
         final int restoreTo = canvas.save();
@@ -2401,7 +2431,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
             canvas.translate(mLeft - sx, mTop - sy);
         } else {
             canvas.translate(mLeft, mTop);
-            canvas.concat(getMatrix());
+            if (!hasIdentityMatrix()) canvas.concat(getMatrix());
+            if (animMatrix) canvas.concat(animXform.getMatrix());
             canvas.translate(-sx, -sy);
         }
         final int w = mRight - mLeft;
@@ -2431,6 +2462,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
             draw(canvas);
         }
         canvas.restoreToCount(restoreTo);
+        if (dropAnim) endTweenAnimation(parent);
         return false;
     }
 
@@ -2755,10 +2787,19 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         }
     }
 
-    // ---------------------------------------------------------------- tween animations (applied by WS5)
+    // ---------------------------------------------------------------- tween animations
 
-    /** The current tween animation. It is held and reported but not yet applied when drawing (WS5). */
+    /** The tween applied by draw(Canvas, ViewGroup, long). Null when none is running. */
     private android.view.animation.Animation mCurrentAnimation;
+    private android.view.animation.Transformation mAnimTransform;
+
+    /** Drops a finished tween that does not fillAfter, and redraws once at the identity transform. */
+    private void endTweenAnimation(ViewGroup parent) {
+        onAnimationEnd();
+        clearAnimation();
+        if (parent != null) parent.invalidate();
+        else invalidate();
+    }
 
     public android.view.animation.Animation getAnimation() { return mCurrentAnimation; }
 
@@ -2778,10 +2819,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         if (animation != null) animation.reset();
     }
 
-    /** Called when the tween animation starts being applied (WS5 calls it from draw). */
+    /** Called when the tween animation starts being applied. */
     protected void onAnimationStart() {}
 
-    /** Called when the tween animation ends (WS5 calls it from draw). */
+    /** Called when the tween animation ends. */
     protected void onAnimationEnd() {}
 
     public void postInvalidateOnAnimation() {
@@ -3261,6 +3302,11 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         beforeTransformChange();
         transformInfo().mCameraDistance = -Math.abs(distance) / dpi;
         afterTransformChange();
+    }
+
+    public ViewPropertyAnimator animate() {
+        if (mAnimator == null) mAnimator = new ViewPropertyAnimator(this);
+        return mAnimator;
     }
 
     public float getRotation() { return mTransformationInfo != null ? mTransformationInfo.mRotation : 0; }

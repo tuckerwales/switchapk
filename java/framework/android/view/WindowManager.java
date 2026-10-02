@@ -112,6 +112,12 @@ public interface WindowManager extends ViewManager {
         public float horizontalWeight;
         public float verticalWeight;
         public float preferredRefreshRate;
+
+        public static final int LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT = 0;
+        public static final int LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES = 1;
+        public static final int LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER = 2;
+        public static final int LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS = 3;
+
         public int layoutInDisplayCutoutMode;
         public int memoryType;
         public int rotationAnimation;

@@ -47,6 +47,7 @@ static inline char *nat_str(Object *s) { return s ? vm_string_to_utf8(s) : NULL;
 void natives_java_lang_register(void);
 void natives_java_io_register(void);
 void natives_java_reflect_register(void);
+void natives_java_annotation_register(void);
 void natives_java_misc_register(void);
 void natives_android_register(void);
 

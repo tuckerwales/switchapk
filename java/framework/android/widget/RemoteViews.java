@@ -48,10 +48,10 @@ import java.util.Map;
  * overloads call {@link AbsListView#setRemoteViewsAdapter}, which does not
  * bind a service; {@link RemoteCollectionItems} are applied directly.
  *
- * <p>AOSP only inflates classes marked {@link RemoteView}. The VM does not
- * return runtime annotations, and our widgets are not annotated, so
- * {@link #onLoadClass} allows framework {@link View} classes by package
- * name. Application classes are rejected.
+ * <p>AOSP only inflates classes marked {@link RemoteView}. Runtime
+ * annotations are visible, but our widgets are not annotated, so
+ * {@link #onLoadClass} still allows framework {@link View} classes by
+ * package name. Application classes are rejected.
  */
 public class RemoteViews implements Parcelable, LayoutInflater.Filter {
     private static final String LOG_TAG = "RemoteViews";

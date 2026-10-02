@@ -5,6 +5,7 @@
 #include "../core/zip.h"
 #include "../native/natives.h"
 #include "../platform/platform.h"
+#include "apk_info.h"
 
 #include <pthread.h>
 
@@ -28,6 +29,7 @@ static void usage(void) {
             "  --screen WxH@dpi     display size (default 1280x720@240)\n"
             "  --trace              trace every instruction\n"
             "  --raw-stdio          write System.out/err directly to stdout/stderr\n"
+            "  --apk-info           print the APK label and icon at 240 dpi, then exit\n"
             "  -v / -vv             verbose logging\n");
 }
 
@@ -50,6 +52,7 @@ static void *vm_main(void *arg) {
     const char *data_dir = "build/data";
     const char *script = NULL;
     const char *shots = NULL;
+    bool apk_info = false;
     int i = 1;
     for (; i < ma->argc && ma->argv[i][0] == '-'; i++) {
         const char *a = ma->argv[i];
@@ -58,6 +61,7 @@ static void *vm_main(void *arg) {
         else if (!strcmp(a, "--script") && i + 1 < ma->argc) script = ma->argv[++i];
         else if (!strcmp(a, "--screenshots") && i + 1 < ma->argc) shots = ma->argv[++i];
         else if (!strcmp(a, "--screen") && i + 1 < ma->argc) i++; /* platform_init reads it */
+        else if (!strcmp(a, "--apk-info")) apk_info = true;
         else if (!strcmp(a, "--trace")) g_vm.trace = true;
         else if (!strcmp(a, "--raw-stdio")) {
             extern bool g_raw_stdio;
@@ -77,6 +81,26 @@ static void *vm_main(void *arg) {
         return NULL;
     }
     const char *program = ma->argv[i++];
+    if (apk_info) {
+        ApkIdentity id;
+        if (!apk_read_identity(program, APK_ICON_DENSITY, &id)) {
+            fprintf(stderr, "cannot read %s\n", program);
+            apk_identity_free(&id);
+            ma->rc = 1;
+            return NULL;
+        }
+        printf("label=%s\n", id.label ? id.label : "");
+        if (id.icon && id.icon_w > 0 && id.icon_h > 0) {
+            printf("icon=%dx%d\n", id.icon_w, id.icon_h);
+            printf("px0=%08X\n", (unsigned)id.icon[0]);
+            printf("px1=%08X\n", (unsigned)id.icon[id.icon_w - 1]);
+        } else {
+            printf("icon=none\n");
+        }
+        apk_identity_free(&id);
+        ma->rc = 0;
+        return NULL;
+    }
     DexFile *fw = load_dex_file(framework);
     if (!fw) {
         ma->rc = 1;

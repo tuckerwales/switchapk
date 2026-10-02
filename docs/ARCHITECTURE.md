@@ -120,6 +120,14 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
   signature in our framework silently turns a real call into a no-op.
   Missing classes are NOT stubbed (they throw NoClassDefFoundError).
   Grep app logs for `STUB:` to find coverage gaps.
+- Runtime annotations: `Class`, `Field`, and `Method` `getAnnotation`
+  read `VISIBILITY_RUNTIME` annotations from the dex, including nested
+  annotations, arrays, enums, class literals, and `AnnotationDefault`
+  for omitted elements. d8 stores that default as one class annotation
+  whose value lists every member; a per-method `AnnotationDefault` is
+  also accepted. CLASS and SOURCE retention are not returned.
+  Parameter annotations are not. `@Inherited` on a class annotation is
+  visible through `getAnnotation` on subclasses.
 
 ### 4.3 Interpreter
 - Non-recursive switch interpreter over a per-thread register stack
@@ -434,6 +442,21 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   the editor that called showSoftInput, via InputConnection.commitText.
 
 ### 6.4.1 View system notes for widget authors
+- `DisplayCutout` holds safe insets, one bounding rect per edge, and
+  waterfall insets. `WindowInsets.getDisplayCutout` returns the cutout
+  attached with `Builder.setDisplayCutout`. That setter does not add
+  `Type.displayCutout` insets; `consumeDisplayCutout` clears the cutout
+  and leaves those insets. `inset` moves the cutout with the other
+  insets. `getCutoutPath` is null: cutout specs are not parsed. The
+  Switch has no cutout, so dispatched insets carry none.
+  `PhoneWindow` copies the theme `windowLayoutInDisplayCutoutMode`
+  (`default` 0, `shortEdges` 1, `never` 2, `always` 3) onto
+  `LayoutParams.layoutInDisplayCutoutMode`.
+- `ViewDebug` is the public annotation set (`ExportedProperty`,
+  `CapturedViewProperty`, `IntToString`, `FlagToString`) plus
+  `dumpCapturedView`, which logs fields and no-arg methods marked
+  `@CapturedViewProperty`. Hierarchy and recycler tracing are no-ops.
+  Hardware capture and the view server are not implemented.
 - `View.setClipToOutline(true)` clips the view, its background, and its
   children to the outline from `getOutlineProvider()`. Only a round rect
   clips (`Outline.canClip()` is false for a path). The rect is in view
@@ -545,24 +568,31 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `SurfaceHolder.Callback`s on the UI thread when it is attached, visible
   and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
   backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
-- `View.animate()`, tween application and `StateListAnimator` belong to
-  WS5. `View.startAnimation/setAnimation/getAnimation/clearAnimation`
-  exist and hold the animation (ViewAnimator and friends use them) but
-  draw does not apply it yet; `AnimationUtils.loadAnimation` parses
-  `<alpha>` and loads other tags as an identity alpha animation. Only the tween core ProgressBar needs exists so far
-  (`TimeInterpolator`, `Interpolator`, linear/accelerate/decelerate
-  interpolators, `Animation`, `AlphaAnimation`, `Transformation`,
-  `AnimationUtils.loadInterpolator`); views do not apply tween animations
-  and AnimatedVectorDrawables do not animate. Accessibility classes are
-  value holders since no accessibility service runs.
+- `View.animate()` returns a `ViewPropertyAnimator`. `ValueAnimator` and
+  `ObjectAnimator` advance on Choreographer frames and set view
+  properties (translation, scale, rotation, alpha, x/y/z). A translation
+  is part of the view matrix, so `invalidateChild` expands the dirty
+  rect by that matrix. `StateListAnimator` is not implemented. View
+  tweens apply in `draw(Canvas, ViewGroup, long)`: the animation matrix
+  is concatenated
+  with the view matrix, and the animation alpha multiplies the view
+  alpha. While `getTransformation` asks for another frame the parent is
+  invalidated, so a translation is not clipped to the view's layout rect.
+  `fillAfter` false clears the animation after the end frame.
+  `AnimationUtils.loadAnimation` loads `set`, `alpha`, `scale`, `rotate`
+  and `translate`; other tags stay an identity alpha. ProgressBar still
+  drives its own `AlphaAnimation`. AnimatedVectorDrawables do not
+  animate. Accessibility classes are value holders since no accessibility
+  service runs.
 - ProgressBar family (AOSP ports): determinate progress sets drawable
   levels per layer id (`android:id/progress`, `secondaryProgress`,
   `background`), indeterminate starts an Animatable drawable or cycles
   levels with an AlphaAnimation. Bitmap layers are tiled with a repeating
   BitmapDrawable clone (keeps the tint; RatingBar stars). The Material
   spinners are `com.android.internal.graphics.drawable.
-  AnimationScaleListDrawable`, which shows its static child until WS5
-  (what Android shows with animations off). AbsSeekBar adds the thumb,
+  AnimationScaleListDrawable`, which shows its static child until
+  animated vectors run (what Android shows with animations off).
+  AbsSeekBar adds the thumb,
   split track, tick marks, touch drag (slop in scrolling containers) and
   D-pad/plus/minus steps (`keyProgressIncrement`, about 1/20 of the
   range); RatingBar steps by stepSize and reports user changes on release.
@@ -834,11 +864,16 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
 - Files: `romfs:/framework.dex`, `romfs:/framework-res.apk`; APKs in
   `sdmc:/switch/switchapk/apks`, app data in `sdmc:/switch/switchapk/data`,
   log in `sdmc:/switch/switchapk/log.txt` (flushed on warnings and errors).
-- Launcher: a C screen listing the APKs (D-pad, stick or touch, A runs,
-  + exits); `argv[1]` ending in .apk skips it (nxlink). When the app ends
-  the NRO reloads itself through hbloader (`envSetNextLoad`). A non-zero
-  exit shows the last 48 INFO+ log lines (`sa_log_recent`) on an error
-  screen.
+- Launcher: a C screen listing the APKs in `sdmc:/switch/switchapk/apks`
+  (D-pad, stick or touch, A runs, + exits). Each row shows the launcher
+  activity's `android:label` and `android:icon` when the APK has them
+  (else the application's, else the file name without `.apk`). Labels and
+  icons are read with the zip, binary XML and resource table code, at
+  240 dpi (`apk_read_identity` in `src/app/apk_info.c`). Bitmap icons are
+  drawn; XML drawables (adaptive icons, vectors) are skipped. `argv[1]`
+  ending in `.apk` skips the list (nxlink). When the app ends the NRO
+  reloads itself through hbloader (`envSetNextLoad`). A non-zero exit
+  shows the last 48 INFO+ log lines (`sa_log_recent`) on an error screen.
 - Not yet: audio (samples are drained like the headless backend), rumble,
   native .so loading, 1080p docked rendering.
 
@@ -853,5 +888,8 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   res), built with aapt2 + javac + d8 against android.jar, run headless
   with a `.script`; screenshots compared with goldens; logcat output
   checked for exceptions and `STUB:` lines.
+- Launcher identity (`apk_read_identity`) is checked on the host with
+  `switchapk-host --apk-info` (`tests/apps/labeled/check_info.sh`), without
+  booting the VM.
 - Real-world APKs: keep a local (not committed) corpus of open-source APKs
   (F-Droid) and track results in `docs/COMPATIBILITY.md` (to be created).

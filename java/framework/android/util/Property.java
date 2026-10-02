@@ -42,9 +42,28 @@ public abstract class Property<T, V> {
                     }
                 }
             }
+            Class<?> primitive = primitiveOf(valueType);
             try {
                 mSetter = propertyHolder.getMethod("set" + cap, valueType);
-            } catch (NoSuchMethodException ignored) {}
+            } catch (NoSuchMethodException e) {
+                if (primitive != null) {
+                    try {
+                        mSetter = propertyHolder.getMethod("set" + cap, primitive);
+                    } catch (NoSuchMethodException ignored) {}
+                }
+            }
+        }
+
+        private static Class<?> primitiveOf(Class<?> type) {
+            if (type == Float.class) return float.class;
+            if (type == Integer.class) return int.class;
+            if (type == Boolean.class) return boolean.class;
+            if (type == Long.class) return long.class;
+            if (type == Double.class) return double.class;
+            if (type == Short.class) return short.class;
+            if (type == Byte.class) return byte.class;
+            if (type == Character.class) return char.class;
+            return null;
         }
 
         @Override

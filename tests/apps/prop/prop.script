@@ -1,0 +1,5 @@
+wait 2000
+screenshot mid.png
+idle 500
+screenshot end.png
+quit

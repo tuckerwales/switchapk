@@ -27,8 +27,8 @@ import java.util.Locale;
 /**
  * framework-internal. View to show a clock circle picker (with one or two
  * picking circles) (AOSP port). The hours-to-minutes crossfade runs on a
- * frame callback with an accelerate/decelerate curve instead of an
- * ObjectAnimator (WS5); the accessibility touch helper is not ported.
+ * frame callback with an accelerate/decelerate curve. The accessibility
+ * touch helper is not ported.
  */
 public class RadialTimePickerView extends View {
     private static final String TAG = "RadialTimePickerView";

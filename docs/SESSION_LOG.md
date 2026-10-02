@@ -428,4 +428,48 @@ what is left in flight.
   and shadows are not drawn. tests/apps/outline has 3 logic checks: a
   48dp corner is the page color, and the inside of the arc stays the
   child's yellow.
-- In flight: WS1 ViewDebug annotations, DisplayCutout, WS5 animation.
+- WS1 ViewDebug annotations. `android.view.ViewDebug` carries
+  ExportedProperty, CapturedViewProperty, IntToString and FlagToString.
+  The VM now returns RUNTIME annotations from `Class`, `Field` and
+  `Method` `getAnnotation`, including defaults, nested annotations,
+  arrays, enums and class literals. `dumpCapturedView` logs captured
+  fields and no-arg methods. Hierarchy tracing stays a no-op.
+  tests/apps/viewdbg has 11 logic checks, and VmTest covers the
+  reflection against the reference JVM.
+- WS1 DisplayCutout. The class stores safe insets, per-edge bounds and
+  waterfall insets. WindowInsets.getDisplayCutout returns one attached
+  by the builder, and consumeDisplayCutout drops it without clearing
+  type insets. PhoneWindow reads windowLayoutInDisplayCutoutMode into
+  the layout params. The Switch reports no cutout, and getCutoutPath
+  stays null. tests/apps/cutout has 15 logic checks: shortEdges comes
+  from the theme, an inset notch moves, and the live window insets
+  have no cutout.
+- WS10 launcher labels and icons. The NRO boot on hardware works. The
+  launcher reads each APK's MAIN/LAUNCHER label and bitmap icon (else the
+  application's, else the file name) at 240 dpi, and draws them on the
+  row. XML drawables are skipped. `switchapk-host --apk-info` checks this
+  without the VM: tests/apps/labeled (a @string label and an hdpi PNG that
+  beats the application icon and the mdpi bucket), the hello APK's literal
+  label, and a zip with no manifest. Audio, rumble, and 1080p stay open.
+- WS5 view tweens. `View.draw` applies the current Animation (matrix and
+  alpha) and keeps invalidating the parent until it ends. `fillAfter`
+  false clears it after the last frame. `AnimationUtils` loads set, alpha,
+  scale, rotate and translate. An `AnimationSet` pushes duration, fill,
+  repeat, offset and the shared interpolator only when that tag set them,
+  so a child keeps its own duration. Property animators, StateListAnimator,
+  layout animation and AVD stay later. tests/apps/tween has 9 logic
+  checks: a 6s slide is partway across at 2s and parked 300px to the
+  right, a scale stays at half size, and a fade is neither solid nor gone
+  in the middle.
+- WS5 property animators. ValueAnimator, ObjectAnimator and
+  ViewPropertyAnimator run on Choreographer frames. ObjectAnimator sets
+  properties by name (the float setter is the primitive, not only the
+  boxed form) or through android.util.Property. View.animate() batches
+  one frame of property changes onto one animator. Values stay put when
+  the animator ends. Multi-float and multi-int holders log once and do
+  not call the setter. StateListAnimator, layout animation and AVD stay
+  later. tests/apps/prop has 9 logic checks: a 6s translation is partway
+  across at 2s and parked 300px to the right, a scale stays at half
+  size, and a named alpha fade is neither solid nor gone in the middle.
+- Next on device: audio (audren/audout), rumble, and 1080p docked. Next
+  on WS5: StateListAnimator, layout animation, AVD.

@@ -22,7 +22,7 @@ public final class Method extends Executable {
     }
 
     public Object getDefaultValue() {
-        return null;
+        return AnnotationParser.defaultValue(vmMethod, getReturnType());
     }
 
     public String getSignatureKey() {

@@ -1,5 +1,7 @@
 package java.lang.reflect;
 
+import java.lang.annotation.Annotation;
+
 public final class Field extends AccessibleObject implements Member {
     private long vmField;
     private Class<?> declaringClass;
@@ -142,5 +144,17 @@ public final class Field extends AccessibleObject implements Member {
     public String toString() {
         String mods = Modifier.toString(getModifiers());
         return (mods.isEmpty() ? "" : mods + " ") + type.getTypeName() + " " + declaringClass.getTypeName() + "." + name;
+    }
+
+    public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
+        return AnnotationParser.findMember(AnnotationParser.KIND_FIELD, vmField, annotationClass);
+    }
+
+    public Annotation[] getDeclaredAnnotations() {
+        return AnnotationParser.allMember(AnnotationParser.KIND_FIELD, vmField);
+    }
+
+    public Annotation[] getAnnotations() {
+        return getDeclaredAnnotations();
     }
 }

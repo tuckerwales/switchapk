@@ -31,16 +31,16 @@ duplicating work.
 | ID | Package | Depends on | Status | Owner |
 |---|---|---|---|---|
 | WS0 | Integration skeleton: framework compiles, natives registered, app runner, first APK on screen | none | done | ws0 2026-09-30 |
-| WS1 | View system core (View, ViewGroup, input dispatch, focus, windows, ViewRootImpl, Choreographer, LayoutInflater, PhoneWindow/DecorView) | WS0 | in progress (core, surfaces, acceptance sample, context menus and primary action modes done (action modes landed from the WS4 session); floating toolbar, text selection, and clipToOutline landed (tests/apps/outline); ViewDebug annotations and DisplayCutout remain) | session 7, 2026-10-02 |
+| WS1 | View system core (View, ViewGroup, input dispatch, focus, windows, ViewRootImpl, Choreographer, LayoutInflater, PhoneWindow/DecorView) | WS0 | done (core, surfaces, acceptance sample, context menus and primary action modes done (action modes landed from the WS4 session); floating toolbar, text selection, and clipToOutline landed (tests/apps/outline); ViewDebug annotations landed (tests/apps/viewdbg); DisplayCutout landed (tests/apps/cutout)) | session 7, 2026-10-02 |
 | WS2 | Text: android.text + TextView/EditText + IME bridge | WS0, WS1 (View API) | done | ws2 session 5, 2026-10-01 |
 | WS3 | Widgets: layouts, lists/adapters, scrolling, buttons, progress, Toast, PopupWindow, Spinner, Toolbar | WS1 | done (ImageView, compound controls, scrolling and lists landed; progress, popups, Toolbar, grids, adapters, ExpandableListView, AutoCompleteTextView, NumberPicker, the clocks, the ViewAnimator family, DatePicker, CalendarView material delegate and holo week list, TimePicker and their dialogs, GridLayout, SearchView, TabHost, the CursorTreeAdapter family done; VideoView done; RemoteViews done) | session 7, 2026-10-02 |
 | WS4 | App model: Activity/ActivityThread lifecycle, manifest, intents, dialogs, menus/ActionBar, services, legacy fragments | WS0 | in progress (lifecycle, fragments, dialogs, ProgressDialog, menus, action bar decor, services, broadcasts, notifications and jobs done; Date/TimePicker dialogs and loaders left) | ws4 session 6, 2026-10-01 |
-| WS5 | Animation: android.animation, view.animation, ViewPropertyAnimator, AVD animation | WS1 | not started (the tween core ProgressBar needs landed early from WS3: TimeInterpolator, Interpolator and the basic interpolators, Animation, AlphaAnimation, Transformation, AnimationUtils.loadInterpolator) | |
+| WS5 | Animation: android.animation, view.animation, ViewPropertyAnimator, AVD animation | WS1 | in progress (tweens in draw, tests/apps/tween; property animators, tests/apps/prop; StateListAnimator, layout animation and AVD remain) | session 7, 2026-10-02 |
 | WS6 | Storage: SQLite natives, database/content provider checks, file APIs, SharedPreferences tests | WS0 | not started | |
 | WS7 | Audio/media: mixer, SoundPool, MediaPlayer, AudioTrack, decoders, platform audio | WS0 | not started | |
 | WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | not started | |
 | WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | not started | |
-| WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO build, platform_switch.c, launcher) | ws4 session 6, 2026-10-01 |
+| WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO boots on hardware; launcher labels and icons landed (tests/apps/labeled); audio, rumble, 1080p docked remain) | session 7, 2026-10-02 |
 | WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | not started | |
 | WS12 | VM performance and memory | none | not started | |
 | WS13 | Test infrastructure and sample apps | WS0 | not started | |

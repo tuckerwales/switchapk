@@ -1,4 +1,7 @@
 import java.io.*;
+import java.lang.annotation.Inherited;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.lang.reflect.*;
 import java.math.*;
 import java.nio.*;
@@ -601,6 +604,100 @@ public class VmTest {
         p(Array.getLength(arr) + " " + Array.get(arr, 1) + " " + int[].class.getName() + " " + String[][].class.getName()
                 + " " + c.getSuperclass().getName() + " " + Color.class.isEnum() + " " + Runnable.class.isInterface());
         p(Integer.TYPE + " " + void.class + " " + new int[0].getClass().getComponentType());
+        annotations();
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Nest {
+        int v();
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Ann {
+        int value() default 1;
+
+        String name() default "n";
+
+        boolean flag() default false;
+
+        String[] names() default {"a", "b"};
+
+        Nest nest() default @Nest(v = 1);
+    }
+
+    @Retention(RetentionPolicy.CLASS)
+    @interface Hidden {
+        int v();
+    }
+
+    @Inherited
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Inh {
+        int v();
+    }
+
+    enum Kind {
+        ONE, TWO
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Ref {
+        Class<?> type() default String.class;
+
+        Kind kind() default Kind.ONE;
+    }
+
+    @Ann(value = 3, name = "z", names = {"p", "q"}, nest = @Nest(v = 9))
+    @Hidden(v = 4)
+    @Inh(v = 2)
+    static class Marked {
+        @Ann(name = "f")
+        public int field;
+
+        @Ann(value = 8, flag = true)
+        public void method() {}
+    }
+
+    static class Child extends Marked {}
+
+    @Ref(type = Integer.class, kind = Kind.TWO)
+    static class Refs {
+        @Ref
+        public int plain;
+    }
+
+    static void annotations() throws Exception {
+        p("== annotations");
+        Ann a = Marked.class.getAnnotation(Ann.class);
+        p(a.value() + " " + a.name() + " " + a.flag() + " " + Arrays.toString(a.names()) + " " + a.nest().v() + " "
+                + (a.annotationType() == Ann.class));
+        String[] ns = a.names();
+        ns[0] = "changed";
+        p(a.names()[0]);
+        Ann again = Marked.class.getAnnotation(Ann.class);
+        p(a.equals(again) + " " + a.equals(a) + " " + a.equals(null) + " " + a.equals("x") + " "
+                + (a.hashCode() == again.hashCode()) + " " + a.hashCode());
+        p(Ann.class.getDeclaredMethod("value").getDefaultValue() + " "
+                + ((Nest) Ann.class.getDeclaredMethod("nest").getDefaultValue()).v());
+        Ann f = Marked.class.getDeclaredField("field").getAnnotation(Ann.class);
+        p(f.name() + " " + f.value() + " " + f.flag() + " " + Arrays.toString(f.names()) + " " + f.nest().v());
+        Ann m = Marked.class.getDeclaredMethod("method").getAnnotation(Ann.class);
+        p(m.value() + " " + m.flag() + " " + m.name());
+        p(String.valueOf(Marked.class.getAnnotation(Hidden.class)) + " " + Marked.class.isAnnotationPresent(Ann.class)
+                + " " + Marked.class.isAnnotationPresent(Hidden.class));
+        p(Child.class.getAnnotation(Inh.class).v() + " " + Child.class.getAnnotation(Ann.class) + " "
+                + Child.class.getDeclaredAnnotations().length + " " + Child.class.getAnnotations().length + " "
+                + Marked.class.getDeclaredAnnotations().length);
+        Ref r = Refs.class.getAnnotation(Ref.class);
+        p(r.type().getName() + " " + r.kind().name());
+        Ref rd = Refs.class.getDeclaredField("plain").getAnnotation(Ref.class);
+        p(rd.type().getName() + " " + rd.kind().name());
+        try {
+            Marked.class.getAnnotation(null);
+            p("no npe");
+        } catch (NullPointerException e) {
+            p("npe");
+        }
     }
 
     static void io() throws Exception {

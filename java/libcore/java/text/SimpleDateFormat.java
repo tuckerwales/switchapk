@@ -94,7 +94,9 @@ public class SimpleDateFormat extends DateFormat {
                     break;
                 case 'M':
                 case 'L':
-                    if (count >= 4) {
+                    if (count == 5) {
+                        out.append(MONTHS[c.get(Calendar.MONTH)].charAt(0));
+                    } else if (count == 4) {
                         out.append(MONTHS[c.get(Calendar.MONTH)]);
                     } else if (count == 3) {
                         out.append(MONTHS[c.get(Calendar.MONTH)], 0, 3);
@@ -105,7 +107,10 @@ public class SimpleDateFormat extends DateFormat {
                 case 'd': out.append(pad(c.get(Calendar.DAY_OF_MONTH), count)); break;
                 case 'D': out.append(pad(c.get(Calendar.DAY_OF_YEAR), count)); break;
                 case 'E':
-                    if (count >= 4) {
+                case 'c':
+                    if (count == 5) {
+                        out.append(DAYS[c.get(Calendar.DAY_OF_WEEK) - 1].charAt(0));
+                    } else if (count == 4) {
                         out.append(DAYS[c.get(Calendar.DAY_OF_WEEK) - 1]);
                     } else {
                         out.append(DAYS[c.get(Calendar.DAY_OF_WEEK) - 1], 0, 3);

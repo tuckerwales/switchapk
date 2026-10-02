@@ -1,0 +1,27 @@
+idle 500
+screenshot gridlayout_start.png
+log type 1 + 23
+tap 78 318
+idle 200
+tap 402 192
+idle 200
+tap 186 318
+idle 200
+tap 294 318
+idle 400
+screenshot gridlayout_typed.png
+log equals: 24
+tap 402 360
+idle 400
+screenshot gridlayout_result.png
+log tap the display: the middle weighted cell goes GONE and the other two share its space
+tap 240 66
+idle 600
+screenshot gridlayout_gone.png
+log tap again to bring it back, then C
+tap 240 66
+idle 600
+tap 294 402
+idle 400
+screenshot gridlayout_back.png
+quit

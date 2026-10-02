@@ -17,7 +17,4 @@ public class CheckBox extends CompoundButton {
 
     @Override
     public CharSequence getAccessibilityClassName() { return CheckBox.class.getName(); }
-
-    @Override
-    boolean drawFallbackButton() { return true; }
 }

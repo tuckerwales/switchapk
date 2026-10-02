@@ -1,0 +1,41 @@
+idle 500
+screenshot times_start.png
+log tap 3 on the hour circle: hour 3 AM, then the picker moves on to minutes
+tap 620 192
+idle 1200
+screenshot times_minutes.png
+log tap the 15 minute mark, then PM
+tap 620 192
+idle 600
+tap 140 294
+idle 600
+screenshot times_pm.png
+log spinner: minute 59 down to 00 rolls the hour to 12 and flips AM to PM
+tap 907 250
+idle 1000
+screenshot times_spin.png
+log open the 24-hour dialog
+tap 779 390
+idle 1000
+screenshot times_dialog.png
+log tap 20 on the inner ring, then OK
+tap 709 370
+idle 1200
+screenshot times_dialog_minutes.png
+tap 918 541
+idle 800
+log switch the clock picker to text input
+tap 335 395
+idle 800
+screenshot times_input.png
+log type 8 into the hour field: 8 PM
+tap 389 120
+idle 500
+text 8
+idle 800
+screenshot times_typed.png
+log back to the clock, which shows the typed hour
+tap 370 221
+idle 800
+screenshot times_back.png
+quit

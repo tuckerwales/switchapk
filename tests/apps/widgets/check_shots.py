@@ -25,6 +25,10 @@ GREEN = 0xFF4CAF50
 RED = 0xFFE53935
 BLUE = 0xFF1565C0
 TRACK = 0xFFBDBDBD
+# Theme indicators (btn_check/btn_radio material, drawn as their static state lists).
+OUTLINE = 0xFF646464
+ACCENT = 0xFF008577
+BG = 0xFFFAFAFA
 WHITE = 0xFFFFFFFF
 
 
@@ -36,18 +40,18 @@ def main():
         (40, 50, RED, "image bitmap"),
         (200, 50, WINDOW, "window beside the image"),
         (1200, 180, BLUE, "button background"),
-        (12, 252, TRACK, "checkbox off"),
-        (12, 324, TRACK, "radio A off"),
-        (12, 396, TRACK, "radio B off"),
+        (12, 252, OUTLINE, "checkbox off: outline"), (24, 251, BG, "checkbox off: empty box"),
+        (10, 326, OUTLINE, "radio A off: ring"), (24, 326, BG, "radio A off: no dot"),
+        (10, 398, OUTLINE, "radio B off: ring"), (24, 396, BG, "radio B off: no dot"),
         (1240, 468, TRACK, "switch track off"),
     ])
     fails += shot(os.path.join(d, "widgets_on.png"), [
         (10, 4, GREEN, "button, check, radio B and switch"),
         (40, 50, RED, "image bitmap still"),
         (1200, 180, BLUE, "button background still"),
-        (12, 252, GREEN, "checkbox on"),
-        (12, 324, TRACK, "radio A stayed off"),
-        (12, 396, GREEN, "radio B on"),
+        (12, 252, ACCENT, "checkbox on: filled box"),
+        (10, 326, OUTLINE, "radio A stayed off"), (24, 326, BG, "radio A no dot"),
+        (10, 398, ACCENT, "radio B on: ring"), (24, 396, ACCENT, "radio B on: dot"),
         (1200, 468, GREEN, "switch track on"),
         (1270, 468, WHITE, "switch thumb at the end"),
     ])

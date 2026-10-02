@@ -2,6 +2,8 @@ package android.view;
 
 public class HapticFeedbackConstants {
     public static final int CLOCK_TICK = 4;
+    /** framework-internal (hidden in AOSP). */
+    public static final int CALENDAR_DATE = 5;
     public static final int CONFIRM = 16;
     public static final int CONTEXT_CLICK = 6;
     public static final int DRAG_START = 25;

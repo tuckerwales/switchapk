@@ -18,16 +18,81 @@ public class DateFormat {
     }
 
     /**
-     * Best-effort skeleton. {@code j} (locale hour) becomes {@code h} because
-     * the default is 12-hour, and an {@code a} is added when the hour needs it.
+     * Skeleton to pattern for the en-US locale (what ICU returns there). Fields
+     * are matched order-insensitively; skeletons outside the table fall back to
+     * the skeleton itself. {@code j} (locale hour) is 12-hour because the
+     * default is 12-hour, and an {@code a} is added when the hour needs it.
      */
     public static String getBestDateTimePattern(Locale locale, String skeleton) {
         if (skeleton == null) return "";
         String s = skeleton.replace("j", "h");
+        String best = bestPattern(canonicalSkeleton(s));
+        if (best != null) return best;
         boolean hour12 = s.indexOf('h') >= 0 || s.indexOf('K') >= 0;
         boolean hour24 = s.indexOf('H') >= 0 || s.indexOf('k') >= 0;
         if (hour12 && !hour24 && s.indexOf('a') < 0) s = s + " a";
         return s;
+    }
+
+    private static final String SKELETON_ORDER = "GyYQMLwWEcdDFahHkKmsSzZ";
+
+    /** Collapses each field to a single run, in a fixed order (numeric 'y' and 'd' widths are irrelevant to en-US). */
+    private static String canonicalSkeleton(String skeleton) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < SKELETON_ORDER.length(); i++) {
+            char f = SKELETON_ORDER.charAt(i);
+            int n = 0;
+            for (int j = 0; j < skeleton.length(); j++) if (skeleton.charAt(j) == f) n++;
+            if (n == 0) continue;
+            if (f == 'y' || f == 'd' || f == 'h' || f == 'H' || f == 'm' || f == 's' || f == 'a') n = 1;
+            if (f == 'E' && n <= 3) n = 1;
+            if ((f == 'M' || f == 'L') && n <= 2) n = 1;
+            for (int k = 0; k < n; k++) out.append(f == 'L' ? 'M' : f);
+        }
+        return out.toString();
+    }
+
+    private static final String[] EN_US_PATTERNS = {
+        "y", "y",
+        "M", "L",
+        "MMM", "LLL",
+        "MMMM", "LLLL",
+        "d", "d",
+        "yM", "M/y",
+        "yMd", "M/d/y",
+        "yMMM", "MMM y",
+        "yMMMM", "MMMM y",
+        "yMMMd", "MMM d, y",
+        "yMMMMd", "MMMM d, y",
+        "yMEd", "EEE, M/d/y",
+        "yMMMEd", "EEE, MMM d, y",
+        "yMMMMEEEEd", "EEEE, MMMM d, y",
+        "Md", "M/d",
+        "MEd", "EEE, M/d",
+        "MMMd", "MMM d",
+        "MMMMd", "MMMM d",
+        "MMMEd", "EEE, MMM d",
+        "MMMMEEEEd", "EEEE, MMMM d",
+        "E", "ccc",
+        "EEEE", "cccc",
+        "Ed", "d EEE",
+        "h", "h a",
+        "H", "HH",
+        "ah", "h a",
+        "hm", "h:mm a",
+        "ahm", "h:mm a",
+        "Hm", "HH:mm",
+        "hms", "h:mm:ss a",
+        "ahms", "h:mm:ss a",
+        "Hms", "HH:mm:ss",
+        "ms", "mm:ss",
+    };
+
+    private static String bestPattern(String canonical) {
+        for (int i = 0; i < EN_US_PATTERNS.length; i += 2) {
+            if (EN_US_PATTERNS[i].equals(canonical)) return EN_US_PATTERNS[i + 1];
+        }
+        return null;
     }
 
     public static java.text.DateFormat getTimeFormat(Context context) {
@@ -137,7 +202,8 @@ public class DateFormat {
                 break;
             case 'M':
             case 'L':
-                if (count >= 4) out.append(DateUtils.getMonthString(cal.get(Calendar.MONTH), DateUtils.LENGTH_LONG));
+                if (count == 5) out.append(DateUtils.getMonthString(cal.get(Calendar.MONTH), DateUtils.LENGTH_LONG).charAt(0));
+                else if (count == 4) out.append(DateUtils.getMonthString(cal.get(Calendar.MONTH), DateUtils.LENGTH_LONG));
                 else if (count == 3) {
                     out.append(DateUtils.getMonthString(cal.get(Calendar.MONTH), DateUtils.LENGTH_SHORT));
                 }
@@ -149,7 +215,9 @@ public class DateFormat {
             case 'E':
             case 'c':
                 int style = count >= 4 ? DateUtils.LENGTH_LONG : DateUtils.LENGTH_SHORT;
-                out.append(DateUtils.getDayOfWeekString(cal.get(Calendar.DAY_OF_WEEK), style));
+                String day = DateUtils.getDayOfWeekString(cal.get(Calendar.DAY_OF_WEEK), style);
+                if (count == 5) out.append(day.charAt(0));
+                else out.append(day);
                 break;
             case 'a':
                 out.append(DateUtils.getAMPMString(cal.get(Calendar.AM_PM)));

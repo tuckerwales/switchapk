@@ -100,7 +100,12 @@ public abstract class Calendar implements java.io.Serializable, Cloneable, Compa
     }
 
     public void set(int field, int value) {
-        getTimeInMillis();
+        // Pending field changes are not normalized until the next read (so set(2024, FEBRUARY, 30)
+        // from January 31 is March 1, not a normalized February 31 with the day replaced).
+        if (isTimeSet && !areFieldsSet) {
+            computeFields();
+            areFieldsSet = true;
+        }
         fields[field] = value;
         isSet[field] = true;
         isTimeSet = false;

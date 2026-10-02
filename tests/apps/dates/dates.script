@@ -1,0 +1,56 @@
+idle 500
+screenshot dates_start.png
+log tap the 21st in the calendar
+tap 513 249
+idle 500
+log next month arrow, then swipe left to April
+tap 719 30
+idle 1000
+swipe 700 300 300 300 150
+idle 1200
+screenshot dates_april.png
+log open the year list from the header
+tap 69 38
+idle 800
+screenshot dates_years.png
+log pick 2026: back to the month view, February 2026
+tap 516 320
+idle 1000
+screenshot dates_2026.png
+log spinners: month down one (Jan 31 -> Feb 29), then the day up one
+tap 864 250
+idle 800
+tap 984 70
+idle 800
+screenshot dates_spin.png
+log open the dialog
+tap 870 390
+idle 1000
+screenshot dates_dialog.png
+log pick the 20th and press OK
+tap 834 388
+idle 500
+tap 968 539
+idle 800
+log swap the page for the CalendarView (August 2024, 8th selected)
+tap 1007 390
+idle 1000
+screenshot dates_calview.png
+log tap the 30th
+tap 777 297
+idle 600
+log D-pad into the month and move the highlight, then select
+key DPAD_DOWN
+idle 300
+key DPAD_DOWN
+idle 300
+screenshot dates_dpad1.png
+key DPAD_LEFT
+idle 300
+key DPAD_UP
+idle 300
+screenshot dates_dpad2.png
+key DPAD_CENTER
+idle 600
+screenshot dates_dpad3.png
+quit

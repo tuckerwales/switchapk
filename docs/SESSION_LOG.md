@@ -294,3 +294,45 @@ what is left in flight.
   tween animations for WS5 to apply. tests/apps/pickers
   covers taps, a drag with the adjust snap, wrapping, a value at its
   limit, D-pad focus and steps, and the clocks' text.
+- WS3 date widgets. Ported the internal ViewPager and PagerAdapter, the
+  material day picker (SimpleMonthView with touch and D-pad day
+  navigation, DayPickerPagerAdapter, DayPickerViewPager, DayPickerView,
+  YearPickerView), DatePicker with its calendar and spinner delegates,
+  CalendarView (material delegate; the holo week list falls back to it)
+  and DatePickerDialog. Supporting pieces: StateSet view-state masks,
+  ColorStateList.hasState, NumberPicker's two-digit formatter, narrow
+  month and weekday names in the formatters, and an en-US skeleton table
+  for getBestDateTimePattern. Fixed three things the dialog exposed:
+  Calendar.set normalized pending fields before each set (Feb 30 became
+  Mar 30), LinearLayout used the pre-N weighted measure for every app
+  (a weighted child got its wrap width plus the excess), and
+  DialogViewAnimator lacked AOSP's measure, so its match_parent year
+  list made the picker report TOO_SMALL and the dialog went full screen.
+  Faithful quirk kept: CalendarView passes its attributes to the inner
+  DayPickerView, so `android:visibility="gone"` in XML hides that view for
+  good. tests/apps/dates covers day taps, month paging by arrow and swipe,
+  the year list, the spinners (leap day), the dialog and the CalendarView
+  with touch and D-pad.
+- WS3 time widgets. Ported TimePicker with the clock delegate (header with
+  NumericTextView hour and minute, AM/PM radio labels, RadialTimePickerView
+  with the 24-hour inner ring, minute snapping that prefers the marks, the
+  between-marks dot, auto-advance from hours to minutes, the text input
+  mode via TextInputTimePickerView) and the spinner delegate (hour, minute
+  and AM/PM NumberPickers, the minute wrap rolling the hour and AM/PM),
+  plus TimePickerDialog (validates text input before OK). The hours to
+  minutes crossfade runs on a frame callback since ObjectAnimator is WS5.
+  The AM/PM labels exposed CompoundButton's old placeholder box, drawn for
+  any null button drawable; it is gone, since the material indicators load
+  now, and tests/apps/widgets checks the real checkbox and radio drawables
+  instead. tests/apps/times covers radial hour and minute taps, AM/PM, the
+  spinner wrap, the 24-hour dialog and typing an hour in text input mode.
+- WS3 GridLayout. Ported GridLayout whole: auto placement around explicit
+  indices and spans, the per-axis Bellman-Ford constraint solve with
+  topologically sorted arcs, alignment groups (start, end, left, right,
+  center, fill, baseline), default margins (half of `default_gap`, none
+  for Space), ALIGN_BOUNDS, row and column weights (binary search for the
+  largest share that still solves), GONE handling and the consistency
+  check. ViewGroup.onSetLayoutParams became protected so GridLayout can
+  hook it. tests/apps/gridlayout has 29 logic checks and a calculator
+  grid with row and column spans, a weighted row that re-splits when a
+  cell goes GONE, and an alignment column with a row-weighted cell.

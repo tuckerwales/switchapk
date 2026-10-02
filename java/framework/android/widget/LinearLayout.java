@@ -36,6 +36,12 @@ public class LinearLayout extends ViewGroup {
     private int mTotalLength;
     private float mWeightSum;
     private boolean mUseLargestChild;
+
+    /**
+     * Apps targeting M or older measure 0dp weighted children at their wrap size plus their share
+     * of the excess when the spec is not EXACTLY; newer ones get only the share (AOSP).
+     */
+    private final boolean mAllowInconsistentMeasurement;
     private int[] mMaxAscent;
     private int[] mMaxDescent;
     private Drawable mDivider;
@@ -59,6 +65,8 @@ public class LinearLayout extends ViewGroup {
 
     public LinearLayout(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
+        final android.content.pm.ApplicationInfo info = context.getApplicationInfo();
+        mAllowInconsistentMeasurement = info != null && info.targetSdkVersion <= android.os.Build.VERSION_CODES.M;
         if (attrs == null && defStyleAttr == 0 && defStyleRes == 0) return;
         final TypedArray a = context.obtainStyledAttributes(attrs, LINEAR_ATTRS, defStyleAttr, defStyleRes);
         int index = a.getInt(0, -1);
@@ -397,7 +405,8 @@ public class LinearLayout extends ViewGroup {
                     final int childHeight;
                     if (mUseLargestChild && heightMode != MeasureSpec.EXACTLY) {
                         childHeight = largestChildHeight;
-                    } else if (lp.height == 0 && heightMode == MeasureSpec.EXACTLY) {
+                    } else if (lp.height == 0 && (!mAllowInconsistentMeasurement
+                            || heightMode == MeasureSpec.EXACTLY)) {
                         childHeight = share;
                     } else {
                         childHeight = child.getMeasuredHeight() + share;
@@ -622,7 +631,8 @@ public class LinearLayout extends ViewGroup {
                     final int childWidth;
                     if (mUseLargestChild && widthMode != MeasureSpec.EXACTLY) {
                         childWidth = largestChildWidth;
-                    } else if (lp.width == 0 && widthMode == MeasureSpec.EXACTLY) {
+                    } else if (lp.width == 0 && (!mAllowInconsistentMeasurement
+                            || widthMode == MeasureSpec.EXACTLY)) {
                         childWidth = share;
                     } else {
                         childWidth = child.getMeasuredWidth() + share;

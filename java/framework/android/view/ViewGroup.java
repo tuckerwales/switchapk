@@ -643,8 +643,8 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
         }
     }
 
-    /** framework-internal. Called by View.setLayoutParams. */
-    void onSetLayoutParams(View child, LayoutParams layoutParams) { requestLayout(); }
+    /** framework-internal (hidden in AOSP). Called by View.setLayoutParams. */
+    protected void onSetLayoutParams(View child, LayoutParams layoutParams) { requestLayout(); }
 
     protected LayoutParams generateDefaultLayoutParams() {
         return new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);

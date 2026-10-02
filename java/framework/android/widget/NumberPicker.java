@@ -577,6 +577,20 @@ public class NumberPicker extends LinearLayout {
 
     public void setOnScrollListener(OnScrollListener onScrollListener) { mOnScrollListener = onScrollListener; }
 
+    /** Zero-padded two digit formatter (AOSP TwoDigitFormatter, used by the date and time pickers). */
+    private static class TwoDigitFormatter implements Formatter {
+        public String format(int value) {
+            return String.format(java.util.Locale.getDefault(), "%02d", value);
+        }
+    }
+
+    private static final TwoDigitFormatter sTwoDigitFormatter = new TwoDigitFormatter();
+
+    /** framework-internal (hidden in AOSP). */
+    public static final Formatter getTwoDigitFormatter() {
+        return sTwoDigitFormatter;
+    }
+
     public void setFormatter(Formatter formatter) {
         if (formatter == mFormatter) return;
         mFormatter = formatter;

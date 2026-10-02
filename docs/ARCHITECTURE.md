@@ -454,6 +454,19 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - Clocks have no system time broadcasts: TextClock schedules its own tick
   on the next second (formats with seconds) or minute boundary while
   attached and visible; Chronometer ticks on second boundaries of its base.
+- LinearLayout measures a 0dp weighted child at only its share of the
+  excess when the spec is not EXACTLY if the app targets N or later, and
+  at its wrap size plus the share for older targets (AOSP
+  `mAllowInconsistentMeasurement`). Dialog sizing depends on it: the
+  wrap-content window trial at `config_prefDialogWidth` only succeeds when
+  nothing below reports MEASURED_STATE_TOO_SMALL.
+- Date widgets: DatePicker and CalendarView use the material day picker
+  (internal ViewPager of SimpleMonthViews, YearPickerView); the landscape
+  `layout-land` dimens and layouts apply on the Switch screen. The holo
+  CalendarView week list (`calendarViewMode` 0, base `Theme` only) is not
+  ported and falls back to the material calendar. Dates format through
+  `DateFormat.getBestDateTimePattern`, which maps skeletons to en-US
+  patterns as ICU would (there is no ICU).
 - Drawing is software only: `isHardwareAccelerated()` is false, layer
   types only add a `saveLayer` with the layer paint, elevation and
   outlines draw no shadows, and `clipToOutline` is not applied yet.

@@ -294,3 +294,22 @@ what is left in flight.
   tween animations for WS5 to apply. tests/apps/pickers
   covers taps, a drag with the adjust snap, wrapping, a value at its
   limit, D-pad focus and steps, and the clocks' text.
+- WS3 date widgets. Ported the internal ViewPager and PagerAdapter, the
+  material day picker (SimpleMonthView with touch and D-pad day
+  navigation, DayPickerPagerAdapter, DayPickerViewPager, DayPickerView,
+  YearPickerView), DatePicker with its calendar and spinner delegates,
+  CalendarView (material delegate; the holo week list falls back to it)
+  and DatePickerDialog. Supporting pieces: StateSet view-state masks,
+  ColorStateList.hasState, NumberPicker's two-digit formatter, narrow
+  month and weekday names in the formatters, and an en-US skeleton table
+  for getBestDateTimePattern. Fixed three things the dialog exposed:
+  Calendar.set normalized pending fields before each set (Feb 30 became
+  Mar 30), LinearLayout used the pre-N weighted measure for every app
+  (a weighted child got its wrap width plus the excess), and
+  DialogViewAnimator lacked AOSP's measure, so its match_parent year
+  list made the picker report TOO_SMALL and the dialog went full screen.
+  Faithful quirk kept: CalendarView passes its attributes to the inner
+  DayPickerView, so `android:visibility="gone"` in XML hides that view for
+  good. tests/apps/dates covers day taps, month paging by arrow and swipe,
+  the year list, the spinners (leap day), the dialog and the CalendarView
+  with touch and D-pad.

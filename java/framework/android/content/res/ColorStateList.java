@@ -149,6 +149,20 @@ public class ColorStateList extends ComplexColor implements Parcelable {
     public int getDefaultColor() { return mDefaultColor; }
 
     public int[][] getStates() { return mStateSpecs; }
+
+    /** framework-internal (hidden in AOSP): whether any state spec mentions {@code state} (or its negation). */
+    public boolean hasState(int state) {
+        final int[][] stateSpecs = mStateSpecs;
+        for (int specIndex = 0; specIndex < stateSpecs.length; specIndex++) {
+            final int[] states = stateSpecs[specIndex];
+            for (int stateIndex = 0; stateIndex < states.length; stateIndex++) {
+                if (states[stateIndex] == state || states[stateIndex] == ~state) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     public int[] getColors() { return mColors; }
 
     private void onColorsChanged() {

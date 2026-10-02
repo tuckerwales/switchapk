@@ -388,5 +388,14 @@ what is left in flight.
   tests/apps/holocal has 19 logic checks and covers March 2024 with the
   15th selected, a tap on Sunday the 10th, and a swipe that settles on
   April with the 10th still selected. tests/apps/dates stays green.
-- In flight: the rest of WS3 (VideoView, RemoteViews), WS1 floating
-  action modes, WS5 animation.
+- WS3 VideoView placeholder. Ported VideoView (aspect-ratio measure,
+  audio-focus request, the framework error dialog, MediaController
+  attach) and MediaController (the `media_controller` layout, seek bar,
+  play, rewind, fast-forward, and prev/next once listeners are set).
+  `Context.AUDIO_SERVICE` returns an AudioManager that grants focus.
+  MediaPlayer keeps the data source and `prepareAsync` posts
+  `MEDIA_ERROR_UNKNOWN` / `MEDIA_ERROR_UNSUPPORTED`, because decoding is
+  WS7. Subtitles are reported unsupported. tests/apps/video has 16 logic
+  checks: the controller draws 1:05 of a 2:05 clip, and Play opens
+  "Can't play this video."
+- In flight: RemoteViews, WS1 floating action modes, WS5 animation.

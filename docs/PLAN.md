@@ -177,7 +177,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     LocalActivityManager (embedded activities); tests/apps/tabs
   - [x] CursorTreeAdapter, ResourceCursorTreeAdapter,
     SimpleCursorTreeAdapter; tests/apps/adapters
-  - [ ] the rest (VideoView, RemoteViews, ...)
+  - [x] VideoView and MediaController (playback fails with the framework
+    error dialog until WS7 decodes); tests/apps/video
+  - [ ] the rest (RemoteViews, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,
@@ -252,9 +254,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    adapters, the expandable list, NumberPicker, the clocks, DatePicker,
    CalendarView (material delegate and the holo week list),
    DatePickerDialog, TimePicker, TimePickerDialog and GridLayout,
-   SearchView, TabHost and the CursorTreeAdapter family.
-   Next: the rest of the WS3 widgets (VideoView, RemoteViews). WS5
-   (animation) can start in parallel.
+   SearchView, TabHost, the CursorTreeAdapter family and VideoView
+   (transport controls and the error dialog; decoding is WS7).
+   Next: the rest of the WS3 widgets (RemoteViews). WS5 (animation)
+   can start in parallel.
 2. Finish WS1: floating action modes (text selection toolbar).
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
@@ -426,3 +429,9 @@ and update ARCHITECTURE.md in the same commit.
   returns one letter, and `formatDateRange` with `FORMAT_NO_MONTH_DAY`
   includes the month name. Format pieces still join with ", ", so the
   week-list title is "March, 2024". ARCHITECTURE 6.4.1 updated.
+- 2026-10-02 (WS3, touches WS7): `Context.AUDIO_SERVICE` returns an
+  AudioManager. Focus requests are granted and never revoked.
+  `MediaPlayer.prepareAsync` fails with `MEDIA_ERROR_UNKNOWN` /
+  `MEDIA_ERROR_UNSUPPORTED` until WS7 has a decoder. VideoView shows the
+  framework error dialog when no OnErrorListener consumes the error.
+  ARCHITECTURE 6.4.1 and 6.6 updated.

@@ -1,0 +1,6 @@
+idle 800
+screenshot video_controls.png
+tap 640 684
+idle 800
+screenshot video_error.png
+quit

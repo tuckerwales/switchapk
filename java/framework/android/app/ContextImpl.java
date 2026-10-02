@@ -19,6 +19,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -356,6 +357,7 @@ public class ContextImpl extends Context {
             if (mSearchManager == null) mSearchManager = new SearchManager(getOuterContext(), null);
             return mSearchManager;
         }
+        if (AUDIO_SERVICE.equals(name)) return AudioManager.getInstance();
         return null;
     }
 
@@ -373,6 +375,7 @@ public class ContextImpl extends Context {
         if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;
         if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;
         if (serviceClass == SearchManager.class) return SEARCH_SERVICE;
+        if (serviceClass == AudioManager.class) return AUDIO_SERVICE;
         return null;
     }
 

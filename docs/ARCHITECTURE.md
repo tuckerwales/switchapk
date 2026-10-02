@@ -477,6 +477,14 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   mode) or NumberPicker spinners; RadialTimePickerView crossfades hours
   and minutes on a frame callback rather than an ObjectAnimator until
   WS5 lands.
+- VideoView is the AOSP widget on a SurfaceView, with MediaController as
+  the floating transport bar from the framework `media_controller` layout.
+  Nothing is decoded yet: `MediaPlayer.prepareAsync` posts
+  `MEDIA_ERROR_UNKNOWN` / `MEDIA_ERROR_UNSUPPORTED` on the main looper, and
+  VideoView shows the framework "Can't play this video." dialog unless an
+  `OnErrorListener` returns true. `Context.AUDIO_SERVICE` returns an
+  AudioManager that grants focus and never revokes it. Subtitle sources
+  are reported unsupported. The mixer and decoders are WS7.
 - GridLayout is the AOSP port: row and column lines come from a
   difference-constraint solve per axis, cached until the structure (child
   set, spans, GONE changes, `onSetLayoutParams`) or the values (any
@@ -714,10 +722,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - SQLite: bundled amalgamation compiled into the binary
   (`third_party/sqlite`), Java API in `android.database.sqlite` over thin
   natives (`SQLiteNative`); results are fully materialized per query.
-- Audio: one float stereo mixer in C (`platform_audio_start` callback)
-  mixing SoundPool voices, AudioTrack streams and MediaPlayer streams.
-  Decoders: WAV/PCM, OGG Vorbis (stb_vorbis or libvorbis), MP3 (mpg123 on
-  Switch portlibs). Switch output via audren or audout.
+- Audio (not built): one float stereo mixer in C (`platform_audio_start`
+  callback) mixing SoundPool voices, AudioTrack streams and MediaPlayer
+  streams. Decoders: WAV/PCM, OGG Vorbis (stb_vorbis or libvorbis), MP3
+  (mpg123 on Switch portlibs). Switch output via audren or audout. Until
+  that lands, the Java MediaPlayer and AudioManager are the placeholders
+  in 6.4.1 and produce no samples.
 - OpenGL ES 2/3: GLES20/GLES30 Java bindings generated from the Khronos
   headers into natives that call the real GLES (mesa/nouveau on Switch via
   portlibs). EGL14 and `javax.microedition.khronos.egl` map to real EGL

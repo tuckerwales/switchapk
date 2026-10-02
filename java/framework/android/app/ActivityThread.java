@@ -909,6 +909,46 @@ public final class ActivityThread {
         return sActivities.isEmpty() ? null : sActivities.get(0);
     }
 
+    // ---------------------------------------------------------------- embedded activities (LocalActivityManager)
+
+    /** framework-internal (AOSP resolveActivityInfo). Throws if nothing in the app handles intent. */
+    static ActivityInfo resolveActivityInfo(Intent intent) {
+        final ParsedActivity parsed = resolveActivity(intent);
+        if (parsed == null) {
+            throw new android.content.ActivityNotFoundException("Unable to find explicit activity class "
+                    + (intent.getComponent() != null ? intent.getComponent().toShortString() : String.valueOf(intent))
+                    + "; have you declared this activity in your AndroidManifest.xml?");
+        }
+        return parsed.info;
+    }
+
+    /**
+     * framework-internal (AOSP startActivityNow). Creates an activity embedded in parent and runs
+     * its onCreate; the LocalActivityManager drives the rest of its lifecycle. It never gets a
+     * record on the stack or a window of its own: its decor goes into the parent's views.
+     */
+    static Activity startActivityNow(Activity parent, String id, Intent intent, ActivityInfo info, Bundle state,
+            Activity.NonConfigurationInstances nci) {
+        final Object obj = newComponent(info.name);
+        if (!(obj instanceof Activity)) throw new ClassCastException(info.name + " is not an Activity");
+        final Activity a = (Activity) obj;
+        a.attach(sContext.createComponentContext(a), info, intent, sApplication, parent, id, nci,
+                sResources.getConfiguration());
+        a.performCreate(state);
+        return a;
+    }
+
+    /** framework-internal (AOSP performDestroyActivity for an embedded activity). */
+    static void destroyEmbeddedActivity(Activity a, boolean finishing) {
+        if (a == null || a.isDestroyed()) return;
+        if (finishing) a.mFinished = true;
+        if (a.mResumed) a.performPause();
+        if (!a.isStopped() && a.mCreated) a.performStop();
+        a.performDestroy();
+        a.getWindow().closeAllPanels();
+        WindowManagerGlobal.getInstance().closeAll(a);
+    }
+
     private static ParsedActivity resolveActivity(Intent intent) {
         if (intent == null) return null;
         for (int i = 0; i < sActivities.size(); i++) {

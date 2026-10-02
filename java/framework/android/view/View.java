@@ -4499,6 +4499,15 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
 
     public void dispatchPointerCaptureChanged(boolean hasCapture) { onPointerCaptureChange(hasCapture); }
 
+    /** framework-internal (hidden in AOSP). */
+    public boolean isRootNamespace() { return (mPrivateFlags & PFLAG_IS_ROOT_NAMESPACE) != 0; }
+
+    /** framework-internal (hidden in AOSP). */
+    public void setIsRootNamespace(boolean isRoot) {
+        if (isRoot) mPrivateFlags |= PFLAG_IS_ROOT_NAMESPACE;
+        else mPrivateFlags &= ~PFLAG_IS_ROOT_NAMESPACE;
+    }
+
     public PointerIcon getPointerIcon() { return null; }
 
     public void setPointerIcon(PointerIcon pointerIcon) {}

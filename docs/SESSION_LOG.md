@@ -354,3 +354,15 @@ what is left in flight.
   bar SearchView with provider suggestions and refine arrow, launching
   ResultsActivity from a suggestion, the search dialog, an in-place list
   filter and an iconified SearchView expanding and closing.
+- WS3 TabHost. Ported TabHost (view id, factory and intent content,
+  label, label and icon, and custom view indicators, D-pad focus hand-off
+  from embedded activities), TabWidget (bottom strips, imposed tab widths
+  when the row overflows, selected tab drawn last), and the embedded
+  activity stack: LocalActivityManager, ActivityGroup and TabActivity.
+  Activity gained its parent and embedded id, with finish,
+  startActivityForResult, setTitle and the options menu routed through
+  the parent and results routed back to the child. tests/apps/tabs has 56
+  logic checks and covers material tab indicators, the view and factory
+  tabs, two embedded activities (only the current one resumed), a result
+  delivered to an embedded activity, recreation on the same tab with
+  retained instances, and BACK finishing the group through its child.

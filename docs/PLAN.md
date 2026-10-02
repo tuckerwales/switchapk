@@ -115,7 +115,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - [x] tests/apps/hello + build script + headless screenshot
 
 ### M2
-- [ ] WS1 view system core
+- [x] WS1 view system core
   - [x] View, ViewGroup, input events, ViewConfiguration, VelocityTracker, gesture detectors, FocusFinder
   - [x] ViewRootImpl, Choreographer, WindowManagerGlobal (window stack, routing, compositing)
   - [x] LayoutInflater, ViewStub, PhoneWindow/DecorView, MenuInflater + menu model, Window.Callback
@@ -134,7 +134,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     method annotations (defaults, nested annotations, arrays, enums,
     class literals) and ViewDebug.dumpCapturedView (tests/dex/VmTest,
     tests/apps/viewdbg)
-  - [ ] DisplayCutout
+  - [x] DisplayCutout: safe insets, per-edge bounds, waterfall insets,
+    WindowInsets.getDisplayCutout, and the layout-in-cutout mode
+    (tests/apps/cutout). The Switch reports no cutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
   - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
@@ -256,7 +258,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS2 is done. WS3 is done: ImageView, the compound controls,
+1. WS1 is done. WS2 is done. WS3 is done: ImageView, the compound controls,
    scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
    EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
    landed, and so have progress, popups, Toolbar, the action bar,
@@ -268,12 +270,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    RemoteViews (inflate, actions and reapply; notification content
    views stay unsupported). Text selection opens the floating toolbar
    (tests/apps/select).
-   Next: the rest of WS1 (DisplayCutout).
+   Next: boot the WS10 NRO on hardware and fix what breaks.
    WS5 (animation) can start in parallel.
-2. Finish WS1: DisplayCutout. ViewDebug annotations have landed
-   (tests/apps/viewdbg). The floating toolbar (tests/apps/floating),
-   text selection (tests/apps/select), and clipToOutline
-   (tests/apps/outline) have landed.
+2. WS1 is done. DisplayCutout has landed (tests/apps/cutout), and so
+   have ViewDebug (tests/apps/viewdbg), the floating toolbar
+   (tests/apps/floating), text selection (tests/apps/select), and
+   clipToOutline (tests/apps/outline).
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
@@ -476,3 +478,11 @@ and update ARCHITECTURE.md in the same commit.
   no-arg methods. `RemoteViews.onLoadClass` still allows framework View
   packages by name and does not require `@RemoteView`. ARCHITECTURE 4.2
   and 6.4.1 updated.
+- 2026-10-02 (WS1): `DisplayCutout` stores safe insets, one bounding rect
+  per edge, and waterfall insets. `WindowInsets.getDisplayCutout`
+  returns it. `consumeDisplayCutout` drops the cutout and leaves type
+  insets in place. `Builder.setDisplayCutout` does not add type insets
+  by itself. `PhoneWindow` copies `windowLayoutInDisplayCutoutMode`
+  onto `LayoutParams`. The Switch reports no cutout, and `getCutoutPath`
+  stays null because cutout specs are not parsed. ARCHITECTURE 6.4.1
+  updated.

@@ -9,22 +9,24 @@ import java.util.Objects;
 
 /**
  * Window insets. The Switch has no system bars, IME panel or cutout, so the
- * framework dispatches all-zero insets; apps may build and inset their own.
+ * framework dispatches all-zero insets and a null display cutout. Apps may
+ * build their own, including a {@link DisplayCutout}.
  */
 public final class WindowInsets {
     private static final int TYPE_COUNT = 9;
 
     public static final WindowInsets CONSUMED = new WindowInsets(new Insets[TYPE_COUNT], new Insets[TYPE_COUNT],
-            false, true, true);
+            false, true, true, null);
 
     private final Insets[] mTypeInsets;
     private final Insets[] mTypeMaxInsets;
     private final boolean mIsRound;
     private final boolean mSystemWindowInsetsConsumed;
     private final boolean mStableInsetsConsumed;
+    private final DisplayCutout mDisplayCutout;
 
     WindowInsets(Insets[] typeInsets, Insets[] typeMaxInsets, boolean isRound, boolean systemConsumed,
-            boolean stableConsumed) {
+            boolean stableConsumed, DisplayCutout cutout) {
         mTypeInsets = new Insets[TYPE_COUNT];
         mTypeMaxInsets = new Insets[TYPE_COUNT];
         for (int i = 0; i < TYPE_COUNT; i++) {
@@ -34,17 +36,18 @@ public final class WindowInsets {
         mIsRound = isRound;
         mSystemWindowInsetsConsumed = systemConsumed;
         mStableInsetsConsumed = stableConsumed;
+        mDisplayCutout = cutout;
     }
 
     /** framework-internal (hidden in AOSP). Zero insets for a window. */
     public WindowInsets(Rect systemWindowInsets) {
-        this(null, null, false, false, false);
+        this(null, null, false, false, false, null);
         if (systemWindowInsets != null) mTypeInsets[1] = Insets.of(systemWindowInsets);
     }
 
     public WindowInsets(WindowInsets src) {
         this(src.mTypeInsets, src.mTypeMaxInsets, src.mIsRound, src.mSystemWindowInsetsConsumed,
-                src.mStableInsetsConsumed);
+                src.mStableInsetsConsumed, src.mDisplayCutout);
     }
 
     private static Insets union(Insets[] all, int typeMask) {
@@ -87,12 +90,20 @@ public final class WindowInsets {
     public List<Rect> getBoundingRects(int typeMask) { return Collections.emptyList(); }
     public List<Rect> getBoundingRectsIgnoringVisibility(int typeMask) { return Collections.emptyList(); }
     public Rect getPrivacyIndicatorBounds() { return null; }
-    public WindowInsets consumeDisplayCutout() { return this; }
+
+    public DisplayCutout getDisplayCutout() { return mDisplayCutout; }
+
+    /** A copy with no display cutout. Type insets are left as they are. */
+    public WindowInsets consumeDisplayCutout() {
+        if (mDisplayCutout == null) return this;
+        return new WindowInsets(mTypeInsets, mTypeMaxInsets, mIsRound, mSystemWindowInsetsConsumed,
+                mStableInsetsConsumed, null);
+    }
     public boolean isConsumed() { return mSystemWindowInsetsConsumed && mStableInsetsConsumed; }
     public boolean isRound() { return mIsRound; }
 
     public WindowInsets consumeSystemWindowInsets() {
-        return new WindowInsets(null, mTypeMaxInsets, mIsRound, true, mStableInsetsConsumed);
+        return new WindowInsets(null, mTypeMaxInsets, mIsRound, true, mStableInsetsConsumed, mDisplayCutout);
     }
 
     public WindowInsets replaceSystemWindowInsets(int left, int top, int right, int bottom) {
@@ -119,7 +130,7 @@ public final class WindowInsets {
     public Insets getTappableElementInsets() { return getInsets(Type.TAPPABLE_ELEMENT); }
 
     public WindowInsets consumeStableInsets() {
-        return new WindowInsets(mTypeInsets, null, mIsRound, mSystemWindowInsetsConsumed, true);
+        return new WindowInsets(mTypeInsets, null, mIsRound, mSystemWindowInsetsConsumed, true, mDisplayCutout);
     }
 
     public WindowInsets inset(Insets insets) { return inset(insets.left, insets.top, insets.right, insets.bottom); }
@@ -131,7 +142,8 @@ public final class WindowInsets {
             a[i] = insetInsets(mTypeInsets[i], left, top, right, bottom);
             b[i] = insetInsets(mTypeMaxInsets[i], left, top, right, bottom);
         }
-        return new WindowInsets(a, b, mIsRound, mSystemWindowInsetsConsumed, mStableInsetsConsumed);
+        DisplayCutout cut = mDisplayCutout == null ? null : mDisplayCutout.inset(left, top, right, bottom);
+        return new WindowInsets(a, b, mIsRound, mSystemWindowInsetsConsumed, mStableInsetsConsumed, cut);
     }
 
     private static Insets insetInsets(Insets insets, int left, int top, int right, int bottom) {
@@ -146,7 +158,7 @@ public final class WindowInsets {
     @Override
     public String toString() {
         return "WindowInsets{systemWindowInsets=" + getSystemWindowInsets() + " stableInsets=" + getStableInsets()
-                + (isRound() ? " round" : "") + "}";
+                + (isRound() ? " round" : "") + (mDisplayCutout != null ? " cutout=" + mDisplayCutout : "") + "}";
     }
 
     @Override
@@ -162,13 +174,14 @@ public final class WindowInsets {
             if (!mTypeInsets[i].equals(that.mTypeInsets[i])) return false;
             if (!mTypeMaxInsets[i].equals(that.mTypeMaxInsets[i])) return false;
         }
-        return true;
+        return Objects.equals(mDisplayCutout, that.mDisplayCutout);
     }
 
     @Override
     public int hashCode() {
         int h = java.util.Arrays.hashCode(mTypeInsets) * 31 + java.util.Arrays.hashCode(mTypeMaxInsets);
-        return h * 31 + (mIsRound ? 1 : 0) + (mSystemWindowInsetsConsumed ? 2 : 0) + (mStableInsetsConsumed ? 4 : 0);
+        h = h * 31 + (mIsRound ? 1 : 0) + (mSystemWindowInsetsConsumed ? 2 : 0) + (mStableInsetsConsumed ? 4 : 0);
+        return h * 31 + (mDisplayCutout == null ? 0 : mDisplayCutout.hashCode());
     }
 
     public static final class Builder {
@@ -177,6 +190,7 @@ public final class WindowInsets {
         private boolean mSystemInsetsConsumed = true;
         private boolean mStableInsetsConsumed = true;
         private boolean mIsRound;
+        private DisplayCutout mCutout;
 
         public Builder() {}
 
@@ -186,6 +200,7 @@ public final class WindowInsets {
             mSystemInsetsConsumed = insets.mSystemWindowInsetsConsumed;
             mStableInsetsConsumed = insets.mStableInsetsConsumed;
             mIsRound = insets.mIsRound;
+            mCutout = insets.mDisplayCutout;
         }
 
         public Builder setSystemWindowInsets(Insets systemWindowInsets) {
@@ -229,6 +244,11 @@ public final class WindowInsets {
             return this;
         }
 
+        public Builder setDisplayCutout(DisplayCutout cutout) {
+            mCutout = cutout;
+            return this;
+        }
+
         public Builder setPrivacyIndicatorBounds(Rect bounds) { return this; }
         public Builder setBoundingRects(int typeMask, List<Rect> rects) { return this; }
         public Builder setBoundingRectsIgnoringVisibility(int typeMask, List<Rect> rects) { return this; }
@@ -243,7 +263,7 @@ public final class WindowInsets {
         public WindowInsets build() {
             return new WindowInsets(mSystemInsetsConsumed ? null : mTypeInsets,
                     mStableInsetsConsumed ? null : mTypeMaxInsets, mIsRound, mSystemInsetsConsumed,
-                    mStableInsetsConsumed);
+                    mStableInsetsConsumed, mCutout);
         }
     }
 

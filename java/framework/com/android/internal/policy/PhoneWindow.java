@@ -671,6 +671,8 @@ public class PhoneWindow extends Window {
         }
         if (a.getBoolean(STYLE_CLOSE_ON_TOUCH_OUTSIDE_INDEX, false)) setCloseOnTouchOutsideIfNotSet(true);
         if (!hasSoftInputMode()) params.softInputMode = a.getInt(STYLE_SOFT_INPUT_MODE_INDEX, params.softInputMode);
+        params.layoutInDisplayCutoutMode = a.getInt(STYLE_LAYOUT_IN_DISPLAY_CUTOUT_MODE_INDEX,
+                params.layoutInDisplayCutoutMode);
         if (a.getBoolean(STYLE_DIM_ENABLED_INDEX, mIsFloating)) {
             if ((getForcedWindowFlags() & WindowManager.LayoutParams.FLAG_DIM_BEHIND) == 0) {
                 params.flags |= WindowManager.LayoutParams.FLAG_DIM_BEHIND;
@@ -757,7 +759,7 @@ public class PhoneWindow extends Window {
             STYLE_DIM_AMOUNT_INDEX = 16, STYLE_STATUS_BAR_COLOR_INDEX = 18, STYLE_NAVIGATION_BAR_COLOR_INDEX = 19,
             STYLE_FIXED_WIDTH_MAJOR_INDEX = 22, STYLE_FIXED_WIDTH_MINOR_INDEX = 23,
             STYLE_FIXED_HEIGHT_MAJOR_INDEX = 24, STYLE_FIXED_HEIGHT_MINOR_INDEX = 25,
-            STYLE_ANIMATION_STYLE_INDEX = 32;
+            STYLE_LAYOUT_IN_DISPLAY_CUTOUT_MODE_INDEX = 31, STYLE_ANIMATION_STYLE_INDEX = 32;
 
     /** framework-internal. Window format follows the background opacity, as AOSP does. */
     void updateFormatForBackground(Drawable background) {

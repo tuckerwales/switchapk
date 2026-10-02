@@ -436,4 +436,12 @@ what is left in flight.
   fields and no-arg methods. Hierarchy tracing stays a no-op.
   tests/apps/viewdbg has 11 logic checks, and VmTest covers the
   reflection against the reference JVM.
-- In flight: WS1 DisplayCutout, WS5 animation.
+- WS1 DisplayCutout. The class stores safe insets, per-edge bounds and
+  waterfall insets. WindowInsets.getDisplayCutout returns one attached
+  by the builder, and consumeDisplayCutout drops it without clearing
+  type insets. PhoneWindow reads windowLayoutInDisplayCutoutMode into
+  the layout params. The Switch reports no cutout, and getCutoutPath
+  stays null. tests/apps/cutout has 15 logic checks: shortEdges comes
+  from the theme, an inset notch moves, and the live window insets
+  have no cutout.
+- In flight: WS5 animation. Next on device: boot the WS10 NRO.

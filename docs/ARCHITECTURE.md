@@ -442,6 +442,16 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   the editor that called showSoftInput, via InputConnection.commitText.
 
 ### 6.4.1 View system notes for widget authors
+- `DisplayCutout` holds safe insets, one bounding rect per edge, and
+  waterfall insets. `WindowInsets.getDisplayCutout` returns the cutout
+  attached with `Builder.setDisplayCutout`. That setter does not add
+  `Type.displayCutout` insets; `consumeDisplayCutout` clears the cutout
+  and leaves those insets. `inset` moves the cutout with the other
+  insets. `getCutoutPath` is null: cutout specs are not parsed. The
+  Switch has no cutout, so dispatched insets carry none.
+  `PhoneWindow` copies the theme `windowLayoutInDisplayCutoutMode`
+  (`default` 0, `shortEdges` 1, `never` 2, `always` 3) onto
+  `LayoutParams.layoutInDisplayCutoutMode`.
 - `ViewDebug` is the public annotation set (`ExportedProperty`,
   `CapturedViewProperty`, `IntToString`, `FlagToString`) plus
   `dumpCapturedView`, which logs fields and no-arg methods marked

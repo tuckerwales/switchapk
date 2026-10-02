@@ -485,6 +485,13 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `OnErrorListener` returns true. `Context.AUDIO_SERVICE` returns an
   AudioManager that grants focus and never revokes it. Subtitle sources
   are reported unsupported. The mixer and decoders are WS7.
+- RemoteViews inflates its layout and runs the action list (reflection
+  setters, click and checked PendingIntents, fill-in against a template
+  tag on an ancestor, and RemoteCollectionItems as a BaseAdapter).
+  onLoadClass allows framework View packages because the VM does not
+  surface the RemoteView annotation. DrawInstructions apply as an empty
+  view. setRemoteAdapter(Intent) is not hosted. Notification content
+  RemoteViews stay unsupported, and this does not change Notification.
 - GridLayout is the AOSP port: row and column lines come from a
   difference-constraint solve per axis, cached until the structure (child
   set, spans, GONE changes, `onSetLayoutParams`) or the values (any

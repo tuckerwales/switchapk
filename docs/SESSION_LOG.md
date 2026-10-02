@@ -398,4 +398,14 @@ what is left in flight.
   WS7. Subtitles are reported unsupported. tests/apps/video has 16 logic
   checks: the controller draws 1:05 of a 2:05 clip, and Play opens
   "Can't play this video."
-- In flight: RemoteViews, WS1 floating action modes, WS5 animation.
+- WS3 RemoteViews. apply inflates the layout and runs the action list:
+  reflection setters, click and checked PendingIntents, fill-in against
+  a template tag on an ancestor, and RemoteCollectionItems as a
+  BaseAdapter. onLoadClass allows framework View packages because the
+  VM does not surface the RemoteView annotation. DrawInstructions apply
+  as an empty view, and setRemoteAdapter(Intent) is not hosted.
+  Notification content views stay unsupported. tests/apps/remote has 43
+  logic checks, including a parcel snapshot, a landscape and sized
+  choice, a two-row list whose fill-in delivers the row extra, and an
+  Open click that reapply()s an orange swatch.
+- In flight: WS1 floating action modes, WS5 animation.

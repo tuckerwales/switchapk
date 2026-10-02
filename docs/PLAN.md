@@ -131,7 +131,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
   - [x] movement and key listeners, EditText, BaseInputConnection, IME `text` delivery
   - [x] Html.fromHtml, Linkify, DateUtils
-- [ ] WS3 widgets
+- [x] WS3 widgets
   - [x] ImageView (scale types), Button, ImageButton, CompoundButton,
     CheckBox, RadioButton, RadioGroup, ToggleButton, Switch, Space;
     tests/apps/widgets
@@ -179,7 +179,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     SimpleCursorTreeAdapter; tests/apps/adapters
   - [x] VideoView and MediaController (playback fails with the framework
     error dialog until WS7 decodes); tests/apps/video
-  - [ ] the rest (RemoteViews, ...)
+  - [x] RemoteViews (apply, reapply, parcel, collections); tests/apps/remote
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,
@@ -247,17 +247,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS2 is done. WS3 is in progress: ImageView, the compound controls,
+1. WS2 is done. WS3 is done: ImageView, the compound controls,
    scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
    EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
    landed, and so have progress, popups, Toolbar, the action bar,
    adapters, the expandable list, NumberPicker, the clocks, DatePicker,
    CalendarView (material delegate and the holo week list),
    DatePickerDialog, TimePicker, TimePickerDialog and GridLayout,
-   SearchView, TabHost, the CursorTreeAdapter family and VideoView
-   (transport controls and the error dialog; decoding is WS7).
-   Next: the rest of the WS3 widgets (RemoteViews). WS5 (animation)
-   can start in parallel.
+   SearchView, TabHost, the CursorTreeAdapter family, VideoView
+   (transport controls and the error dialog; decoding is WS7) and
+   RemoteViews (inflate, actions and reapply; notification content
+   views stay unsupported).
+   Next: WS1 floating action modes. WS5 (animation) can start in
+   parallel.
 2. Finish WS1: floating action modes (text selection toolbar).
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13

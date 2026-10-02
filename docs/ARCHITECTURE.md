@@ -464,7 +464,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (internal ViewPager of SimpleMonthViews, YearPickerView); the landscape
   `layout-land` dimens and layouts apply on the Switch screen. The holo
   CalendarView week list (`calendarViewMode` 0, base `Theme` only) is not
-  ported and falls back to the material calendar. Dates format through
+  ported and falls back to the material calendar. TimePicker uses the
+  radial clock (with the text input mode) or NumberPicker spinners;
+  RadialTimePickerView crossfades hours and minutes on a frame callback
+  rather than an ObjectAnimator until WS5 lands.
+- CompoundButton draws only its button drawable; with none (an explicit
+  `@null`) nothing is drawn, as on Android. Dates format through
   `DateFormat.getBestDateTimePattern`, which maps skeletons to en-US
   patterns as ICU would (there is no ICU).
 - Drawing is software only: `isHardwareAccelerated()` is false, layer

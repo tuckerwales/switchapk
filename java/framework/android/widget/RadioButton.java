@@ -35,7 +35,4 @@ public class RadioButton extends CompoundButton {
 
     @Override
     public CharSequence getAccessibilityClassName() { return RadioButton.class.getName(); }
-
-    @Override
-    boolean drawFallbackButton() { return true; }
 }

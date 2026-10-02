@@ -18,8 +18,8 @@ import android.view.View;
 /**
  * A button with a check state and an indicator drawable (AOSP CompoundButton).
  * The indicator is drawn by this class, not as a compound drawable, so an app
- * drawable on the text is left alone. With no button drawable, a flat box is
- * drawn so the control is still visible.
+ * drawable on the text is left alone. With no button drawable (for example
+ * {@code android:button="@null"}) nothing is drawn, as on Android.
  */
 public abstract class CompoundButton extends Button implements Checkable {
     private static final int[] ATTRS = {android.R.attr.button, android.R.attr.checked};
@@ -35,7 +35,6 @@ public abstract class CompoundButton extends Button implements Checkable {
     private boolean mHasButtonTintMode;
     private OnCheckedChangeListener mOnCheckedChangeListener;
     private OnCheckedChangeListener mOnCheckedChangeWidgetListener;
-    private Paint mFallbackPaint;
 
     public interface OnCheckedChangeListener {
         void onCheckedChanged(CompoundButton buttonView, boolean isChecked);
@@ -164,7 +163,7 @@ public abstract class CompoundButton extends Button implements Checkable {
     protected void onDraw(Canvas canvas) {
         int dw = buttonWidth();
         int dh = buttonHeight();
-        if (dw > 0 && dh > 0 && (mButtonDrawable != null || drawFallbackButton())) {
+        if (dw > 0 && dh > 0 && mButtonDrawable != null) {
             int vertical = getGravity() & Gravity.VERTICAL_GRAVITY_MASK;
             int top;
             if (vertical == Gravity.BOTTOM) top = getHeight() - getPaddingBottom() - dh;
@@ -174,20 +173,11 @@ public abstract class CompoundButton extends Button implements Checkable {
             int left = isLayoutRtl() ? getWidth() - getPaddingRight() - dw : getPaddingLeft();
             left += getScrollX();
             top += getScrollY();
-            if (mButtonDrawable != null) {
-                mButtonDrawable.setBounds(left, top, left + dw, top + dh);
-                mButtonDrawable.draw(canvas);
-            } else {
-                if (mFallbackPaint == null) mFallbackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                mFallbackPaint.setColor(mChecked ? 0xFF4CAF50 : 0xFFBDBDBD);
-                canvas.drawRect(left, top, left + dw, top + dh, mFallbackPaint);
-            }
+            mButtonDrawable.setBounds(left, top, left + dw, top + dh);
+            mButtonDrawable.draw(canvas);
         }
         super.onDraw(canvas);
     }
-
-    /** CheckBox and RadioButton draw a flat box when the theme supplies no button drawable. */
-    boolean drawFallbackButton() { return false; }
 
     @Override
     protected int[] onCreateDrawableState(int extraSpace) {
@@ -251,13 +241,13 @@ public abstract class CompoundButton extends Button implements Checkable {
     }
 
     private int buttonWidth() {
-        if (mButtonDrawable == null) return drawFallbackButton() ? fallbackSize() : 0;
+        if (mButtonDrawable == null) return 0;
         int w = mButtonDrawable.getIntrinsicWidth();
         return w > 0 ? w : fallbackSize();
     }
 
     private int buttonHeight() {
-        if (mButtonDrawable == null) return drawFallbackButton() ? fallbackSize() : 0;
+        if (mButtonDrawable == null) return 0;
         int h = mButtonDrawable.getIntrinsicHeight();
         return h > 0 ? h : fallbackSize();
     }

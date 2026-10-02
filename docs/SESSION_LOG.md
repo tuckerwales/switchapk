@@ -313,3 +313,16 @@ what is left in flight.
   good. tests/apps/dates covers day taps, month paging by arrow and swipe,
   the year list, the spinners (leap day), the dialog and the CalendarView
   with touch and D-pad.
+- WS3 time widgets. Ported TimePicker with the clock delegate (header with
+  NumericTextView hour and minute, AM/PM radio labels, RadialTimePickerView
+  with the 24-hour inner ring, minute snapping that prefers the marks, the
+  between-marks dot, auto-advance from hours to minutes, the text input
+  mode via TextInputTimePickerView) and the spinner delegate (hour, minute
+  and AM/PM NumberPickers, the minute wrap rolling the hour and AM/PM),
+  plus TimePickerDialog (validates text input before OK). The hours to
+  minutes crossfade runs on a frame callback since ObjectAnimator is WS5.
+  The AM/PM labels exposed CompoundButton's old placeholder box, drawn for
+  any null button drawable; it is gone, since the material indicators load
+  now, and tests/apps/widgets checks the real checkbox and radio drawables
+  instead. tests/apps/times covers radial hour and minute taps, AM/PM, the
+  spinner wrap, the 24-hour dialog and typing an hour in text input mode.

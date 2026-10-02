@@ -42,7 +42,6 @@ final class WidgetChecks {
         CheckBox check = (CheckBox) activity.findViewById(R.id.check);
         check.setPadding(0, 0, 0, 0);
         check.setGravity(Gravity.CENTER_VERTICAL);
-        check.setButtonDrawable(null);
 
         RadioButton a = (RadioButton) activity.findViewById(R.id.radio_a);
         RadioButton b = (RadioButton) activity.findViewById(R.id.radio_b);
@@ -50,8 +49,6 @@ final class WidgetChecks {
         b.setPadding(0, 0, 0, 0);
         a.setGravity(Gravity.CENTER_VERTICAL);
         b.setGravity(Gravity.CENTER_VERTICAL);
-        a.setButtonDrawable(null);
-        b.setButtonDrawable(null);
 
         float density = activity.getResources().getDisplayMetrics().density;
         Switch sw = (Switch) activity.findViewById(R.id.switcher);

@@ -40,7 +40,7 @@ duplicating work.
 | WS7 | Audio/media: mixer, SoundPool, MediaPlayer, AudioTrack, decoders, platform audio | WS0 | not started | |
 | WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | not started | |
 | WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | not started | |
-| WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO build, platform_switch.c, launcher) | ws4 session 6, 2026-10-01 |
+| WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO boots on hardware; launcher labels and icons) | session 7, 2026-10-02 |
 | WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | not started | |
 | WS12 | VM performance and memory | none | not started | |
 | WS13 | Test infrastructure and sample apps | WS0 | not started | |

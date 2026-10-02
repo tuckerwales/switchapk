@@ -39,7 +39,7 @@ duplicating work.
 | WS6 | Storage: SQLite natives, database/content provider checks, file APIs, SharedPreferences tests | WS0 | not started | |
 | WS7 | Audio/media: mixer, SoundPool, MediaPlayer, AudioTrack, decoders, platform audio | WS0 | not started | |
 | WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | in progress (bindings, EGL, GLSurfaceView, window surfaces and tests/apps/gles done on host Mesa; Switch GL on hardware, GLES1 verification, EGL15 syncs/images and SurfaceTexture left) | session 9, 2026-10-02 |
-| WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, bionic shim, JNI_OnLoad, System.load/loadLibrary and tests/apps/ndk done on x86-64 and AArch64 Linux; Switch code memory, NativeActivity/ANativeWindow and OpenSL ES left) | session 9, 2026-10-02 |
+| WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, bionic shim, JNI_OnLoad, System.load/loadLibrary and tests/apps/ndk done on x86-64 and AArch64 Linux; Switch code memory via svcMapProcessCodeMemory done, not run on hardware; newlib struct translation, NativeActivity/ANativeWindow and OpenSL ES left) | session 10, 2026-10-02 |
 | WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO boots on hardware; launcher labels and icons landed (tests/apps/labeled); audio, rumble, 1080p docked remain) | session 7, 2026-10-02 |
 | WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | not started | |
 | WS12 | VM performance and memory | none | not started | |

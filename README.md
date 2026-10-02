@@ -39,9 +39,10 @@ Early and experimental. It has not yet been confirmed on real hardware.
 **Not yet:**
 
 - Sound
-- OpenGL ES and native `.so` code on the Switch itself (GL is built in
-  but untested on hardware; native code needs code memory support), and
-  NativeActivity games, so most games do not run on device yet
+- OpenGL ES on the Switch itself (GL is built in but untested on
+  hardware). Native libraries can be mapped as executable code there,
+  but that path is not yet run on hardware, and NativeActivity games are
+  not implemented, so most games do not run on device yet
 - AndroidX/AppCompat apps are not targeted yet
 - Networking and SQLite
 

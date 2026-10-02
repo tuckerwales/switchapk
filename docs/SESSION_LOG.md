@@ -511,4 +511,16 @@ what is left in flight.
   (needed -lstdc++) and compiles without it. Not run on hardware.
 - The SD package (and the Package NRO workflow) now includes gles.apk and
   ndk.apk with arm64-v8a libraries, for the first hardware runs of GL and
-  the loader's error path.
+  the native loader.
+
+### Session 10 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- WS9 Switch code memory. The loader mirrors each library (and its
+  unresolved-import stub page) into the alias region with
+  svcMapProcessCodeMemory and svcSetProcessMemoryPermission, on the
+  own-process handle. Code pages are read-execute and data pages stay
+  read-write; a write+execute request keeps execute. An applet, where
+  hbloader does not hint those syscalls, fails the load with that
+  reason. The NRO links again: newlib has no getpagesize, posix_memalign
+  or pipe, so the shim provides the first two and pipe returns ENOSYS.
+  newlib struct translation is still open. Not run on hardware.

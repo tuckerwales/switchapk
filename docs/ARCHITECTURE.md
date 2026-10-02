@@ -434,6 +434,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   the editor that called showSoftInput, via InputConnection.commitText.
 
 ### 6.4.1 View system notes for widget authors
+- `View.setClipToOutline(true)` clips the view, its background, and its
+  children to the outline from `getOutlineProvider()`. Only a round rect
+  clips (`Outline.canClip()` is false for a path). The rect is in view
+  coordinates and is shifted by the scroll, matching
+  `draw(Canvas, ViewGroup)`. Shadows are not drawn. `invalidateOutline()`
+  invalidates the view.
 - `View`/`ViewGroup` are ports of AOSP; subclasses behave as on Android.
   Package-private hooks used inside `android.view`: `View.draw(Canvas,
   ViewGroup, long)` (per-child transform/alpha/clip), `mAttachInfo`

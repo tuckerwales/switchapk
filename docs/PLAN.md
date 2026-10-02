@@ -128,7 +128,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     above the content rect (tests/apps/floating). A long press on
     selectable text selects a word and opens that toolbar
     (tests/apps/select)
-  - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
+  - [x] clipToOutline: a round-rect outline clips the view and its
+    children (tests/apps/outline). Path outlines do not clip
+  - [ ] ViewDebug annotations, DisplayCutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
   - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
@@ -262,11 +264,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    RemoteViews (inflate, actions and reapply; notification content
    views stay unsupported). Text selection opens the floating toolbar
    (tests/apps/select).
-   Next: the rest of WS1 (clipToOutline, ViewDebug annotations,
-   DisplayCutout). WS5 (animation) can start in parallel.
-2. Finish WS1: clipToOutline, ViewDebug annotations, DisplayCutout.
-   The floating toolbar (tests/apps/floating) and text selection
-   (tests/apps/select) have landed.
+   Next: the rest of WS1 (ViewDebug annotations, DisplayCutout).
+   WS5 (animation) can start in parallel.
+2. Finish WS1: ViewDebug annotations and DisplayCutout. The floating
+   toolbar (tests/apps/floating), text selection (tests/apps/select),
+   and clipToOutline (tests/apps/outline) have landed.
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
@@ -456,3 +458,8 @@ and update ARCHITECTURE.md in the same commit.
   View.performLongClick(float, float) stores the point and calls
   performLongClick(), so a no-arg override sees an anchored press.
   ARCHITECTURE 6.4 updated.
+- 2026-10-02 (WS1): `View.setClipToOutline(true)` clips that view, its
+  background, and its children to the outline from `getOutlineProvider()`.
+  Only round rects clip. A path outline (`Outline.canClip()` is false)
+  does not. `invalidateOutline()` invalidates the view. Shadows are not
+  drawn. ARCHITECTURE 6.4.1 updated.

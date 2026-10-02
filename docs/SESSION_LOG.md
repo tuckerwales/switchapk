@@ -423,5 +423,9 @@ what is left in flight.
   ClipboardManager. tests/apps/select has 7 logic checks: "beta" is
   highlighted, Copy is the first toolbar item, and tapping it clears
   the selection.
-- In flight: WS1 clipToOutline, ViewDebug annotations, DisplayCutout,
-  WS5 animation.
+- WS1 clipToOutline. setClipToOutline clips the view, its background,
+  and its children to a round-rect outline. Path outlines do not clip,
+  and shadows are not drawn. tests/apps/outline has 3 logic checks: a
+  48dp corner is the page color, and the inside of the arc stays the
+  child's yellow.
+- In flight: WS1 ViewDebug annotations, DisplayCutout, WS5 animation.

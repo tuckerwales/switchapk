@@ -531,6 +531,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
     private Rect mClipBounds;
     private ViewOutlineProvider mOutlineProvider = ViewOutlineProvider.BACKGROUND;
     private boolean mClipToOutline;
+    private Outline mCachedOutline;
+    private Path mOutlinePath;
     private int mOutlineAmbientShadowColor = 0xff000000;
     private int mOutlineSpotShadowColor = 0xff000000;
     private ViewTreeObserver mFloatingTreeObserver;
@@ -2406,6 +2408,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         final int h = mBottom - mTop;
         if (clip) canvas.clipRect(sx, sy, sx + w, sy + h);
         if (mClipBounds != null) canvas.clipRect(mClipBounds);
+        applyClipToOutline(canvas);
         if (alpha < 1f) {
             int multipliedAlpha = (int) (255 * alpha);
             if (!onSetAlpha(multipliedAlpha)) {
@@ -2438,6 +2441,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
     public void draw(Canvas canvas) {
         mPrivateFlags = (mPrivateFlags & ~PFLAG_DIRTY) | PFLAG_DRAWN;
         mPrivateFlags &= ~PFLAG_INVALIDATED;
+        // The root is drawn here, not through draw(Canvas, ViewGroup). Children that
+        // do not skip draw clip again; the same outline intersected twice is unchanged.
+        applyClipToOutline(canvas);
         drawBackground(canvas);
         if ((mViewFlags & (FADING_EDGE_HORIZONTAL | FADING_EDGE_VERTICAL)) == 0 || !drawWithFadingEdges(canvas)) {
             onDraw(canvas);
@@ -3474,13 +3480,43 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
 
     public ViewOutlineProvider getOutlineProvider() { return mOutlineProvider; }
 
-    public void invalidateOutline() {}
+    public void invalidateOutline() { invalidate(); }
 
     public final boolean getClipToOutline() { return mClipToOutline; }
 
     public void setClipToOutline(boolean clipToOutline) {
         mClipToOutline = clipToOutline;
         invalidate();
+    }
+
+    /**
+     * Clips to a round-rect outline. Path outlines do not clip ({@link Outline#canClip()}
+     * is false for them). The canvas is in the scrolled space used by
+     * {@code draw(Canvas, ViewGroup)}, so the view-local rect is shifted by the scroll.
+     */
+    private void applyClipToOutline(Canvas canvas) {
+        if (!mClipToOutline || mOutlineProvider == null) return;
+        if (mBackground != null && mBackgroundSizeChanged) {
+            mBackground.setBounds(0, 0, mRight - mLeft, mBottom - mTop);
+            mBackgroundSizeChanged = false;
+        }
+        if (mCachedOutline == null) mCachedOutline = new Outline();
+        else mCachedOutline.setEmpty();
+        mOutlineProvider.getOutline(this, mCachedOutline);
+        if (!mCachedOutline.canClip() || mCachedOutline.isEmpty()) return;
+        int sx = mScrollX;
+        int sy = mScrollY;
+        Rect r = mCachedOutline.mRect;
+        if (mCachedOutline.mRadius <= 0f) {
+            canvas.clipRect(r.left + sx, r.top + sy, r.right + sx, r.bottom + sy);
+            return;
+        }
+        if (mOutlinePath == null) mOutlinePath = new Path();
+        else mOutlinePath.rewind();
+        float rad = mCachedOutline.mRadius;
+        mOutlinePath.addRoundRect(r.left + sx, r.top + sy, r.right + sx, r.bottom + sy, rad, rad,
+                Path.Direction.CW);
+        canvas.clipPath(mOutlinePath);
     }
 
     public void setOutlineSpotShadowColor(int color) { mOutlineSpotShadowColor = color; }

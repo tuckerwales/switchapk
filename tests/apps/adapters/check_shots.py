@@ -27,7 +27,7 @@ POPUP = 0xFFFAFAFA
 HIGHLIGHT = 0xFFC8C8C8
 
 LOG = ["expand 1", "child Leek", "row 2 id 102", "picked Cameroon"]
-CHECKS = 27
+CHECKS = 40
 
 
 def main():

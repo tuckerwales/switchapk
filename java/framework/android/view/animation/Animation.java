@@ -8,8 +8,8 @@ import android.util.AttributeSet;
 import android.util.TypedValue;
 
 /**
- * Port of AOSP Animation (timing, repeat, fill and listeners). Views do not
- * apply tween animations yet (WS5); ProgressBar drives one itself.
+ * Port of AOSP Animation (timing, repeat, fill and listeners). View.draw applies
+ * one of these. ProgressBar also drives an AlphaAnimation itself.
  */
 public abstract class Animation implements Cloneable {
     public static final int INFINITE = -1;

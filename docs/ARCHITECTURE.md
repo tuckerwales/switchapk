@@ -568,16 +568,18 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `SurfaceHolder.Callback`s on the UI thread when it is attached, visible
   and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
   backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
-- `View.animate()`, tween application and `StateListAnimator` belong to
-  WS5. `View.startAnimation/setAnimation/getAnimation/clearAnimation`
-  exist and hold the animation (ViewAnimator and friends use them) but
-  draw does not apply it yet; `AnimationUtils.loadAnimation` parses
-  `<alpha>` and loads other tags as an identity alpha animation. Only the tween core ProgressBar needs exists so far
-  (`TimeInterpolator`, `Interpolator`, linear/accelerate/decelerate
-  interpolators, `Animation`, `AlphaAnimation`, `Transformation`,
-  `AnimationUtils.loadInterpolator`); views do not apply tween animations
-  and AnimatedVectorDrawables do not animate. Accessibility classes are
-  value holders since no accessibility service runs.
+- `View.animate()`, property animators and `StateListAnimator` belong to
+  WS5 and are not implemented. View tweens apply in
+  `draw(Canvas, ViewGroup, long)`: the animation matrix is concatenated
+  with the view matrix, and the animation alpha multiplies the view
+  alpha. While `getTransformation` asks for another frame the parent is
+  invalidated, so a translation is not clipped to the view's layout rect.
+  `fillAfter` false clears the animation after the end frame.
+  `AnimationUtils.loadAnimation` loads `set`, `alpha`, `scale`, `rotate`
+  and `translate`; other tags stay an identity alpha. ProgressBar still
+  drives its own `AlphaAnimation`. AnimatedVectorDrawables do not
+  animate. Accessibility classes are value holders since no accessibility
+  service runs.
 - ProgressBar family (AOSP ports): determinate progress sets drawable
   levels per layer id (`android:id/progress`, `secondaryProgress`,
   `background`), indeterminate starts an Animatable drawable or cycles

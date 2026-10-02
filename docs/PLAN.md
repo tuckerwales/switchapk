@@ -242,6 +242,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ### M4
 - [ ] WS5 animation
+  - [x] view tween animations applied while drawing (translate, scale,
+    rotate, alpha, set; tests/apps/tween)
+  - [ ] property animators (ValueAnimator, ObjectAnimator,
+    ViewPropertyAnimator) and StateListAnimator
+  - [ ] layout animation and AnimatedVectorDrawable
 - [ ] WS7 audio/media
 - [ ] WS8 OpenGL ES/EGL
 - [ ] WS15 sensors and system services
@@ -270,17 +275,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    RemoteViews (inflate, actions and reapply; notification content
    views stay unsupported). Text selection opens the floating toolbar
    (tests/apps/select).
-   Next: audio (audren/audout), rumble, and 1080p docked rendering.
-   The NRO boots on hardware, and the launcher shows APK labels and icons.
-   WS5 (animation) can start in parallel. WS8 can start now that the
-   device presents a frame.
+   Next on device: audio (audren/audout), rumble, and 1080p docked
+   rendering. The NRO boots on hardware, and the launcher shows APK
+   labels and icons. View tween animations apply while drawing
+   (tests/apps/tween); property animators are the rest of WS5. WS8 can
+   start now that the device presents a frame.
 2. WS1 is done. DisplayCutout has landed (tests/apps/cutout), and so
    have ViewDebug (tests/apps/viewdbg), the floating toolbar
    (tests/apps/floating), text selection (tests/apps/select), and
    clipToOutline (tests/apps/outline).
 3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
-   as agents are available: WS5, WS8, WS13 (test runner around the app
-   scripts), WS6/WS7/WS9/WS11/WS12/WS15.
+   as agents are available: the rest of WS5 (property animators,
+   StateListAnimator, layout animation, animated vectors), WS8, WS13
+   (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
 
 ## Known issues and gotchas
 
@@ -301,7 +308,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - Apps whose manifest sets no theme get Theme.DeviceDefault.Light.DarkActionBar
   (AOSP selectDefaultTheme for targetSdk 24+), so they now show an action
   bar with the activity label. Action bar show/hide and action mode
-  transitions are immediate until WS5 animators land.
+  transitions are immediate until property animators land. View tweens
+  (translate, scale, rotate, alpha, set) already apply while drawing.
 - The headless `idle` script command now waits until queued input is
   consumed and nothing was presented for the quiet time since the command
   started.
@@ -489,3 +497,7 @@ and update ARCHITECTURE.md in the same commit.
   onto `LayoutParams`. The Switch reports no cutout, and `getCutoutPath`
   stays null because cutout specs are not parsed. ARCHITECTURE 6.4.1
   updated.
+- 2026-10-02 (WS5): `View.draw` applies the child's tween `Animation`
+  (matrix and alpha) and keeps invalidating its parent until the
+  animation ends. `fillAfter` false clears it on the last frame. No new
+  native fields. ARCHITECTURE 6.4 updated.

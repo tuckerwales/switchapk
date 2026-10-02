@@ -451,5 +451,15 @@ what is left in flight.
   without the VM: tests/apps/labeled (a @string label and an hdpi PNG that
   beats the application icon and the mdpi bucket), the hello APK's literal
   label, and a zip with no manifest. Audio, rumble, and 1080p stay open.
-- In flight: WS5 animation. Next on device: audio (audren/audout), rumble,
-  and 1080p docked.
+- WS5 view tweens. `View.draw` applies the current Animation (matrix and
+  alpha) and keeps invalidating the parent until it ends. `fillAfter`
+  false clears it after the last frame. `AnimationUtils` loads set, alpha,
+  scale, rotate and translate. An `AnimationSet` pushes duration, fill,
+  repeat, offset and the shared interpolator only when that tag set them,
+  so a child keeps its own duration. Property animators, StateListAnimator,
+  layout animation and AVD stay later. tests/apps/tween has 9 logic
+  checks: a 6s slide is partway across at 2s and parked 300px to the
+  right, a scale stays at half size, and a fade is neither solid nor gone
+  in the middle.
+- Next on device: audio (audren/audout), rumble, and 1080p docked. Next
+  on WS5: property animators.

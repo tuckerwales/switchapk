@@ -2,6 +2,8 @@ package java.lang;
 
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Inherited;
+import java.lang.reflect.AnnotationParser;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.GenericDeclaration;
@@ -388,19 +390,41 @@ public final class Class<T> implements java.io.Serializable, GenericDeclaration,
     }
 
     public <A extends Annotation> A getAnnotation(Class<A> annotationClass) {
+        if (annotationClass == null) throw new NullPointerException("annotationClass");
+        A found = AnnotationParser.findClass(this, annotationClass);
+        if (found != null) return found;
+        Class<?> sup = getSuperclass();
+        if (sup != null && AnnotationParser.declares(annotationClass, Inherited.class)) {
+            return sup.getAnnotation(annotationClass);
+        }
         return null;
     }
 
     public boolean isAnnotationPresent(Class<? extends Annotation> annotationClass) {
-        return false;
-    }
-
-    public Annotation[] getAnnotations() {
-        return new Annotation[0];
+        return getAnnotation(annotationClass) != null;
     }
 
     public Annotation[] getDeclaredAnnotations() {
-        return new Annotation[0];
+        return AnnotationParser.allClass(this);
+    }
+
+    public Annotation[] getAnnotations() {
+        Annotation[] declared = getDeclaredAnnotations();
+        Class<?> sup = getSuperclass();
+        if (sup == null) return declared;
+        Annotation[] inherited = sup.getAnnotations();
+        ArrayList<Annotation> out = new ArrayList<Annotation>();
+        for (int i = 0; i < declared.length; i++) out.add(declared[i]);
+        for (int i = 0; i < inherited.length; i++) {
+            Annotation a = inherited[i];
+            if (!a.annotationType().isAnnotationPresent(Inherited.class)) continue;
+            boolean have = false;
+            for (int j = 0; j < declared.length; j++) {
+                if (declared[j].annotationType() == a.annotationType()) have = true;
+            }
+            if (!have) out.add(a);
+        }
+        return out.toArray(new Annotation[out.size()]);
     }
 
     @SuppressWarnings("unchecked")

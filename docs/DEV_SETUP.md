@@ -36,6 +36,15 @@ make -f Makefile.switch       # build/switch/switchapk.nro (run `make` first for
 make -f Makefile.switch dist  # build/switch/switchapk-sd.zip: NRO + sample APKs in the SD layout
 ```
 
+## CI
+
+`.github/workflows/package.yml` (Package NRO) runs on every push, on pull
+requests from forks, and from the Actions tab (workflow dispatch). The
+runner is Ubuntu 24.04 with JDK 17. It fetches the SDK and devkitPro
+(cached between runs), then runs `make` and `make -f Makefile.switch dist`.
+The `switchapk-sd` artifact is `build/switch/switchapk-sd.zip`, kept for
+14 days. Unzip it at the root of the SD card, the same as a local build.
+
 ## Run on a Switch
 
 Needs a Switch running homebrew (Atmosphere + hbmenu).

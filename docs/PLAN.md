@@ -115,7 +115,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - [x] tests/apps/hello + build script + headless screenshot
 
 ### M2
-- [ ] WS1 view system core
+- [x] WS1 view system core
   - [x] View, ViewGroup, input events, ViewConfiguration, VelocityTracker, gesture detectors, FocusFinder
   - [x] ViewRootImpl, Choreographer, WindowManagerGlobal (window stack, routing, compositing)
   - [x] LayoutInflater, ViewStub, PhoneWindow/DecorView, MenuInflater + menu model, Window.Callback
@@ -130,7 +130,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     (tests/apps/select)
   - [x] clipToOutline: a round-rect outline clips the view and its
     children (tests/apps/outline). Path outlines do not clip
-  - [ ] ViewDebug annotations, DisplayCutout
+  - [x] ViewDebug annotations: runtime reflection of class, field and
+    method annotations (defaults, nested annotations, arrays, enums,
+    class literals) and ViewDebug.dumpCapturedView (tests/dex/VmTest,
+    tests/apps/viewdbg)
+  - [x] DisplayCutout: safe insets, per-edge bounds, waterfall insets,
+    WindowInsets.getDisplayCutout, and the layout-in-cutout mode
+    (tests/apps/cutout). The Switch reports no cutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
   - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
@@ -219,6 +225,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     latency, deadlines, constraints, periodic, backoff, enqueue/dequeue
     work, JobServiceEngine binder for AndroidX JobIntentService)
 - [ ] WS13 app test runner with screenshot goldens
+  - [x] GitHub Actions workflow builds the NRO and packages the sample
+    APKs (`.github/workflows/package.yml`, artifact `switchapk-sd`)
 
 ### M3
 - [ ] WS10 Switch platform, NRO, launcher
@@ -229,13 +237,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] main_switch.c: APK launcher, VM thread, error screen, log file,
     nxlink, relaunch to the list
   - [x] VM and samples verified on AArch64 (qemu-user host build)
-  - [ ] first boot on hardware (untested: no device in the dev
-    environment)
-  - [ ] audio (audren/audout), rumble, 1080p docked, APK labels and icons
-    in the launcher
+  - [x] first boot on hardware (confirmed 2026-10-02)
+  - [x] APK labels and icons in the launcher (tests/apps/labeled,
+    switchapk-host --apk-info)
+  - [ ] audio (audren/audout), rumble, 1080p docked
 
 ### M4
 - [ ] WS5 animation
+  - [x] view tween animations applied while drawing (translate, scale,
+    rotate, alpha, set; tests/apps/tween)
+  - [x] property animators (ValueAnimator, ObjectAnimator,
+    ViewPropertyAnimator; tests/apps/prop)
+  - [ ] StateListAnimator
+  - [ ] layout animation and AnimatedVectorDrawable
 - [ ] WS7 audio/media
 - [ ] WS8 OpenGL ES/EGL
   - [x] GLES10/11/20/30/31/32 (+Ext) bindings generated from android.jar and
@@ -277,7 +291,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS2 is done. WS3 is done: ImageView, the compound controls,
+1. WS1 is done. WS2 is done. WS3 is done: ImageView, the compound controls,
    scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
    EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
    landed, and so have progress, popups, Toolbar, the action bar,
@@ -289,14 +303,21 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    RemoteViews (inflate, actions and reapply; notification content
    views stay unsupported). Text selection opens the floating toolbar
    (tests/apps/select).
-   Next: the rest of WS1 (ViewDebug annotations, DisplayCutout).
-   WS5 (animation) can start in parallel.
-2. Finish WS1: ViewDebug annotations and DisplayCutout. The floating
-   toolbar (tests/apps/floating), text selection (tests/apps/select),
-   and clipToOutline (tests/apps/outline) have landed.
-3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
-   launcher labels/icons. In parallel as agents are available: WS13
-   (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
+   Next on device: audio (audren/audout), rumble, and 1080p docked
+   rendering. The NRO boots on hardware, and the launcher shows APK
+   labels and icons. View tween animations apply while drawing
+   (tests/apps/tween). Property animators run on Choreographer
+   (tests/apps/prop). StateListAnimator, layout animation and animated
+   vectors are the rest of WS5.
+2. WS1 is done. DisplayCutout has landed (tests/apps/cutout), and so
+   have ViewDebug (tests/apps/viewdbg), the floating toolbar
+   (tests/apps/floating), text selection (tests/apps/select), and
+   clipToOutline (tests/apps/outline).
+3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
+   as agents are available: the rest of WS5 (StateListAnimator, layout
+   animation, animated vectors), WS13
+   (test runner around the app scripts; packaging CI is
+   `.github/workflows/package.yml`), WS6/WS7/WS11/WS12/WS15.
 4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
    next is the Switch build with switch-mesa and a device run, then
    SurfaceTexture external textures.
@@ -324,7 +345,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - Apps whose manifest sets no theme get Theme.DeviceDefault.Light.DarkActionBar
   (AOSP selectDefaultTheme for targetSdk 24+), so they now show an action
   bar with the activity label. Action bar show/hide and action mode
-  transitions are immediate until WS5 animators land.
+  transitions are still immediate: the animator classes exist, but
+  PhoneWindow does not use them. View tweens (translate, scale, rotate,
+  alpha, set) and property animators (ValueAnimator, ObjectAnimator,
+  ViewPropertyAnimator) already run.
 - Native libraries load on the host and AArch64 Linux only; the Switch
   build reports that code memory is not implemented yet.
 - Host GL tests need Mesa's EGL and GLES libraries (`libegl1`,
@@ -334,6 +358,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - The headless `idle` script command now waits until queued input is
   consumed and nothing was presented for the quiet time since the command
   started.
+- The launcher draws bitmap icons from the APK. Adaptive-icon and vector
+  XML drawables are skipped, and that row shows the label only.
 
 ## Interface changes log
 
@@ -521,3 +547,28 @@ and update ARCHITECTURE.md in the same commit.
   Only round rects clip. A path outline (`Outline.canClip()` is false)
   does not. `invalidateOutline()` invalidates the view. Shadows are not
   drawn. ARCHITECTURE 6.4.1 updated.
+- 2026-10-02 (WS1, touches the VM and libcore): `Class`, `Field` and
+  `Method` `getAnnotation` return RUNTIME annotations from the dex,
+  including defaults, nested annotations, arrays, enums and class
+  literals. CLASS and SOURCE retention stay invisible.
+  `ViewDebug.dumpCapturedView` logs `@CapturedViewProperty` fields and
+  no-arg methods. `RemoteViews.onLoadClass` still allows framework View
+  packages by name and does not require `@RemoteView`. ARCHITECTURE 4.2
+  and 6.4.1 updated.
+- 2026-10-02 (WS1): `DisplayCutout` stores safe insets, one bounding rect
+  per edge, and waterfall insets. `WindowInsets.getDisplayCutout`
+  returns it. `consumeDisplayCutout` drops the cutout and leaves type
+  insets in place. `Builder.setDisplayCutout` does not add type insets
+  by itself. `PhoneWindow` copies `windowLayoutInDisplayCutoutMode`
+  onto `LayoutParams`. The Switch reports no cutout, and `getCutoutPath`
+  stays null because cutout specs are not parsed. ARCHITECTURE 6.4.1
+  updated.
+- 2026-10-02 (WS5): `View.draw` applies the child's tween `Animation`
+  (matrix and alpha) and keeps invalidating its parent until the
+  animation ends. `fillAfter` false clears it on the last frame. No new
+  native fields. ARCHITECTURE 6.4 updated.
+- 2026-10-02 (WS5): `ValueAnimator`, `ObjectAnimator` and
+  `ViewPropertyAnimator` run on Choreographer frames and write view
+  properties (translation, scale, rotation, alpha, and x/y/z).
+  Invalidation reuses `invalidateChild`'s child-matrix transform. No new
+  native fields. ARCHITECTURE 6.4 updated.

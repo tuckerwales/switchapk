@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF101820">
+    <View android:id="@+id/fade"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginLeft="16dp"
+        android:layout_marginTop="16dp"
+        android:background="#FFFF5252" />
+    <View android:id="@+id/slide"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:layout_marginLeft="48dp"
+        android:layout_marginTop="120dp"
+        android:background="#FFFFF59D" />
+    <View android:id="@+id/grow"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_marginLeft="48dp"
+        android:layout_marginTop="420dp"
+        android:background="#FF1565C0" />
+</FrameLayout>

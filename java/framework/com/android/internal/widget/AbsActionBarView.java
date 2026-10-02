@@ -14,7 +14,7 @@ import android.widget.ActionMenuView;
 
 /**
  * framework-internal. Port of AOSP AbsActionBarView, the base of the action
- * mode bar. Visibility changes are immediate (no animators until WS5).
+ * mode bar. Visibility changes are immediate (property animators are not wired here).
  */
 public abstract class AbsActionBarView extends ViewGroup {
     protected final Context mPopupContext;

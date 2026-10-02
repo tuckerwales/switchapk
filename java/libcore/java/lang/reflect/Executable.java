@@ -1,5 +1,7 @@
 package java.lang.reflect;
 
+import java.lang.annotation.Annotation;
+
 public abstract class Executable extends AccessibleObject implements Member, GenericDeclaration {
     long vmMethod;
     Class<?> declaringClass;
@@ -65,5 +67,17 @@ public abstract class Executable extends AccessibleObject implements Member, Gen
 
     static String typeName(Class<?> c) {
         return c.getTypeName();
+    }
+
+    public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
+        return AnnotationParser.findMember(AnnotationParser.KIND_METHOD, vmMethod, annotationClass);
+    }
+
+    public Annotation[] getDeclaredAnnotations() {
+        return AnnotationParser.allMember(AnnotationParser.KIND_METHOD, vmMethod);
+    }
+
+    public Annotation[] getAnnotations() {
+        return getDeclaredAnnotations();
     }
 }

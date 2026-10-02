@@ -38,7 +38,7 @@ import java.util.ArrayList;
  * framework-internal. Port of AOSP WindowDecorActionBar: the ActionBar of a
  * window whose decor is the action bar layout (screen_toolbar). Primary
  * action modes replace the bar with the context bar. Show, hide and mode
- * changes are immediate (no animators until WS5). Tabs are tracked and
+ * changes are immediate (property animators are not wired here). Tabs are tracked and
  * their listeners run, but no tab strip is drawn (ScrollingTabContainerView
  * is not ported).
  */

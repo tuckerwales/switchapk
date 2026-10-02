@@ -10,8 +10,7 @@ import android.view.animation.AnimationUtils;
 
 /**
  * Port of AOSP ViewAnimator: a FrameLayout showing one child at a time, starting the in and out
- * animations on the children it shows and hides. Views hold tween animations without applying them
- * until WS5, so switches are immediate (as with animations off).
+ * animations on the children it shows and hides. With no in or out animation the switch is immediate.
  */
 public class ViewAnimator extends FrameLayout {
     int mWhichChild = 0;

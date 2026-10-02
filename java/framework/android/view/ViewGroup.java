@@ -1665,15 +1665,6 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
         return null;
     }
 
-    /** framework-internal (hidden in AOSP). */
-    public boolean isRootNamespace() { return (mPrivateFlags & PFLAG_IS_ROOT_NAMESPACE) != 0; }
-
-    /** framework-internal (hidden in AOSP). */
-    public void setIsRootNamespace(boolean isRoot) {
-        if (isRoot) mPrivateFlags |= PFLAG_IS_ROOT_NAMESPACE;
-        else mPrivateFlags &= ~PFLAG_IS_ROOT_NAMESPACE;
-    }
-
     @Override
     public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) { return false; }
 

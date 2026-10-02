@@ -80,6 +80,8 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     private static final String SAVED_DIALOG_ARGS_KEY_PREFIX = "android:dialog_args_";
 
     private Application mApplication;
+    Activity mParent;
+    String mEmbeddedID;
     Intent mIntent;
     ActivityInfo mActivityInfo;
     private ComponentName mComponent;
@@ -138,7 +140,16 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     final void attach(Context context, ActivityInfo info, Intent intent, Application application,
             NonConfigurationInstances lastNonConfigurationInstances, Configuration config) {
+        attach(context, info, intent, application, null, null, lastNonConfigurationInstances, config);
+    }
+
+    /** parent and id are set for an activity embedded by a LocalActivityManager. */
+    final void attach(Context context, ActivityInfo info, Intent intent, Application application,
+            Activity parent, String id, NonConfigurationInstances lastNonConfigurationInstances,
+            Configuration config) {
         attachBaseContext(context);
+        mParent = parent;
+        mEmbeddedID = id;
         mFragments.attachHost(null);
         mApplication = application;
         mActivityInfo = info;
@@ -157,6 +168,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         mWindow.getLayoutInflater().setPrivateFactory(this);
         if (info != null && info.softInputMode != 0) mWindow.setSoftInputMode(info.softInputMode);
         if (info != null && info.uiOptions != 0) mWindow.setUiOptions(info.uiOptions);
+        if (mParent != null) mWindow.setContainer(mParent.getWindow());
         mWindowManager = mWindow.getWindowManager();
         if (info != null) {
             CharSequence label = info.loadLabel(getPackageManager());
@@ -168,9 +180,9 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public final Application getApplication() { return mApplication; }
 
-    public final boolean isChild() { return false; }
+    public final boolean isChild() { return mParent != null; }
 
-    public final Activity getParent() { return null; }
+    public final Activity getParent() { return mParent; }
 
     public Intent getIntent() { return mIntent; }
 
@@ -811,6 +823,10 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     public boolean isDestroyed() { return mDestroyed; }
 
     public void finish() {
+        if (mParent != null) {
+            mParent.finishFromChild(this);
+            return;
+        }
         if (mFinished) return;
         mFinished = true;
         ActivityThread.finishActivity(this, mResultCode, mResultData);
@@ -822,7 +838,10 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void finishAfterTransition() { finish(); }
 
-    public void finishActivity(int requestCode) { ActivityThread.finishActivityForRequest(this, requestCode); }
+    public void finishActivity(int requestCode) {
+        if (mParent != null) mParent.finishActivityFromChild(this, requestCode);
+        else ActivityThread.finishActivityForRequest(this, requestCode);
+    }
 
     public void finishActivityFromChild(Activity child, int requestCode) { finishActivity(requestCode); }
 
@@ -888,15 +907,20 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     public void startActivityForResult(Intent intent, int requestCode) { startActivityForResult(intent, requestCode, null); }
 
     public void startActivityForResult(Intent intent, int requestCode, Bundle options) {
+        if (mParent != null) {
+            mParent.startActivityFromChild(this, intent, requestCode, options);
+            return;
+        }
         ActivityThread.startActivity(this, intent, requestCode, null);
     }
 
     public void startActivityFromChild(Activity child, Intent intent, int requestCode) {
-        startActivityForResult(intent, requestCode);
+        startActivityFromChild(child, intent, requestCode, null);
     }
 
+    /** The result comes back to this activity tagged with the child's embedded id. */
     public void startActivityFromChild(Activity child, Intent intent, int requestCode, Bundle options) {
-        startActivityForResult(intent, requestCode, options);
+        ActivityThread.startActivity(this, intent, requestCode, child.mEmbeddedID);
     }
 
     public void startActivityFromFragment(Fragment fragment, Intent intent, int requestCode) {
@@ -1091,6 +1115,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     public void setTitle(CharSequence title) {
         mTitle = title;
         onTitleChanged(title, mTitleColor);
+        if (mParent != null) mParent.onChildTitleChanged(this, title);
     }
 
     public void setTitle(int titleId) { setTitle(getText(titleId)); }
@@ -1445,13 +1470,24 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         }
     }
 
-    public boolean onCreateOptionsMenu(Menu menu) { return true; }
+    public boolean onCreateOptionsMenu(Menu menu) {
+        if (mParent != null) return mParent.onCreateOptionsMenu(menu);
+        return true;
+    }
 
-    public boolean onPrepareOptionsMenu(Menu menu) { return true; }
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        if (mParent != null) return mParent.onPrepareOptionsMenu(menu);
+        return true;
+    }
 
-    public boolean onOptionsItemSelected(MenuItem item) { return false; }
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (mParent != null) return mParent.onOptionsItemSelected(item);
+        return false;
+    }
 
-    public void onOptionsMenuClosed(Menu menu) {}
+    public void onOptionsMenuClosed(Menu menu) {
+        if (mParent != null) mParent.onOptionsMenuClosed(menu);
+    }
 
     public void invalidateOptionsMenu() {
         if (mActionBar == null || !mActionBar.invalidateOptionsMenu()) {

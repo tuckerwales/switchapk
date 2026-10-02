@@ -1,0 +1,40 @@
+idle 600
+screenshot tabs_start.png
+log the factory tab builds its view on first selection
+tap 480 108
+idle 400
+screenshot tabs_factory.png
+log the child tab starts an embedded activity in the tab content
+tap 800 108
+idle 600
+screenshot tabs_child.png
+log the embedded activity starts PickActivity; the result comes back to it through the group
+tap 120 230
+idle 600
+screenshot tabs_pick.png
+tap 640 380
+idle 600
+screenshot tabs_result.png
+log the other tab pauses the first embedded activity and starts a second
+tap 1120 108
+idle 600
+screenshot tabs_other.png
+log a configuration change recreates the group; the current tab and the embedded activities' state come back
+screen 1920x1080@360
+idle 800
+screen 1280x720@240
+idle 800
+screenshot tabs_recreated.png
+tap 800 108
+idle 600
+screenshot tabs_restored.png
+log back to the view tab; the embedded activity stays resumed behind it
+tap 160 108
+idle 400
+screenshot tabs_text.png
+log back finishes the tab activity through its embedded child
+tap 800 108
+idle 400
+key BACK
+idle 600
+quit

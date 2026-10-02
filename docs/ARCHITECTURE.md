@@ -591,6 +591,20 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   new instance is created with that state and restored
   (onRestoreInstanceState before onPostCreate). Stopped activities are
   relaunched lazily when they come back to the top.
+- Embedded activities (ActivityGroup, TabActivity): LocalActivityManager
+  creates a child through `ActivityThread.startActivityNow` (attach with a
+  parent and an embedded id, then onCreate) and moves it through its own
+  RESTORED/INITIALIZING/CREATED/STARTED/RESUMED state machine with direct
+  perform* calls, following the group's lifecycle. A child never gets a
+  stack record or a window of its own: its window is contained by the
+  parent's (no title or action bar, no window background) and TabHost
+  adds its decor to the tab content. finish, startActivityForResult,
+  setTitle and the options menu callbacks go through the parent; results
+  for a child come back to the group tagged with its id and ActivityGroup
+  routes them. As on Android, a group only saves the state of children
+  that are resumed, and from API 28 it saves after stopping them, so
+  embedded activity state does not survive a configuration change (the
+  current tab and retained non-config instances do).
 - Fragments: the platform `android.app.Fragment`, `FragmentManager`
   (FragmentManagerImpl state machine, back stack, BackStackRecord ops,
   saved and retained state, `<fragment>` inflation), `DialogFragment`,

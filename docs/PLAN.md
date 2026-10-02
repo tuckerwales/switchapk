@@ -171,7 +171,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] SearchView (suggestions adapter, iconified and action view modes),
     SearchManager, SearchableInfo, the search dialog, RecognizerIntent
     constants; tests/apps/search
-  - [ ] the rest (the holo CalendarView week list, TabHost,
+  - [x] TabHost, TabWidget, TabActivity, ActivityGroup and
+    LocalActivityManager (embedded activities); tests/apps/tabs
+  - [ ] the rest (the holo CalendarView week list,
     CursorTreeAdapter family, VideoView, RemoteViews, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
@@ -246,8 +248,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    landed, and so have progress, popups, Toolbar, the action bar,
    adapters, the expandable list, NumberPicker, the clocks, DatePicker,
    CalendarView, DatePickerDialog, TimePicker, TimePickerDialog and
-   GridLayout and SearchView. Next: TabHost, the rest of the WS3 widgets. WS5 (animation) can start in
-   parallel.
+   GridLayout, SearchView and TabHost. Next: the rest of the WS3 widgets
+   (CursorTreeAdapter family, the holo CalendarView week list, VideoView,
+   RemoteViews). WS5 (animation) can start in parallel.
 2. Finish WS1: floating action modes (text selection toolbar).
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
@@ -404,3 +407,12 @@ and update ARCHITECTURE.md in the same commit.
   in a single-line editor before its key listener, so Enter is never
   inserted. MenuBuilder expands collapsible action views on item taps.
   ARCHITECTURE 6.4.1 and the boot section updated.
+- 2026-10-02 (WS3, WS4 app model): embedded activities. Activity has
+  AOSP's `mParent`/`mEmbeddedID`; `isChild`/`getParent` report them, a
+  child's window is contained by its parent's, and a child's finish,
+  startActivityForResult (results come back tagged with the child's id),
+  setTitle and options menu callbacks go through the parent. ActivityThread
+  gained package-private `resolveActivityInfo`, `startActivityNow` and
+  `destroyEmbeddedActivity`, which LocalActivityManager drives instead of
+  AOSP's client transactions. `isRootNamespace`/`setIsRootNamespace` moved
+  from ViewGroup to View (as in AOSP). ARCHITECTURE 6.5 updated.

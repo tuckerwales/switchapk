@@ -581,7 +581,21 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `ObjectAnimator` advance on Choreographer frames and set view
   properties (translation, scale, rotation, alpha, x/y/z). A translation
   is part of the view matrix, so `invalidateChild` expands the dirty
-  rect by that matrix. `StateListAnimator` is not implemented. View
+  rect by that matrix. `StateListAnimator` runs the first matching
+  animator when the drawable state changes. The view holds it strongly,
+  because this VM clears weak references on every GC.
+  `android:stateListAnimator` is read from the tag itself, not the theme.
+  A ViewGroup layout animation binds in `dispatchDraw`: each child gets a
+  clone whose start offset is `LayoutAnimationController.getDelayForView`.
+  `LayoutTransition` fades a child in on add and out on remove.
+  `startViewTransition` keeps a disappearing child parented until the fade
+  ends, and `dispatchDraw` draws `mDisappearingChildren` after the live
+  children. Change-type animators are stored and not started, so sibling
+  positions are not animated. `AnimatedVectorDrawable` clones the target
+  animators on `start`, sets them on `VectorDrawable.getTargetByName`
+  (groups and paths: trim, color, stroke, transforms) and invalidates
+  itself each frame. pathData morphs are not applied
+  (`PathParser.canMorph` is false). View
   tweens apply in `draw(Canvas, ViewGroup, long)`: the animation matrix
   is concatenated
   with the view matrix, and the animation alpha multiplies the view
@@ -589,18 +603,20 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   invalidated, so a translation is not clipped to the view's layout rect.
   `fillAfter` false clears the animation after the end frame.
   `AnimationUtils.loadAnimation` loads `set`, `alpha`, `scale`, `rotate`
-  and `translate`; other tags stay an identity alpha. ProgressBar still
-  drives its own `AlphaAnimation`. AnimatedVectorDrawables do not
-  animate. Accessibility classes are value holders since no accessibility
-  service runs.
+  and `translate`. `loadLayoutAnimation` loads `layoutAnimation` and
+  `gridLayoutAnimation`. Other animation tags stay an identity alpha.
+  Cycle, anticipate, overshoot, bounce and path interpolators still load
+  as linear. ProgressBar still
+  drives its own `AlphaAnimation`. Accessibility classes are value holders
+  since no accessibility service runs.
 - ProgressBar family (AOSP ports): determinate progress sets drawable
   levels per layer id (`android:id/progress`, `secondaryProgress`,
   `background`), indeterminate starts an Animatable drawable or cycles
   levels with an AlphaAnimation. Bitmap layers are tiled with a repeating
   BitmapDrawable clone (keeps the tint; RatingBar stars). The Material
   spinners are `com.android.internal.graphics.drawable.
-  AnimationScaleListDrawable`, which shows its static child until
-  animated vectors run (what Android shows with animations off).
+  AnimationScaleListDrawable`, which keeps its static child so a spinner
+  screenshot does not depend on the phase.
   AbsSeekBar adds the thumb,
   split track, tick marks, touch drag (slop in scrolling containers) and
   D-pad/plus/minus steps (`keyProgressIncrement`, about 1/20 of the

@@ -546,3 +546,24 @@ what is left in flight.
   MEDIA_ERROR_UNSUPPORTED (tests/apps/video). ndk, gles, native and
   VmTest still pass, and the Switch NRO links. The Switch audio thread
   still discards samples. Not run on hardware. AAudio remains open.
+
+### Session 11 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- WS5 StateListAnimator, layout animation, LayoutTransition and
+  AnimatedVectorDrawable. A state list runs the first matching animator
+  when the drawable state changes. The view holds it strongly, because
+  this VM clears weak references on every GC. `android:stateListAnimator`
+  is taken from the tag, not the theme, so a framework button style does
+  not start an animator on every control. A layout animation binds in
+  `dispatchDraw` and staggers a cloned tween by `getDelayForView`.
+  `LayoutTransition` fades a child in on add and out on remove. The
+  disappearing child stays parented until the fade ends, and is drawn
+  after the live children. Change-type animators are stored and not
+  started. An animated vector clones its target animators onto the
+  vector's groups and paths (trim, color, stroke, transforms) and
+  invalidates each frame. pathData is not morphed.
+  `AnimationScaleListDrawable` still shows the static spinner frame.
+  tests/apps/motion checks the press slide, the staggered column, the
+  trim, and the fade at the middle and the end. prop, tween and progress
+  still pass. PathInterpolator, the cycle/anticipate/overshoot/bounce
+  interpolators, and path morph remain.

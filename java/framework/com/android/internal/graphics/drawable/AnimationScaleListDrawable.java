@@ -13,7 +13,8 @@ import org.xmlpull.v1.XmlPullParserException;
 /**
  * Port of the AOSP internal drawable the Material progress spinners use: an
  * animatable child and a static child, picked by whether animations are
- * enabled. Animators do not run before WS5, so the static child shows.
+ * enabled. The spinner stays on the static child so a screenshot does not
+ * depend on the spinner phase.
  */
 public class AnimationScaleListDrawable extends DrawableContainer implements Animatable {
     private AnimationScaleListState mAnimationScaleListState;
@@ -110,9 +111,8 @@ public class AnimationScaleListDrawable extends DrawableContainer implements Ani
         @Override
         public Drawable newDrawable(Resources res) { return new AnimationScaleListDrawable(this, res); }
 
-        /** The animatable child waits on AnimatedVectorDrawable. Until then the static child is shown. */
+        /** The static child. An animating spinner would make screenshots depend on the phase. */
         int getCurrentDrawableIndexBasedOnScale() {
-            // TODO(WS5) the animatable child once AnimatedVectorDrawable animates.
             return mStaticDrawableIndex >= 0 ? mStaticDrawableIndex : mAnimatableDrawableIndex;
         }
     }

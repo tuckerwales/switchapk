@@ -1,0 +1,9 @@
+wait 2000
+screenshot mid.png
+down 96 96
+wait 2000
+screenshot press.png
+up 96 96
+idle 800
+screenshot end.png
+quit

@@ -247,8 +247,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     rotate, alpha, set; tests/apps/tween)
   - [x] property animators (ValueAnimator, ObjectAnimator,
     ViewPropertyAnimator; tests/apps/prop)
-  - [ ] StateListAnimator
-  - [ ] layout animation and AnimatedVectorDrawable
+  - [x] StateListAnimator (tests/apps/motion)
+  - [x] layout animation, LayoutTransition and AnimatedVectorDrawable
+    (tests/apps/motion). PathInterpolator, the cycle/anticipate/overshoot/
+    bounce interpolators, and path morph remain
 - [ ] WS7 audio/media
 - [ ] WS8 OpenGL ES/EGL
   - [x] GLES10/11/20/30/31/32 (+Ext) bindings generated from android.jar and
@@ -313,15 +315,17 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    rendering. The NRO boots on hardware, and the launcher shows APK
    labels and icons. View tween animations apply while drawing
    (tests/apps/tween). Property animators run on Choreographer
-   (tests/apps/prop). StateListAnimator, layout animation and animated
-   vectors are the rest of WS5.
+   (tests/apps/prop). StateListAnimator, layout animation, LayoutTransition
+   and animated vectors land in tests/apps/motion. Still open in WS5:
+   PathInterpolator, the cycle/anticipate/overshoot/bounce interpolators,
+   and path morph (pathData).
 2. WS1 is done. DisplayCutout has landed (tests/apps/cutout), and so
    have ViewDebug (tests/apps/viewdbg), the floating toolbar
    (tests/apps/floating), text selection (tests/apps/select), and
    clipToOutline (tests/apps/outline).
 3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
-   as agents are available: the rest of WS5 (StateListAnimator, layout
-   animation, animated vectors), WS13
+   as agents are available: the rest of WS5 (PathInterpolator, the
+   cycle/anticipate/overshoot/bounce interpolators, and path morph), WS13
    (test runner around the app scripts; packaging CI is
    `.github/workflows/package.yml`), WS6/WS7/WS11/WS12/WS15.
 4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
@@ -383,6 +387,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-02 (WS5, touches WS1): `View.setStateListAnimator` runs the first
+  matching animator when the drawable state changes. The view holds that
+  animator strongly, because this VM clears weak references on every GC.
+  `android:stateListAnimator` is read from the tag itself, not the theme.
+  A ViewGroup layout animation binds in `dispatchDraw`: each child gets a
+  clone whose start offset comes from `getDelayForView`. `LayoutTransition`
+  fades a child in on add and out on remove. A disappearing child stays
+  parented until the fade ends, and `dispatchDraw` draws it from
+  `mDisappearingChildren`. Change-type animators are stored and not
+  started, so sibling positions do not move. `AnimatedVectorDrawable`
+  clones its target animators onto `VectorDrawable` groups and paths
+  (trim, color, stroke, transforms). pathData morphs are not applied.
+  No new native fields. ARCHITECTURE 6.4 updated.
 - 2026-10-02 (WS7, touches WS9 and WS10): `platform_audio_start` is called
   once with the mixer callback (`src/android/audio_mixer.c`, 48 kHz
   stereo float) and is not stopped. The audio thread takes only the

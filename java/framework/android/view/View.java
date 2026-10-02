@@ -1,5 +1,7 @@
 package android.view;
 
+import android.animation.AnimatorInflater;
+import android.animation.StateListAnimator;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.res.ColorStateList;
@@ -1440,6 +1442,24 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         if (mBackgroundTintList != null || mBackgroundTintMode != null) applyBackgroundTint();
         if (mForegroundTintList != null || mForegroundTintMode != null) applyForegroundTint();
         computeOpaqueFlags();
+        // The attribute on this tag only. A theme animator on every Button would
+        // keep invalidating, and idle would wait until it stopped.
+        if (attrs != null) {
+            int sla = 0;
+            for (int i = 0; i < attrs.getAttributeCount(); i++) {
+                if (attrs.getAttributeNameResource(i) == android.R.attr.stateListAnimator) {
+                    sla = attrs.getAttributeResourceValue(i, 0);
+                    break;
+                }
+            }
+            if (sla != 0) {
+                try {
+                    setStateListAnimator(AnimatorInflater.loadStateListAnimator(context, sla));
+                } catch (Exception e) {
+                    Log.w("View", "stateListAnimator failed", e);
+                }
+            }
+        }
     }
 
     private static int getFocusableAttribute(TypedArray attributes, int index) {
@@ -3077,6 +3097,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
                 changed |= mScrollCache.verticalThumb.setState(state);
             }
         }
+        if (mStateListAnimator != null) mStateListAnimator.setState(state);
         if (changed) invalidate();
     }
 
@@ -3134,7 +3155,24 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         if (mBackground != null) mBackground.jumpToCurrentState();
         if (mDefaultFocusHighlight != null) mDefaultFocusHighlight.jumpToCurrentState();
         if (mForeground != null) mForeground.jumpToCurrentState();
+        if (mStateListAnimator != null) mStateListAnimator.jumpToCurrentState();
     }
+
+    private StateListAnimator mStateListAnimator;
+
+    public void setStateListAnimator(StateListAnimator stateListAnimator) {
+        if (mStateListAnimator == stateListAnimator) return;
+        if (mStateListAnimator != null) mStateListAnimator.setTarget(null);
+        mStateListAnimator = stateListAnimator;
+        if (stateListAnimator != null) {
+            stateListAnimator.setTarget(this);
+            // Attach jumps drawables, then refreshDrawableState starts the animator.
+            // Starting it here, before attach, would be jumped to its end immediately.
+            if (isAttachedToWindow()) stateListAnimator.setState(getDrawableState());
+        }
+    }
+
+    public StateListAnimator getStateListAnimator() { return mStateListAnimator; }
 
     public void setPressed(boolean pressed) {
         final boolean needsRefresh = pressed != ((mPrivateFlags & PFLAG_PRESSED) == PFLAG_PRESSED);

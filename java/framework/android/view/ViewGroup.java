@@ -1,5 +1,6 @@
 package android.view;
 
+import android.animation.LayoutTransition;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
@@ -15,6 +16,9 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.view.animation.LayoutAnimationController;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -42,6 +46,10 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
     static final int FLAG_CLIP_CHILDREN = 0x1;
     static final int FLAG_CLIP_TO_PADDING = 0x2;
+    /** Next dispatchDraw binds a layout animation on each child. */
+    static final int FLAG_RUN_ANIMATION = 0x8;
+    /** The layout animation has been bound. The end listener has not necessarily run. */
+    static final int FLAG_ANIMATION_DONE = 0x10;
     static final int FLAG_PADDING_NOT_NULL = 0x20;
     static final int FLAG_USE_CHILD_DRAWING_ORDER = 0x400;
     static final int FLAG_SUPPORT_STATIC_TRANSFORMATIONS = 0x800;
@@ -80,7 +88,12 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     private int mNestedScrollAxes;
     private int mChildCountWithTransientState;
     private ArrayList<View> mTransitioningViews;
+    private ArrayList<View> mDisappearingChildren;
     private ArrayList<View> mPreSortedChildren;
+    private LayoutAnimationController mLayoutAnimationController;
+    private Animation.AnimationListener mAnimationListener;
+    private boolean mLayoutAnimationEnded;
+    private LayoutTransition mLayoutTransition;
 
     protected OnHierarchyChangeListener mOnHierarchyChangeListener;
 
@@ -94,7 +107,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
         android.R.attr.persistentDrawingCache, android.R.attr.addStatesFromChildren,
         android.R.attr.alwaysDrawnWithCache, android.R.attr.descendantFocusability,
         android.R.attr.splitMotionEvents, android.R.attr.layoutMode, android.R.attr.transitionGroup,
-        android.R.attr.touchscreenBlocksFocus,
+        android.R.attr.touchscreenBlocksFocus, android.R.attr.layoutAnimation,
     };
 
     public ViewGroup(Context context) { this(context, null); }
@@ -160,6 +173,17 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
                 case android.R.attr.touchscreenBlocksFocus:
                     setTouchscreenBlocksFocus(a.getBoolean(index, false));
                     break;
+                case android.R.attr.layoutAnimation: {
+                    int id = a.getResourceId(index, 0);
+                    if (id != 0) {
+                        try {
+                            setLayoutAnimation(AnimationUtils.loadLayoutAnimation(context, id));
+                        } catch (Exception e) {
+                            Log.w(TAG, "layoutAnimation failed", e);
+                        }
+                    }
+                    break;
+                }
             }
         }
         a.recycle();
@@ -283,23 +307,71 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
     public boolean shouldDelayChildPressedState() { return true; }
 
-    protected boolean canAnimate() { return false; }
+    protected boolean canAnimate() { return mLayoutAnimationController != null; }
 
-    public void startLayoutAnimation() {}
+    public void startLayoutAnimation() {
+        if (mLayoutAnimationController != null) {
+            mGroupFlags |= FLAG_RUN_ANIMATION;
+            requestLayout();
+        }
+    }
 
-    public void scheduleLayoutAnimation() {}
+    public void scheduleLayoutAnimation() { mGroupFlags |= FLAG_RUN_ANIMATION; }
 
-    public void clearDisappearingChildren() {}
+    public void setLayoutAnimation(LayoutAnimationController controller) {
+        mLayoutAnimationController = controller;
+        if (controller != null) mGroupFlags |= FLAG_RUN_ANIMATION;
+    }
+
+    public LayoutAnimationController getLayoutAnimation() { return mLayoutAnimationController; }
+
+    public void setLayoutAnimationListener(Animation.AnimationListener animationListener) {
+        mAnimationListener = animationListener;
+    }
+
+    public Animation.AnimationListener getLayoutAnimationListener() { return mAnimationListener; }
+
+    public void setLayoutTransition(LayoutTransition transition) { mLayoutTransition = transition; }
+
+    public LayoutTransition getLayoutTransition() { return mLayoutTransition; }
+
+    public void clearDisappearingChildren() {
+        if (mDisappearingChildren == null) return;
+        for (int i = mDisappearingChildren.size() - 1; i >= 0; i--) {
+            finishDisappearing(mDisappearingChildren.get(i));
+        }
+        mDisappearingChildren.clear();
+        invalidate();
+    }
 
     public void startViewTransition(View view) {
         if (view.mParent == this) {
             if (mTransitioningViews == null) mTransitioningViews = new ArrayList<View>();
-            mTransitioningViews.add(view);
+            if (!mTransitioningViews.contains(view)) mTransitioningViews.add(view);
         }
     }
 
     public void endViewTransition(View view) {
         if (mTransitioningViews != null) mTransitioningViews.remove(view);
+        if (mDisappearingChildren != null && mDisappearingChildren.remove(view)) {
+            finishDisappearing(view);
+            invalidate();
+        }
+    }
+
+    private void finishDisappearing(View view) {
+        if (view.mAttachInfo != null) view.dispatchDetachedFromWindow();
+        if (view.mParent == this) view.mParent = null;
+    }
+
+    private void addDisappearingView(View view) {
+        if (mDisappearingChildren == null) mDisappearingChildren = new ArrayList<View>();
+        if (!mDisappearingChildren.contains(view)) mDisappearingChildren.add(view);
+    }
+
+    /** True when a layout transition is keeping this child parented after removal. */
+    private boolean isDisappearing(View view) {
+        return mTransitioningViews != null && mTransitioningViews.contains(view);
     }
 
     /** framework-internal (hidden in AOSP). */
@@ -438,6 +510,9 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
         }
         if (child.hasTransientState()) childHasTransientStateChanged(child, true);
         if (child.isFocusedByDefault()) setDefaultFocus(child);
+        if (mLayoutTransition != null && (child.mViewFlags & VISIBILITY_MASK) != GONE) {
+            mLayoutTransition.addChild(this, child);
+        }
     }
 
     private void addInArray(View child, int index) {
@@ -529,16 +604,20 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
     private void removeViewInternal(int index, View view) {
         if (view == null) return;
+        if (mLayoutTransition != null) mLayoutTransition.removeChild(this, view);
         boolean clearChildFocus = false;
         if (view == mFocused) {
             view.unFocus(null);
             clearChildFocus = true;
         }
         cancelTouchTarget(view);
-        if (view.mAttachInfo != null) view.dispatchDetachedFromWindow();
+        // A disappearing transition keeps the child parented so setAlpha still invalidates.
+        boolean disappearing = isDisappearing(view);
+        if (disappearing) addDisappearingView(view);
+        else if (view.mAttachInfo != null) view.dispatchDetachedFromWindow();
         if (view.hasTransientState()) childHasTransientStateChanged(view, false);
         removeFromArray(index);
-        view.mParent = null;
+        if (!disappearing) view.mParent = null;
         if (view == mDefaultFocus) clearDefaultFocus(view);
         if (clearChildFocus) {
             clearChildFocus(view);
@@ -555,15 +634,18 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
         final View[] children = mChildren;
         for (int i = start; i < end; i++) {
             final View view = children[i];
+            if (mLayoutTransition != null) mLayoutTransition.removeChild(this, view);
             if (view == focused) {
                 view.unFocus(null);
                 clearChildFocus = true;
             }
             if (view == mDefaultFocus) clearDefaultFocus(view);
             cancelTouchTarget(view);
-            if (detach) view.dispatchDetachedFromWindow();
+            boolean disappearing = isDisappearing(view);
+            if (disappearing) addDisappearingView(view);
+            else if (detach) view.dispatchDetachedFromWindow();
             if (view.hasTransientState()) childHasTransientStateChanged(view, false);
-            view.mParent = null;
+            if (!disappearing) view.mParent = null;
             dispatchViewRemoved(view);
         }
         removeFromArray(start, end - start);
@@ -912,6 +994,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
+        bindLayoutAnimation();
         final int childrenCount = mChildrenCount;
         final View[] children = mChildren;
         final int flags = mGroupFlags;
@@ -930,8 +1013,52 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
             final View child = getAndVerifyPreorderedView(preorderedList, children, childIndex);
             if ((child.mViewFlags & VISIBILITY_MASK) == VISIBLE) drawChild(canvas, child, drawingTime);
         }
+        if (mDisappearingChildren != null) {
+            for (int i = 0; i < mDisappearingChildren.size(); i++) {
+                drawChild(canvas, mDisappearingChildren.get(i), drawingTime);
+            }
+        }
         if (preorderedList != null) preorderedList.clear();
         if (clipToPadding) canvas.restoreToCount(clipSaveCount);
+        if (mLayoutAnimationController != null && (mGroupFlags & FLAG_ANIMATION_DONE) != 0
+                && !mLayoutAnimationEnded && mLayoutAnimationController.isDone() && mAnimationListener != null) {
+            mLayoutAnimationEnded = true;
+            final Animation.AnimationListener listener = mAnimationListener;
+            final Animation anim = mLayoutAnimationController.getAnimation();
+            post(new Runnable() {
+                public void run() { listener.onAnimationEnd(anim); }
+            });
+        }
+    }
+
+    /** Assigns each child its staggered clone. The first frame of this draw uses it. */
+    private void bindLayoutAnimation() {
+        if ((mGroupFlags & FLAG_RUN_ANIMATION) == 0 || !canAnimate()) return;
+        final LayoutAnimationController controller = mLayoutAnimationController;
+        controller.start();
+        final int count = mChildrenCount;
+        for (int i = 0; i < count; i++) {
+            final View child = getChildAt(i);
+            LayoutParams lp = child.getLayoutParams();
+            if (lp == null) continue;
+            attachLayoutAnimationParameters(child, lp, i, count);
+            Animation anim = controller.getAnimationForView(child);
+            if (anim != null) child.setAnimation(anim);
+        }
+        mGroupFlags &= ~FLAG_RUN_ANIMATION;
+        mGroupFlags |= FLAG_ANIMATION_DONE;
+        mLayoutAnimationEnded = false;
+        if (mAnimationListener != null) mAnimationListener.onAnimationStart(controller.getAnimation());
+    }
+
+    protected void attachLayoutAnimationParameters(View child, LayoutParams params, int index, int count) {
+        LayoutAnimationController.AnimationParameters animationParams = params.layoutAnimationParameters;
+        if (animationParams == null) {
+            animationParams = new LayoutAnimationController.AnimationParameters();
+            params.layoutAnimationParameters = animationParams;
+        }
+        animationParams.count = count;
+        animationParams.index = index;
     }
 
     protected boolean drawChild(Canvas canvas, View child, long drawingTime) { return child.draw(canvas, this, drawingTime); }
@@ -2028,6 +2155,9 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
         public int width;
         public int height;
+
+        /** Filled by attachLayoutAnimationParameters while a layout animation is bound. */
+        public LayoutAnimationController.AnimationParameters layoutAnimationParameters;
 
         private static final int[] LAYOUT_ATTRS = {android.R.attr.layout_width, android.R.attr.layout_height};
 

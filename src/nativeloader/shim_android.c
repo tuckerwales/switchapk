@@ -1,13 +1,18 @@
 /*
  * Android system library shim (WS9): liblog, libdl, libandroid's asset
- * manager, system properties, zlib, and the GL/EGL entry points, plus the
- * lookup that joins every shim table.
+ * manager, system properties, zlib, ANativeWindow, the GL/EGL entry
+ * points, and the OpenSL ES engine (WS7), plus the lookup that joins
+ * every shim table.
  *
- * Not yet: ANativeWindow/ANativeActivity/ALooper/AInputQueue (NativeActivity),
- * OpenSL ES and AAudio (WS7), AConfiguration, ASensorManager. Imports of
- * those bind to logging stubs (elf_loader.c).
+ * Not yet: ALooper/AInputQueue, AAudio, AConfiguration, ASensorManager.
+ * Imports of those bind to logging stubs (elf_loader.c).
+ *
+ * SL_IID_* are pointer objects. The dynamic symbol is the address of that
+ * pointer, which the loader stores in the GOT. A load then yields the UUID.
  */
 #include "nativeloader.h"
+#include "ndk_android.h"
+#include "sles.h"
 #include "../android/android_gl.h"
 #include "../core/zip.h"
 
@@ -286,6 +291,28 @@ static const ShimSym g_syms[] = {
     W(AAsset_openFileDescriptor64, sh_AAsset_openFileDescriptor),
     W(AAssetDir_getNextFileName, sh_AAssetDir_getNextFileName), W(AAssetDir_rewind, sh_AAssetDir_rewind),
     W(AAssetDir_close, sh_AAssetDir_close),
+    /* libnativewindow / libandroid */
+    W(ANativeWindow_acquire, ANativeWindow_acquire), W(ANativeWindow_release, ANativeWindow_release),
+    W(ANativeWindow_getWidth, ANativeWindow_getWidth), W(ANativeWindow_getHeight, ANativeWindow_getHeight),
+    W(ANativeWindow_getFormat, ANativeWindow_getFormat),
+    W(ANativeWindow_setBuffersGeometry, ANativeWindow_setBuffersGeometry),
+    W(ANativeWindow_lock, ANativeWindow_lock), W(ANativeWindow_unlockAndPost, ANativeWindow_unlockAndPost),
+    W(ANativeWindow_fromSurface, ANativeWindow_fromSurface),
+    W(ANativeActivity_finish, ANativeActivity_finish),
+    W(ANativeActivity_setWindowFormat, ANativeActivity_setWindowFormat),
+    W(ANativeActivity_setWindowFlags, ANativeActivity_setWindowFlags),
+    W(ANativeActivity_showSoftInput, ANativeActivity_showSoftInput),
+    W(ANativeActivity_hideSoftInput, ANativeActivity_hideSoftInput),
+    /* libOpenSLES. IID symbols are the pointer objects, not the UUID bytes. */
+    W(slCreateEngine, slCreateEngine),
+    {"SL_IID_NULL", (void *)&SL_IID_NULL},
+    {"SL_IID_OBJECT", (void *)&SL_IID_OBJECT},
+    {"SL_IID_ENGINE", (void *)&SL_IID_ENGINE},
+    {"SL_IID_PLAY", (void *)&SL_IID_PLAY},
+    {"SL_IID_BUFFERQUEUE", (void *)&SL_IID_BUFFERQUEUE},
+    {"SL_IID_VOLUME", (void *)&SL_IID_VOLUME},
+    {"SL_IID_OUTPUTMIX", (void *)&SL_IID_OUTPUTMIX},
+    {"SL_IID_ANDROIDSIMPLEBUFFERQUEUE", (void *)&SL_IID_ANDROIDSIMPLEBUFFERQUEUE},
     /* libz */
     S(zlibVersion), S(inflateInit_), S(inflateInit2_), S(inflate), S(inflateEnd), S(inflateReset),
     S(deflateInit_), S(deflateInit2_), S(deflate), S(deflateEnd), S(deflateReset), S(deflateBound), S(crc32),
@@ -325,9 +352,12 @@ void *shim_lookup(const char *name) {
     pthread_once(&g_shim_once, build_shim);
     void *p = sa_map_get(&g_shim, name);
     if (p) return p;
-    /* GL ES and EGL go straight to the driver (loaded on first use) */
+    /* GL ES and EGL. Window surfaces are ours; everything else is the driver. */
     if ((name[0] == 'g' && name[1] == 'l') || (name[0] == 'e' && name[1] == 'g' && name[2] == 'l')) {
-        if (sa_gl_load()) return sa_gl_proc(name);
+        if (!sa_gl_load()) return NULL;
+        void *wrap = sa_egl_native_proc(name);
+        if (wrap) return wrap;
+        return sa_gl_proc(name);
     }
     return NULL;
 }

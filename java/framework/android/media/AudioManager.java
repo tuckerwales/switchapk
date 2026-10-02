@@ -1,8 +1,9 @@
 package android.media;
 
 /**
- * Audio routing and focus (placeholder until WS7). Focus requests are granted
- * and never taken back, because nothing else is playing. There is no mixer.
+ * Audio routing, stream volume and focus. Focus requests are granted and
+ * never taken back. Stream volume scales the mixer. The default index is
+ * the maximum, so a stream that nobody touches plays at full gain.
  */
 public class AudioManager {
     public static final int STREAM_VOICE_CALL = 0;
@@ -27,13 +28,27 @@ public class AudioManager {
     public static final int AUDIOFOCUS_REQUEST_GRANTED = 1;
     public static final int AUDIOFOCUS_REQUEST_DELAYED = 2;
 
+    public static final int ADJUST_LOWER = -1;
+    public static final int ADJUST_SAME = 0;
+    public static final int ADJUST_RAISE = 1;
+    public static final int ADJUST_MUTE = -100;
+    public static final int ADJUST_UNMUTE = 100;
+    public static final int ADJUST_TOGGLE_MUTE = 101;
+
+    private static final int STREAM_SLOTS = 11;
+    private static final int STREAM_MAX = 15;
+
     public interface OnAudioFocusChangeListener {
         void onAudioFocusChange(int focusChange);
     }
 
     private static AudioManager sInstance;
+    private final int[] mIndex = new int[STREAM_SLOTS];
+    private final boolean[] mMute = new boolean[STREAM_SLOTS];
 
-    private AudioManager() {}
+    private AudioManager() {
+        for (int i = 0; i < STREAM_SLOTS; i++) mIndex[i] = STREAM_MAX;
+    }
 
     /** framework-internal. One manager for the process. */
     public static AudioManager getInstance() {
@@ -60,6 +75,51 @@ public class AudioManager {
     public int abandonAudioFocus(OnAudioFocusChangeListener l) {
         return AUDIOFOCUS_REQUEST_GRANTED;
     }
+
+    public int getStreamMaxVolume(int streamType) { return STREAM_MAX; }
+
+    public int getStreamMinVolume(int streamType) { return 0; }
+
+    public int getStreamVolume(int streamType) {
+        int slot = slot(streamType);
+        return slot < 0 ? 0 : mIndex[slot];
+    }
+
+    public void setStreamVolume(int streamType, int index, int flags) {
+        int slot = slot(streamType);
+        if (slot < 0) return;
+        if (index < 0) index = 0;
+        if (index > STREAM_MAX) index = STREAM_MAX;
+        mIndex[slot] = index;
+        nativeVolume(streamType, index, STREAM_MAX, mMute[slot]);
+    }
+
+    public void setStreamMute(int streamType, boolean state) {
+        int slot = slot(streamType);
+        if (slot < 0) return;
+        mMute[slot] = state;
+        nativeVolume(streamType, mIndex[slot], STREAM_MAX, state);
+    }
+
+    public boolean isStreamMute(int streamType) {
+        int slot = slot(streamType);
+        return slot >= 0 && mMute[slot];
+    }
+
+    public void adjustStreamVolume(int streamType, int direction, int flags) {
+        if (direction == ADJUST_RAISE) setStreamVolume(streamType, getStreamVolume(streamType) + 1, flags);
+        else if (direction == ADJUST_LOWER) setStreamVolume(streamType, getStreamVolume(streamType) - 1, flags);
+        else if (direction == ADJUST_MUTE) setStreamMute(streamType, true);
+        else if (direction == ADJUST_UNMUTE) setStreamMute(streamType, false);
+        else if (direction == ADJUST_TOGGLE_MUTE) setStreamMute(streamType, !isStreamMute(streamType));
+    }
+
+    private static int slot(int streamType) {
+        if (streamType < 0 || streamType >= STREAM_SLOTS) return -1;
+        return streamType;
+    }
+
+    private static native void nativeVolume(int stream, int index, int max, boolean mute);
 
     private static boolean isGain(int durationHint) {
         return durationHint == AUDIOFOCUS_GAIN || durationHint == AUDIOFOCUS_GAIN_TRANSIENT

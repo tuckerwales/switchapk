@@ -524,3 +524,25 @@ what is left in flight.
   reason. The NRO links again: newlib has no getpagesize, posix_memalign
   or pipe, so the shim provides the first two and pipe returns ENOSYS.
   newlib struct translation is still open. Not run on hardware.
+- WS9 NativeActivity. `android.app.NativeActivity` matches the jar,
+  including the hidden load and lifecycle natives. The content view is
+  a full-bleed SurfaceView (PhoneWindow.takeSurface does not install a
+  surface) with format RGBA_8888. The entry, default
+  ANativeActivity_onCreate, runs before that surface exists.
+  ANativeWindow locks the Surface as RGBA bytes and posts ARGB through
+  lockGlBuffer. The NDK shim's eglCreateWindowSurface takes an
+  ANativeWindow, backs it with a pbuffer, and eglSwapBuffers reads the
+  frame back the same way Java does. tests/apps/native clears red and
+  paints a gold rectangle; the screenshot checks both. ndk, gles and
+  VmTest still pass. ALooper and AInputQueue are not delivered, so
+  onInputQueueCreated is intentionally not called. Not run on hardware.
+- WS7 audio. One 48 kHz stereo float mixer serves SoundPool, MediaPlayer,
+  AudioTrack, ToneGenerator and the OpenSL ES buffer queue. Decoders are
+  WAV, Ogg Vorbis (stb_vorbis) and MP3 (minimp3, no SIMD, on the host and
+  on Switch). The audio thread never takes the VM lock; natives drop the
+  GIL before decode and before a blocking write. tests/apps/audio plays
+  all five and turns green when every source has contributed a non-silent
+  sample. A missing video URI still reports MEDIA_ERROR_UNKNOWN /
+  MEDIA_ERROR_UNSUPPORTED (tests/apps/video). ndk, gles, native and
+  VmTest still pass, and the Switch NRO links. The Switch audio thread
+  still discards samples. Not run on hardware. AAudio remains open.

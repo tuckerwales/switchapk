@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.nativeact">
+    <uses-feature android:glEsVersion="0x00020000" android:required="true" />
+    <application android:label="Native" android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity android:name="android.app.NativeActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.lib_name" android:value="nativeact" />
+        </activity>
+    </application>
+</manifest>

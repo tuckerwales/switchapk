@@ -34,7 +34,7 @@ import java.util.ArrayList;
  * Port of AOSP ProgressBar: determinate (drawable levels per layer id) and
  * indeterminate (an Animatable drawable is started; anything else is cycled
  * through levels by an AlphaAnimation, as on Android). The animated progress
- * change of setProgress(int, true) jumps until WS5 brings ObjectAnimator.
+ * change of setProgress(int, true) jumps. The animated form is not wired.
  */
 public class ProgressBar extends View {
     private static final int MAX_LEVEL = 10000;
@@ -665,7 +665,7 @@ public class ProgressBar extends View {
         int range = mMax - mMin;
         final float scale = range > 0 ? (progress - mMin) / (float) range : 0;
         final boolean isPrimary = id == android.R.id.progress;
-        // TODO(WS5) animate the primary progress with ObjectAnimator when asked to.
+        // Animated primary progress is not wired; the value jumps to the new level.
         setVisualProgress(id, scale);
         if (isPrimary && callBackToApp) onProgressRefresh(scale, fromUser, progress);
     }

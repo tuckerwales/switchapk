@@ -461,5 +461,15 @@ what is left in flight.
   checks: a 6s slide is partway across at 2s and parked 300px to the
   right, a scale stays at half size, and a fade is neither solid nor gone
   in the middle.
+- WS5 property animators. ValueAnimator, ObjectAnimator and
+  ViewPropertyAnimator run on Choreographer frames. ObjectAnimator sets
+  properties by name (the float setter is the primitive, not only the
+  boxed form) or through android.util.Property. View.animate() batches
+  one frame of property changes onto one animator. Values stay put when
+  the animator ends. Multi-float and multi-int holders log once and do
+  not call the setter. StateListAnimator, layout animation and AVD stay
+  later. tests/apps/prop has 9 logic checks: a 6s translation is partway
+  across at 2s and parked 300px to the right, a scale stays at half
+  size, and a named alpha fade is neither solid nor gone in the middle.
 - Next on device: audio (audren/audout), rumble, and 1080p docked. Next
-  on WS5: property animators.
+  on WS5: StateListAnimator, layout animation, AVD.

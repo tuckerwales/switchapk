@@ -548,6 +548,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
     private int mSourceLayoutId;
 
     TransformationInfo mTransformationInfo;
+    private ViewPropertyAnimator mAnimator;
 
 
     private static final String TAG = "View";
@@ -3301,6 +3302,11 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         beforeTransformChange();
         transformInfo().mCameraDistance = -Math.abs(distance) / dpi;
         afterTransformChange();
+    }
+
+    public ViewPropertyAnimator animate() {
+        if (mAnimator == null) mAnimator = new ViewPropertyAnimator(this);
+        return mAnimator;
     }
 
     public float getRotation() { return mTransformationInfo != null ? mTransformationInfo.mRotation : 0; }

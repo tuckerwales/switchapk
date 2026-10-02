@@ -568,9 +568,13 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `SurfaceHolder.Callback`s on the UI thread when it is attached, visible
   and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
   backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
-- `View.animate()`, property animators and `StateListAnimator` belong to
-  WS5 and are not implemented. View tweens apply in
-  `draw(Canvas, ViewGroup, long)`: the animation matrix is concatenated
+- `View.animate()` returns a `ViewPropertyAnimator`. `ValueAnimator` and
+  `ObjectAnimator` advance on Choreographer frames and set view
+  properties (translation, scale, rotation, alpha, x/y/z). A translation
+  is part of the view matrix, so `invalidateChild` expands the dirty
+  rect by that matrix. `StateListAnimator` is not implemented. View
+  tweens apply in `draw(Canvas, ViewGroup, long)`: the animation matrix
+  is concatenated
   with the view matrix, and the animation alpha multiplies the view
   alpha. While `getTransformation` asks for another frame the parent is
   invalidated, so a translation is not clipped to the view's layout rect.
@@ -586,8 +590,9 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   levels with an AlphaAnimation. Bitmap layers are tiled with a repeating
   BitmapDrawable clone (keeps the tint; RatingBar stars). The Material
   spinners are `com.android.internal.graphics.drawable.
-  AnimationScaleListDrawable`, which shows its static child until WS5
-  (what Android shows with animations off). AbsSeekBar adds the thumb,
+  AnimationScaleListDrawable`, which shows its static child until
+  animated vectors run (what Android shows with animations off).
+  AbsSeekBar adds the thumb,
   split track, tick marks, touch drag (slop in scrolling containers) and
   D-pad/plus/minus steps (`keyProgressIncrement`, about 1/20 of the
   range); RatingBar steps by stepSize and reports user changes on release.

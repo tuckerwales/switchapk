@@ -509,3 +509,6 @@ what is left in flight.
   pass on x86-64 and on the AArch64 host build under qemu.
 - Switch build checked with devkitPro: the NRO links with switch-mesa
   (needed -lstdc++) and compiles without it. Not run on hardware.
+- The SD package (and the Package NRO workflow) now includes gles.apk and
+  ndk.apk with arm64-v8a libraries, for the first hardware runs of GL and
+  the loader's error path.

@@ -357,6 +357,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-02 (WS8/WS9, touches WS10 and WS13): `make -f Makefile.switch
+  dist` packages tests/apps/gles and tests/apps/ndk. Apps with a
+  `native/build.sh` are always rebuilt with `NDK_ARM64=1`, so the APK
+  carries arm64-v8a libraries. The Package NRO workflow installs clang,
+  lld and libc6-dev-arm64-cross, and checks that gles.apk is in the SD zip
+  and that ndk.apk has arm64-v8a libraries. On the Switch, ndk.apk shows
+  the loader's code memory error until WS9 adds code memory there.
 - 2026-10-02 (WS9, touches WS4, WS13, libcore): `src/nativeloader/loader_stub.c`
   is replaced by the ELF loader and shim (same `nativeloader_load_library`
   / `nativeloader_find_symbol` contract, ARCHITECTURE 6.7). `os.arch` comes

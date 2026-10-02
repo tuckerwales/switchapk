@@ -81,7 +81,10 @@ clean:
 
 # SD card layout: unzip build/switch/switchapk-sd.zip at the root of the SD card.
 # The sample APKs from tests/apps (tools/build_apk.sh) go in switch/switchapk/apks.
-SAMPLE_APPS := hello views text widgets scroll list relative appmodel lifecycle progress popups toolbar actionbar grid
+# Apps with native code (native/build.sh, needs clang and lld) are always rebuilt with arm64-v8a libraries
+# (NDK_ARM64=1): a host build only carries x86_64 ones.
+SAMPLE_APPS := hello views text widgets scroll list relative appmodel lifecycle progress popups toolbar actionbar grid \
+               gles ndk
 SD := $(BUILD)/sd
 
 dist: $(BUILD)/switchapk.nro
@@ -89,7 +92,11 @@ dist: $(BUILD)/switchapk.nro
 	mkdir -p $(SD)/switch/switchapk/apks
 	cp $(BUILD)/switchapk.nro $(SD)/switch/switchapk/switchapk.nro
 	for app in $(SAMPLE_APPS); do \
-	    [ -f build/apps/$$app/$$app.apk ] || ./tools/build_apk.sh tests/apps/$$app >/dev/null || exit 1; \
+	    if [ -x tests/apps/$$app/native/build.sh ]; then \
+	        NDK_ARM64=1 ./tools/build_apk.sh tests/apps/$$app >/dev/null || exit 1; \
+	    elif [ ! -f build/apps/$$app/$$app.apk ]; then \
+	        ./tools/build_apk.sh tests/apps/$$app >/dev/null || exit 1; \
+	    fi; \
 	    cp build/apps/$$app/$$app.apk $(SD)/switch/switchapk/apks/; \
 	done
 	cd $(SD) && zip -qr ../switchapk-sd.zip switch

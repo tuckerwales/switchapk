@@ -254,6 +254,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ### M5
 - [ ] WS9 native loader, bionic shim, NativeActivity
+  - [x] ELF64 loader (x86-64 and AArch64; RELA, APS2, RELR; DT_NEEDED from
+    the APK; constructors; JNI_OnLoad), unresolved imports bound to
+    logging stubs, System.load/loadLibrary and nativeLibraryDir
+  - [x] shim: libc/libm subset with bionic wrappers (paths, sysconf,
+    pthread objects, __sF, fortify), liblog, libdl, AAssetManager,
+    system properties, zlib, GL/EGL lookup
+  - [x] tests/apps/ndk (19 JNI checks; passes on x86-64 and on the
+    AArch64 host build under qemu with arm64-v8a libraries)
+  - [ ] Switch code memory (svcMapProcessCodeMemory) and newlib struct
+    translation (stat, dirent, O_* flags, clock ids)
+  - [ ] NativeActivity, ANativeWindow + native EGL window surfaces,
+    ALooper/AInputQueue, OpenSL ES/AAudio (with WS7)
+  - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
 
 ### M6
 - [ ] WS6 SQLite natives and storage
@@ -286,7 +299,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
 4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
    next is the Switch build with switch-mesa and a device run, then
-   SurfaceTexture external textures. WS9 (native loader) is under way.
+   SurfaceTexture external textures.
+5. WS9: JNI libraries load on the host and on AArch64 (qemu). Next:
+   Switch code memory, then NativeActivity with ANativeWindow and native
+   EGL window surfaces (shares the WS8 window path), then OpenSL ES with
+   WS7.
 
 ## Known issues and gotchas
 
@@ -308,6 +325,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   (AOSP selectDefaultTheme for targetSdk 24+), so they now show an action
   bar with the activity label. Action bar show/hide and action mode
   transitions are immediate until WS5 animators land.
+- Native libraries load on the host and AArch64 Linux only; the Switch
+  build reports that code memory is not implemented yet.
 - Host GL tests need Mesa's EGL and GLES libraries (`libegl1`,
   `libgles2`; `libegl-dev`/`libgles-dev` to regenerate the bindings).
   Ubuntu's Mesa cannot create ES1 contexts, so GLES1 rendering is not
@@ -321,6 +340,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-02 (WS9, touches WS4, WS13, libcore): `src/nativeloader/loader_stub.c`
+  is replaced by the ELF loader and shim (same `nativeloader_load_library`
+  / `nativeloader_find_symbol` contract, ARCHITECTURE 6.7). `os.arch` comes
+  from the new `System.nativeArch()` native ("x86_64" on x86-64 hosts,
+  "aarch64" otherwise), so `Build.CPU_ABI` matches the loader's ABI.
+  `ApplicationInfo.nativeLibraryDir` is set to
+  `/data/app/<pkg>/lib/<x86_64|arm64>`. `tools/build_apk.sh` packages an
+  app's `assets/` and runs an optional `native/build.sh <out>` whose
+  `lib/<abi>/*.so` go into the APK. Makefile.switch adds `-lstdc++` with
+  Mesa (switch-mesa is C++).
 - 2026-10-02 (WS8, touches WS1 and the VM): `Surface` gained
   framework-internal `lockGlBuffer(w, h)`, `unlockGlBufferAndPost()` and
   `isOpaqueBuffer()` so EGL window surfaces post frames through the

@@ -444,3 +444,17 @@ what is left in flight.
   when installed. tests/apps/gles renders a GLES2 textured cube on Mesa
   llvmpipe and checks it; Ubuntu's Mesa has no ES1 contexts, so the GLES1
   half checks the "OpenGL ES unavailable" panel there.
+- WS9 native loader. An ELF64 loader replaces loader_stub.c: it maps
+  lib/<abi>/ libraries from the APK, loads DT_NEEDED dependencies,
+  applies RELA, APS2 and RELR relocations (x86-64 and AArch64), runs
+  constructors and JNI_OnLoad, and binds imports nobody provides to
+  stubs that log once and return 0. The shim maps bionic libc/libm onto
+  the host C library with wrappers where bionic differs (paths, sysconf,
+  pthread objects, __sF, fortify), plus liblog, libdl, AAssetManager,
+  system properties, zlib and GL. `os.arch` now reports the real CPU and
+  nativeLibraryDir is set. tools/build_apk.sh packages assets/ and
+  native/build.sh output. tests/apps/ndk builds two libraries with clang
+  and lld for an Android target (no NDK) and runs 19 JNI checks; they
+  pass on x86-64 and on the AArch64 host build under qemu.
+- Switch build checked with devkitPro: the NRO links with switch-mesa
+  (needed -lstdc++) and compiles without it. Not run on hardware.

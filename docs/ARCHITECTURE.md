@@ -26,7 +26,7 @@ application (NRO). There is no Android OS underneath. Instead we provide:
 +------------------------------+--------------------------------------------+
 | android.* framework (java/framework)  | NDK shim: libc/libm/libdl/liblog/  |
 | java.* libcore       (java/libcore)   | libandroid/libEGL/libGLESv2/       |
-|                                       | OpenSLES  (src/nativeloader) [todo]|
+|                                       | OpenSLES  (src/nativeloader)       |
 +---------------------------------------+-----------------------------------+
 | Dalvik VM (src/vm): interpreter, class linker, GC, threads/GIL, JNI       |
 +---------------------------------------------------------------------------+
@@ -65,7 +65,9 @@ src/android/     natives for android.*: android.h (shared helpers),
 src/gfx/         gfx.h, raster.c (AA rasterizer/compositor), font.c
                  (stb_truetype text), image.c (stb_image decode, PNG encode)
 src/platform/    platform.h, platform_headless.c, [todo] platform_switch.c
-src/nativeloader/ loader_stub.c (placeholder), [todo] ELF loader + bionic shim
+src/nativeloader/ nativeloader.h, elf_loader.c (ELF loader, dl*), shim_libc.c
+                 (libc/libm), shim_android.c (liblog, libdl, assets,
+                 properties, zlib, GL lookup)
 src/app/         main_host.c (host driver), app_stub.c (placeholder for the
                  APK runner), [todo] app_runner.c, main_switch.c
 java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
@@ -204,7 +206,7 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
   x86-64 SysV).
 - Contract with the native loader (src/nativeloader):
   - `const char *nativeloader_load_library(VMThread *t, const char *name, bool is_libname)`:
-    load from the APK's `lib/arm64-v8a/` (or an absolute path), run
+    load from the APK's `lib/<abi>/` (or an absolute path; 6.7), run
     constructors and `JNI_OnLoad`; return NULL or an error message.
   - `void *nativeloader_find_symbol(const char *name)`: search all loaded
     libraries.
@@ -820,27 +822,61 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `elementSizeShift` (by `gles_buffer`), besides `backing` and
   `byteOffset` (by `vm_buffer_address`, declared in vm.h).
 
-### 6.7 Native libraries (design)
-- ELF64 loader for `lib/arm64-v8a/*.so` from the APK: map segments,
-  apply relocations (AArch64: RELATIVE, GLOB_DAT, JUMP_SLOT, ABS64,
-  TLSDESC; x86-64 equivalents for host tests), resolve imports against
-  (1) other loaded app libraries, (2) our shim libraries, run
-  `.init_array`, then `JNI_OnLoad`.
-- Shim ("bionic on newlib"): exported symbol tables for libc, libm, libdl,
-  liblog, libandroid (ANativeWindow, AAssetManager, ALooper, AInputQueue,
-  AConfiguration, ANativeActivity), libEGL, libGLESv2, libOpenSLES,
-  libaaudio, libz. Most libc symbols forward to newlib/libnx; bionic
-  struct layouts that differ (FILE, pthread types, stat, dirent, sigaction)
-  need translation wrappers.
-- TLS: bionic keeps the stack protector guard at `tpidr_el0 + 40` and uses
-  fixed TLS slots; the loader must provide a compatible TLS block per
-  thread.
-- Switch executable memory: map code with `svcMapProcessCodeMemory` +
-  `svcSetProcessMemoryPermission` (needs the process handle; works on
-  homebrew with JIT-capable environments, e.g. when launched as an
-  application rather than an applet). Host builds use mmap/mprotect.
-- NativeActivity: implement `ANativeActivity_onCreate` callbacks and the
-  input queue/window lifecycle expected by `android_native_app_glue`.
+### 6.7 Native libraries
+
+- `System.loadLibrary("foo")` / `System.load(path)` reach
+  `nativeloader_load_library` (src/nativeloader/elf_loader.c). Libraries
+  come from the APK's `lib/<abi>/` (`x86_64` on the host, `arm64-v8a` on
+  AArch64 and the Switch; `SA_NATIVE_ABI`). Absolute paths are read from
+  the file system when they exist, else by file name from the APK, so
+  `ApplicationInfo.nativeLibraryDir` (`/data/app/<pkg>/lib/<x86_64|arm64>`)
+  paths work. `os.arch` (and so `Build.CPU_ABI`) reports the real CPU.
+  A library already loaded is not loaded again and its JNI_OnLoad does
+  not rerun; a missing one gives Android's message
+  (`dlopen failed: library "libx.so" not found`) as UnsatisfiedLinkError.
+- Loading: PT_LOAD segments are copied into an anonymous mapping,
+  DT_NEEDED libraries load first (shim names are skipped), relocations
+  are applied (RELR / DT_ANDROID_RELR, Android packed APS2
+  (DT_ANDROID_RELA), RELA, JMPREL; AArch64 ABS64, GLOB_DAT, JUMP_SLOT,
+  RELATIVE, IRELATIVE and their x86-64 equivalents), segments get their
+  final protections (RELRO read-only), then DT_INIT and DT_INIT_ARRAY run,
+  then JNI_OnLoad (with a JNI frame) whose version is checked like ART.
+  Constructors and JNI_OnLoad run with the GIL released, like JNI calls.
+  ELF TLS is not supported (TLS relocations fail the load); NDK code for
+  minSdk < 29 uses emulated TLS, which needs nothing from us.
+- Symbol resolution follows Android's linker: the shim first (standing in
+  for the global group: libc, libm, libdl, liblog, libandroid, libz, GL),
+  then the library's local group breadth-first (itself, then its
+  DT_NEEDED tree). Weak undefined imports become 0. An import nothing
+  provides is bound to a generated stub (x86-64 or AArch64 code in a
+  per-library page) that logs `native code called X, which no library
+  provides` once and returns 0; the load succeeds with a warning listing
+  the unresolved names. This trades Android's load failure for partial
+  coverage, like framework auto-stubbing.
+- `nativeloader_find_symbol` (JNI binding) searches every loaded library.
+  libdl's dlopen/dlsym/dladdr go through the same loader; dlopen of a
+  system library name returns a handle whose dlsym searches the shim.
+- Shim (`shim_libc.c`, `shim_android.c`): bionic names mapped to the host
+  C library where the ABI matches, with wrappers where bionic differs:
+  Android path mapping for open/fopen/stat/opendir/..., bionic sysconf
+  numbering, `__errno`, fortify `_chk` entry points, `__sF`
+  (stdin/stdout/stderr for code built before API 23) and FILE* translation,
+  stack protector, `__cxa_atexit` (native destructors never run), pthread
+  mutexes and condition variables (bionic's 40/48-byte objects hold a
+  pointer to a lazily created host object, so zeroed static initializers
+  and the recursive initializer work), bionic pthread_attr_t, liblog
+  (to sa_log), AAssetManager (reads `assets/` from the APK; no file
+  descriptors), `__system_property_get` (SDK 29 values), zlib, and GL/EGL
+  names resolved from the driver (`sa_gl_proc`, 6.6.1). Struct layouts
+  (stat, dirent, tm, timespec) match bionic on 64-bit Linux hosts; the
+  Switch needs translation wrappers for newlib's.
+- Code memory: mmap/mprotect on the host. On the Switch loading fails with
+  a message until `svcMapProcessCodeMemory` + `svcSetProcessMemoryPermission`
+  are wired in (application launches, not applets).
+- Not yet: NativeActivity (`ANativeActivity_onCreate`, ALooper,
+  AInputQueue, ANativeWindow and EGL window surfaces from native code),
+  OpenSL ES and AAudio (WS7), AConfiguration, ASensorManager, libc++_shared
+  coverage checks, socket APIs.
 
 ## 7. Platform layer (src/platform/platform.h)
 

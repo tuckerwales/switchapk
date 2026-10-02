@@ -42,9 +42,19 @@ NATIVE(Runtime_nativeLoad) {
     R_OBJ(err ? vm_new_string_utf8(t, err) : NULL);
 }
 
+NATIVE(System_nativeArch) {
+    UNUSED_ARGS();
+#if defined(__x86_64__)
+    R_OBJ(vm_new_string_utf8(t, "x86_64"));
+#else
+    R_OBJ(vm_new_string_utf8(t, "aarch64"));
+#endif
+}
+
 static const NativeMethodReg g_regs[] = {
     {"Ljava/lang/ClassLoader;", "getResourceBytes", "(Ljava/lang/String;)[B", ClassLoader_getResourceBytes},
     {"Ljava/lang/Runtime;", "nativeLoad", "(Ljava/lang/String;Z)Ljava/lang/String;", Runtime_nativeLoad},
+    {"Ljava/lang/System;", "nativeArch", "()Ljava/lang/String;", System_nativeArch},
 };
 
 void natives_java_misc_register(void) { vm_register_natives(g_regs, SA_ARRAY_LEN(g_regs)); }

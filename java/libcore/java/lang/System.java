@@ -31,7 +31,7 @@ public final class System {
         props.setProperty("path.separator", ":");
         props.setProperty("file.encoding", "UTF-8");
         props.setProperty("os.name", "Linux");
-        props.setProperty("os.arch", "aarch64");
+        props.setProperty("os.arch", nativeArch());
         props.setProperty("os.version", "4.9.0");
         props.setProperty("user.dir", "/");
         props.setProperty("user.home", "");
@@ -68,6 +68,9 @@ public final class System {
     public static native int identityHashCode(Object x);
 
     static native void nativeExit(int status);
+
+    /** "aarch64" or "x86_64": the CPU native libraries are loaded for (Build.CPU_ABI follows it). */
+    private static native String nativeArch();
 
     static native void logNative(int priority, String msg);
 

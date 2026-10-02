@@ -39,7 +39,7 @@ duplicating work.
 | WS6 | Storage: SQLite natives, database/content provider checks, file APIs, SharedPreferences tests | WS0 | not started | |
 | WS7 | Audio/media: mixer, SoundPool, MediaPlayer, AudioTrack, decoders, platform audio | WS0 | not started | |
 | WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | in progress (bindings, EGL, GLSurfaceView, window surfaces and tests/apps/gles done on host Mesa; Switch build with switch-mesa, GLES1 verification, EGL15 syncs/images and SurfaceTexture left) | session 8, 2026-10-02 |
-| WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, shim, JNI sample on host) | session 8, 2026-10-02 |
+| WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, bionic shim, JNI_OnLoad, System.load/loadLibrary and tests/apps/ndk done on x86-64 and AArch64 Linux; Switch code memory, NativeActivity/ANativeWindow and OpenSL ES left) | session 8, 2026-10-02 |
 | WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO build, platform_switch.c, launcher) | ws4 session 6, 2026-10-01 |
 | WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | not started | |
 | WS12 | VM performance and memory | none | not started | |

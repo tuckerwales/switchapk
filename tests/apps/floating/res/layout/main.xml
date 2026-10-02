@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF101820">
+    <View android:id="@+id/selection"
+        android:layout_width="480dp"
+        android:layout_height="48dp"
+        android:layout_marginLeft="48dp"
+        android:layout_marginTop="200dp"
+        android:background="#FFFFF59D" />
+    <TextView android:id="@+id/status"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom"
+        android:gravity="center_vertical"
+        android:paddingLeft="16dp"
+        android:background="#FF203040"
+        android:textColor="#FFF5F5F5"
+        android:text="floating" />
+</FrameLayout>

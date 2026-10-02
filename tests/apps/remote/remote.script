@@ -1,0 +1,6 @@
+idle 800
+screenshot remote_card.png
+tap 640 400
+idle 800
+screenshot remote_open.png
+quit

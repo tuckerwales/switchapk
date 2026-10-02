@@ -374,3 +374,58 @@ what is left in flight.
   SimpleCursorTreeAdapter (column to view binding with a ViewBinder).
   tests/apps/adapters gained 13 logic checks (40 in all), including an
   ExpandableListView collapse closing the children cursor.
+
+### Session 7 (2026-10-02, branch ccr-08dbdaa2-6llszo)
+- WS3 holo CalendarView. Mode 0 (`Widget.CalendarView` and the Holo
+  styles) now builds CalendarViewLegacyDelegate: the framework
+  `calendar_view` layout, a month title, single-letter day names, and a
+  ListView of weeks with week numbers, a selected-week tint and the
+  vertical bar drawable. Theme.Material still builds the material
+  delegate, so `new CalendarView(activity)` is unchanged.
+  `DateUtils.getDayOfWeekString` honors `LENGTH_SHORTEST`, and
+  `formatDateRange` with `FORMAT_NO_MONTH_DAY` keeps the month name.
+  Pieces still join with ", ", so the title is "March, 2024".
+  tests/apps/holocal has 19 logic checks and covers March 2024 with the
+  15th selected, a tap on Sunday the 10th, and a swipe that settles on
+  April with the 10th still selected. tests/apps/dates stays green.
+- WS3 VideoView placeholder. Ported VideoView (aspect-ratio measure,
+  audio-focus request, the framework error dialog, MediaController
+  attach) and MediaController (the `media_controller` layout, seek bar,
+  play, rewind, fast-forward, and prev/next once listeners are set).
+  `Context.AUDIO_SERVICE` returns an AudioManager that grants focus.
+  MediaPlayer keeps the data source and `prepareAsync` posts
+  `MEDIA_ERROR_UNKNOWN` / `MEDIA_ERROR_UNSUPPORTED`, because decoding is
+  WS7. Subtitles are reported unsupported. tests/apps/video has 16 logic
+  checks: the controller draws 1:05 of a 2:05 clip, and Play opens
+  "Can't play this video."
+- WS3 RemoteViews. apply inflates the layout and runs the action list:
+  reflection setters, click and checked PendingIntents, fill-in against
+  a template tag on an ancestor, and RemoteCollectionItems as a
+  BaseAdapter. onLoadClass allows framework View packages because the
+  VM does not surface the RemoteView annotation. DrawInstructions apply
+  as an empty view, and setRemoteAdapter(Intent) is not hosted.
+  Notification content views stay unsupported. tests/apps/remote has 43
+  logic checks, including a parcel snapshot, a landscape and sized
+  choice, a two-row list whose fill-in delivers the row extra, and an
+  Open click that reapply()s an orange swatch.
+- WS1 floating action mode toolbar. TYPE_FLOATING now builds a
+  FloatingActionMode. The menu is a horizontal popup above the content
+  rect from Callback2.onGetContentRect (below it when there is no room).
+  hide dismisses the popup without ending the mode, and BACK finishes a
+  floating mode before a primary one. Text selection does not open one
+  yet. tests/apps/floating has 9 logic checks: Copy and Share sit above
+  a yellow selection, and tapping Copy finishes the mode.
+- WS1 text selection toolbar. A long press on selectable or editable
+  text selects the word and opens the floating action mode on the
+  selection bounds. Cut, Copy, Paste, and Select all use
+  onTextContextMenuItem. Copy, cut, and paste finish the mode; Select
+  all updates the rect. Context.CLIPBOARD_SERVICE is a process-wide
+  ClipboardManager. tests/apps/select has 7 logic checks: "beta" is
+  highlighted, Copy is the first toolbar item, and tapping it clears
+  the selection.
+- WS1 clipToOutline. setClipToOutline clips the view, its background,
+  and its children to a round-rect outline. Path outlines do not clip,
+  and shadows are not drawn. tests/apps/outline has 3 logic checks: a
+  48dp corner is the page color, and the inside of the arc stays the
+  child's yellow.
+- In flight: WS1 ViewDebug annotations, DisplayCutout, WS5 animation.

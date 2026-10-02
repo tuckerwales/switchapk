@@ -17,6 +17,7 @@ import android.view.ViewStub;
 import android.view.Window;
 import android.widget.FrameLayout;
 import com.android.internal.util.InternalRes;
+import com.android.internal.view.FloatingActionMode;
 import com.android.internal.view.StandaloneActionMode;
 import com.android.internal.widget.ActionBarContextView;
 
@@ -33,6 +34,8 @@ public class DecorView extends FrameLayout {
     /** The primary action mode, whether shown by the action bar or by mPrimaryActionModeView. */
     ActionMode mPrimaryActionMode;
     private ActionBarContextView mPrimaryActionModeView;
+    /** The floating action mode (selection toolbar). */
+    private ActionMode mFloatingActionMode;
 
     DecorView(Context context, PhoneWindow window) {
         super(context);
@@ -82,7 +85,11 @@ public class DecorView extends FrameLayout {
     }
 
     public boolean superDispatchKeyEvent(KeyEvent event) {
-        // Back cancels action modes first.
+        // Back cancels a floating toolbar first, then a primary action mode.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && mFloatingActionMode != null) {
+            if (event.getAction() == KeyEvent.ACTION_UP) mFloatingActionMode.finish();
+            return true;
+        }
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && mPrimaryActionMode != null) {
             if (event.getAction() == KeyEvent.ACTION_UP) mPrimaryActionMode.finish();
             return true;
@@ -218,12 +225,15 @@ public class DecorView extends FrameLayout {
             if (mode.getType() == ActionMode.TYPE_PRIMARY) {
                 cleanupPrimaryActionMode();
                 mPrimaryActionMode = mode;
+            } else if (mode.getType() == ActionMode.TYPE_FLOATING) {
+                cleanupFloatingActionMode();
+                mFloatingActionMode = mode;
             }
         } else {
-            // Floating action modes (text selection toolbars) are not supported yet.
-            mode = type == ActionMode.TYPE_PRIMARY ? createStandaloneActionMode(wrappedCallback) : null;
+            mode = createActionMode(type, wrappedCallback, originatingView);
             if (mode != null && wrappedCallback.onCreateActionMode(mode, mode.getMenu())) {
-                setHandledPrimaryActionMode(mode);
+                if (mode.getType() == ActionMode.TYPE_FLOATING) setHandledFloatingActionMode(mode);
+                else setHandledPrimaryActionMode(mode);
             } else {
                 mode = null;
             }
@@ -238,6 +248,30 @@ public class DecorView extends FrameLayout {
             mPrimaryActionMode = null;
         }
         if (mPrimaryActionModeView != null) mPrimaryActionModeView.killMode();
+    }
+
+    private ActionMode createActionMode(int type, ActionMode.Callback2 callback, View originatingView) {
+        if (type == ActionMode.TYPE_FLOATING) return createFloatingActionMode(originatingView, callback);
+        if (type == ActionMode.TYPE_PRIMARY) return createStandaloneActionMode(callback);
+        return null;
+    }
+
+    private ActionMode createFloatingActionMode(View originatingView, ActionMode.Callback2 callback) {
+        if (originatingView == null) return null;
+        cleanupFloatingActionMode();
+        return new FloatingActionMode(getContext(), callback, originatingView);
+    }
+
+    private void cleanupFloatingActionMode() {
+        if (mFloatingActionMode != null) {
+            mFloatingActionMode.finish();
+            mFloatingActionMode = null;
+        }
+    }
+
+    private void setHandledFloatingActionMode(ActionMode mode) {
+        mFloatingActionMode = mode;
+        mode.invalidate();
     }
 
     private ActionMode createStandaloneActionMode(ActionMode.Callback callback) {
@@ -288,6 +322,7 @@ public class DecorView extends FrameLayout {
                 }
                 mPrimaryActionMode = null;
             }
+            if (mode == mFloatingActionMode) mFloatingActionMode = null;
             final Window.Callback cb = mWindow.getCallback();
             if (cb != null && !mWindow.isDestroyed()) cb.onActionModeFinished(mode);
             requestFitSystemWindows();

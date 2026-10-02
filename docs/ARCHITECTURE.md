@@ -389,7 +389,19 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   ToolbarActionBar after setActionBar(Toolbar), which wraps the window
   callback. DecorView owns the primary ActionMode: the window callback
   may supply it (the action bar's context bar), else DecorView inflates
-  `action_mode_bar_stub` for a StandaloneActionMode. BACK finishes it.
+  `action_mode_bar_stub` for a StandaloneActionMode. TYPE_FLOATING
+  creates a FloatingActionMode: a popup row of the menu items above the
+  content rect from Callback2.onGetContentRect, or below it when the row
+  does not fit. hide dismisses the popup without finishing the mode.
+  A long press on selectable or editable text selects the word under
+  the finger and starts that floating mode. The menu is Cut, Copy,
+  Paste, and Select all. Copy, cut, and paste finish the mode; Select
+  all updates the content rect. Destroying the mode clears a
+  non-editable selection and collapses an editable one to a cursor.
+  Context.CLIPBOARD_SERVICE is one process-wide ClipboardManager, which
+  is what those items read and write. An anchored long press calls
+  performLongClick() with the point stored, so a no-arg override sees
+  it. BACK finishes a floating mode before a primary one.
 - Default theme: a context whose component and application set no theme
   uses `Resources.selectDefaultTheme(0, targetSdk)` (DeviceDefault Light
   DarkActionBar for targetSdk 24+), as AOSP ContextImpl and
@@ -422,6 +434,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   the editor that called showSoftInput, via InputConnection.commitText.
 
 ### 6.4.1 View system notes for widget authors
+- `View.setClipToOutline(true)` clips the view, its background, and its
+  children to the outline from `getOutlineProvider()`. Only a round rect
+  clips (`Outline.canClip()` is false for a path). The rect is in view
+  coordinates and is shifted by the scroll, matching
+  `draw(Canvas, ViewGroup)`. Shadows are not drawn. `invalidateOutline()`
+  invalidates the view.
 - `View`/`ViewGroup` are ports of AOSP; subclasses behave as on Android.
   Package-private hooks used inside `android.view`: `View.draw(Canvas,
   ViewGroup, long)` (per-child transform/alpha/clip), `mAttachInfo`
@@ -460,14 +478,38 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `mAllowInconsistentMeasurement`). Dialog sizing depends on it: the
   wrap-content window trial at `config_prefDialogWidth` only succeeds when
   nothing below reports MEASURED_STATE_TOO_SMALL.
-- Date widgets: DatePicker and CalendarView use the material day picker
-  (internal ViewPager of SimpleMonthViews, YearPickerView); the landscape
-  `layout-land` dimens and layouts apply on the Switch screen. The holo
-  CalendarView week list (`calendarViewMode` 0, base `Theme` only) is not
-  ported and falls back to the material calendar. TimePicker uses the
-  radial clock (with the text input mode) or NumberPicker spinners;
-  RadialTimePickerView crossfades hours and minutes on a frame callback
-  rather than an ObjectAnimator until WS5 lands.
+- Date widgets: DatePicker uses the material day picker (internal
+  ViewPager of SimpleMonthViews, YearPickerView); the landscape
+  `layout-land` dimens and layouts apply on the Switch screen.
+  CalendarView follows `calendarViewMode`: material (the Theme.Material
+  default) is that day picker, and holo (`Widget.CalendarView`, mode 0)
+  is CalendarViewLegacyDelegate, a ListView of weeks inflated from the
+  framework `calendar_view` layout (month title, day-name header, week
+  numbers, selected-week tint, vertical bars). There is no
+  libcore.icu.LocaleData, so the default first day of the week is
+  `Calendar.getInstance().getFirstDayOfWeek()` (Sunday on the Gregorian
+  calendar). `DateUtils` joins format pieces with ", ", emits the month
+  for `FORMAT_NO_MONTH_DAY`, and returns a one-letter weekday for
+  `LENGTH_SHORTEST`, so the holo header reads "March, 2024" over
+  "S M T W T F S". TimePicker uses the radial clock (with the text input
+  mode) or NumberPicker spinners; RadialTimePickerView crossfades hours
+  and minutes on a frame callback rather than an ObjectAnimator until
+  WS5 lands.
+- VideoView is the AOSP widget on a SurfaceView, with MediaController as
+  the floating transport bar from the framework `media_controller` layout.
+  Nothing is decoded yet: `MediaPlayer.prepareAsync` posts
+  `MEDIA_ERROR_UNKNOWN` / `MEDIA_ERROR_UNSUPPORTED` on the main looper, and
+  VideoView shows the framework "Can't play this video." dialog unless an
+  `OnErrorListener` returns true. `Context.AUDIO_SERVICE` returns an
+  AudioManager that grants focus and never revokes it. Subtitle sources
+  are reported unsupported. The mixer and decoders are WS7.
+- RemoteViews inflates its layout and runs the action list (reflection
+  setters, click and checked PendingIntents, fill-in against a template
+  tag on an ancestor, and RemoteCollectionItems as a BaseAdapter).
+  onLoadClass allows framework View packages because the VM does not
+  surface the RemoteView annotation. DrawInstructions apply as an empty
+  view. setRemoteAdapter(Intent) is not hosted. Notification content
+  RemoteViews stay unsupported, and this does not change Notification.
 - GridLayout is the AOSP port: row and column lines come from a
   difference-constraint solve per axis, cached until the structure (child
   set, spans, GONE changes, `onSetLayoutParams`) or the values (any
@@ -705,10 +747,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - SQLite: bundled amalgamation compiled into the binary
   (`third_party/sqlite`), Java API in `android.database.sqlite` over thin
   natives (`SQLiteNative`); results are fully materialized per query.
-- Audio: one float stereo mixer in C (`platform_audio_start` callback)
-  mixing SoundPool voices, AudioTrack streams and MediaPlayer streams.
-  Decoders: WAV/PCM, OGG Vorbis (stb_vorbis or libvorbis), MP3 (mpg123 on
-  Switch portlibs). Switch output via audren or audout.
+- Audio (not built): one float stereo mixer in C (`platform_audio_start`
+  callback) mixing SoundPool voices, AudioTrack streams and MediaPlayer
+  streams. Decoders: WAV/PCM, OGG Vorbis (stb_vorbis or libvorbis), MP3
+  (mpg123 on Switch portlibs). Switch output via audren or audout. Until
+  that lands, the Java MediaPlayer and AudioManager are the placeholders
+  in 6.4.1 and produce no samples.
 - OpenGL ES 2/3: GLES20/GLES30 Java bindings generated from the Khronos
   headers into natives that call the real GLES (mesa/nouveau on Switch via
   portlibs). EGL14 and `javax.microedition.khronos.egl` map to real EGL

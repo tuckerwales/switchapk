@@ -1,0 +1,11 @@
+idle 800
+screenshot holocal_start.png
+log tap Sunday the 10th
+tap 241 334
+idle 600
+screenshot holocal_tenth.png
+log swipe toward later weeks
+swipe 640 560 640 160 400
+idle 1500
+screenshot holocal_scrolled.png
+quit

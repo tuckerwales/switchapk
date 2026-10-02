@@ -124,14 +124,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] context menu presentation (MenuDialogHelper, from WS4)
   - [x] action mode presentation: primary modes in the action bar's
     context bar (WindowDecorActionBar) or standalone in the decor's
-    action_mode_bar stub; floating (text selection) modes are not done
-  - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
+    action_mode_bar stub; floating toolbar (TYPE_FLOATING) shows the menu
+    above the content rect (tests/apps/floating). A long press on
+    selectable text selects a word and opens that toolbar
+    (tests/apps/select)
+  - [x] clipToOutline: a round-rect outline clips the view and its
+    children (tests/apps/outline). Path outlines do not clip
+  - [ ] ViewDebug annotations, DisplayCutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
   - [x] TextView measure, draw, common XML attributes, transformations; tests/apps/text screenshots
   - [x] movement and key listeners, EditText, BaseInputConnection, IME `text` delivery
   - [x] Html.fromHtml, Linkify, DateUtils
-- [ ] WS3 widgets
+- [x] WS3 widgets
   - [x] ImageView (scale types), Button, ImageButton, CompoundButton,
     CheckBox, RadioButton, RadioGroup, ToggleButton, Switch, Space;
     tests/apps/widgets
@@ -163,6 +168,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] DatePicker (calendar and spinner delegates), CalendarView
     (material delegate), DatePickerDialog, internal ViewPager, DayPickerView,
     SimpleMonthView, YearPickerView; tests/apps/dates
+  - [x] CalendarView holo week list (CalendarViewLegacyDelegate);
+    tests/apps/holocal
   - [x] TimePicker (clock and spinner delegates), RadialTimePickerView,
     NumericTextView, TextInputTimePickerView, TimePickerDialog;
     tests/apps/times
@@ -175,8 +182,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     LocalActivityManager (embedded activities); tests/apps/tabs
   - [x] CursorTreeAdapter, ResourceCursorTreeAdapter,
     SimpleCursorTreeAdapter; tests/apps/adapters
-  - [ ] the rest (the holo CalendarView week list, VideoView,
-    RemoteViews, ...)
+  - [x] VideoView and MediaController (playback fails with the framework
+    error dialog until WS7 decodes); tests/apps/video
+  - [x] RemoteViews (apply, reapply, parcel, collections); tests/apps/remote
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,
@@ -244,16 +252,23 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 ## Next steps (in order)
 
-1. WS2 is done. WS3 is in progress: ImageView, the compound controls,
+1. WS2 is done. WS3 is done: ImageView, the compound controls,
    scrolling (ScrollView, HorizontalScrollView, Scroller, OverScroller,
    EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
    landed, and so have progress, popups, Toolbar, the action bar,
    adapters, the expandable list, NumberPicker, the clocks, DatePicker,
-   CalendarView, DatePickerDialog, TimePicker, TimePickerDialog and
-   GridLayout, SearchView, TabHost and the CursorTreeAdapter family.
-   Next: the rest of the WS3 widgets (the holo CalendarView week list,
-   VideoView, RemoteViews). WS5 (animation) can start in parallel.
-2. Finish WS1: floating action modes (text selection toolbar).
+   CalendarView (material delegate and the holo week list),
+   DatePickerDialog, TimePicker, TimePickerDialog and GridLayout,
+   SearchView, TabHost, the CursorTreeAdapter family, VideoView
+   (transport controls and the error dialog; decoding is WS7) and
+   RemoteViews (inflate, actions and reapply; notification content
+   views stay unsupported). Text selection opens the floating toolbar
+   (tests/apps/select).
+   Next: the rest of WS1 (ViewDebug annotations, DisplayCutout).
+   WS5 (animation) can start in parallel.
+2. Finish WS1: ViewDebug annotations and DisplayCutout. The floating
+   toolbar (tests/apps/floating), text selection (tests/apps/select),
+   and clipToOutline (tests/apps/outline) have landed.
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
@@ -418,3 +433,33 @@ and update ARCHITECTURE.md in the same commit.
   `destroyEmbeddedActivity`, which LocalActivityManager drives instead of
   AOSP's client transactions. `isRootNamespace`/`setIsRootNamespace` moved
   from ViewGroup to View (as in AOSP). ARCHITECTURE 6.5 updated.
+- 2026-10-02 (WS3): CalendarView mode 0 constructs
+  CalendarViewLegacyDelegate (the holo week list) instead of the material
+  day picker. `DateUtils.getDayOfWeekString` with `LENGTH_SHORTEST`
+  returns one letter, and `formatDateRange` with `FORMAT_NO_MONTH_DAY`
+  includes the month name. Format pieces still join with ", ", so the
+  week-list title is "March, 2024". ARCHITECTURE 6.4.1 updated.
+- 2026-10-02 (WS3, touches WS7): `Context.AUDIO_SERVICE` returns an
+  AudioManager. Focus requests are granted and never revoked.
+  `MediaPlayer.prepareAsync` fails with `MEDIA_ERROR_UNKNOWN` /
+  `MEDIA_ERROR_UNSUPPORTED` until WS7 has a decoder. VideoView shows the
+  framework error dialog when no OnErrorListener consumes the error.
+  ARCHITECTURE 6.4.1 and 6.6 updated.
+- 2026-10-02 (WS1): `View.startActionMode(callback, TYPE_FLOATING)` creates
+  a FloatingActionMode. Its toolbar is a popup of the menu items above
+  the content rect from `Callback2.onGetContentRect` (below it when the
+  row does not fit). `hide` dismisses the popup without finishing the
+  mode. Text selection does not open one yet. ARCHITECTURE 6.4 updated.
+- 2026-10-02 (WS1): A long press on selectable or editable text selects
+  the word and starts a TYPE_FLOATING action mode on the selection
+  bounds. Copy, cut, and paste call onTextContextMenuItem and finish
+  the mode. Select all keeps it and updates the rect.
+  Context.CLIPBOARD_SERVICE returns one process-wide ClipboardManager.
+  View.performLongClick(float, float) stores the point and calls
+  performLongClick(), so a no-arg override sees an anchored press.
+  ARCHITECTURE 6.4 updated.
+- 2026-10-02 (WS1): `View.setClipToOutline(true)` clips that view, its
+  background, and its children to the outline from `getOutlineProvider()`.
+  Only round rects clip. A path outline (`Outline.canClip()` is false)
+  does not. `invalidateOutline()` invalidates the view. Shadows are not
+  drawn. ARCHITECTURE 6.4.1 updated.

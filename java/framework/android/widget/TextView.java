@@ -28,6 +28,7 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.method.AllCapsTransformationMethod;
+import android.text.method.ArrowKeyMovementMethod;
 import android.text.method.DigitsKeyListener;
 import android.text.method.KeyListener;
 import android.text.method.LinkMovementMethod;
@@ -44,8 +45,12 @@ import android.text.style.UpdateLayout;
 import android.text.util.Linkify;
 import android.util.AttributeSet;
 import android.util.TypedValue;
+import android.view.ActionMode;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -151,6 +156,11 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     private boolean mCursorVisible = true;
     private boolean mSelectAllOnFocus;
     private boolean mTextIsSelectable;
+    private ActionMode mSelectionMode;
+    private ActionMode.Callback mCustomSelectionActionModeCallback;
+    private ActionMode.Callback mCustomInsertionActionModeCallback;
+    private float mLongPressX = Float.NaN;
+    private float mLongPressY = Float.NaN;
     private boolean mFreezesText;
     private boolean mLinksClickable = true;
     private boolean mAllCaps;
@@ -1249,17 +1259,150 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     public boolean isCursorVisible() { return mCursorVisible; }
 
     public void setTextIsSelectable(boolean selectable) {
+        if (mTextIsSelectable == selectable) return;
         mTextIsSelectable = selectable;
         if (selectable) {
             setFocusable(true);
             setFocusableInTouchMode(true);
             setClickable(true);
             setLongClickable(true);
-            if (!(mText instanceof Spannable)) setText(mText, BufferType.SPANNABLE);
+            if (mMovement == null) setMovementMethod(ArrowKeyMovementMethod.getInstance());
+            else if (!(mText instanceof Spannable)) setText(mText, BufferType.SPANNABLE);
+        } else if (mSelectionMode != null) {
+            mSelectionMode.finish();
         }
     }
 
     public boolean isTextSelectable() { return mTextIsSelectable; }
+
+    public void setCustomSelectionActionModeCallback(ActionMode.Callback actionModeCallback) {
+        mCustomSelectionActionModeCallback = actionModeCallback;
+    }
+
+    public ActionMode.Callback getCustomSelectionActionModeCallback() {
+        return mCustomSelectionActionModeCallback;
+    }
+
+    public void setCustomInsertionActionModeCallback(ActionMode.Callback actionModeCallback) {
+        mCustomInsertionActionModeCallback = actionModeCallback;
+    }
+
+    public ActionMode.Callback getCustomInsertionActionModeCallback() {
+        return mCustomInsertionActionModeCallback;
+    }
+
+    /** Touch long-press stores its point, then this selects a word and opens the floating toolbar. */
+    @Override
+    public boolean performLongClick() {
+        if (startSelectionActionMode()) {
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+            return true;
+        }
+        return super.performLongClick();
+    }
+
+    private boolean startSelectionActionMode() {
+        if (!(mTextIsSelectable || mText instanceof Editable)) return false;
+        if (mText == null || mText.length() == 0 || mLayout == null) return false;
+        if (!(mText instanceof Spannable)) setText(mText, BufferType.SPANNABLE);
+        if (!(mText instanceof Spannable) || mLayout == null) return false;
+        // Focus can move the cursor. Select the word after that so the range wins.
+        requestFocus();
+        int len = mText.length();
+        int offset;
+        if (Float.isNaN(mLongPressX) || Float.isNaN(mLongPressY)) offset = Math.max(0, getSelectionStart());
+        else offset = getOffsetForPosition(mLongPressX, mLongPressY);
+        if (offset < 0) offset = 0;
+        if (offset >= len) offset = len - 1;
+        selectWordAt((Spannable) mText, offset);
+        if (!hasSelection()) return false;
+        if (mSelectionMode != null) {
+            mSelectionMode.invalidate();
+            return true;
+        }
+        mSelectionMode = startActionMode(new SelectionModeCallback(), ActionMode.TYPE_FLOATING);
+        if (mSelectionMode == null) finishSelectionVisual();
+        return true;
+    }
+
+    private void finishSelectionVisual() {
+        if (mText instanceof Editable) {
+            int cursor = Math.max(getSelectionStart(), getSelectionEnd());
+            if (cursor >= 0) Selection.setSelection((Spannable) mText, cursor);
+        } else if (mText instanceof Spannable) {
+            Selection.removeSelection((Spannable) mText);
+        }
+        invalidate();
+    }
+
+    private static boolean isWordBreak(char c) {
+        return Character.isWhitespace(c) || c == ',' || c == '.' || c == ';' || c == ':' || c == '!' || c == '?';
+    }
+
+    private static void selectWordAt(Spannable text, int offset) {
+        int len = text.length();
+        if (len == 0) return;
+        if (offset < 0) offset = 0;
+        if (offset >= len) offset = len - 1;
+        if (isWordBreak(text.charAt(offset))) {
+            int next = offset + 1;
+            while (next < len && isWordBreak(text.charAt(next))) next++;
+            if (next < len) {
+                int end = next;
+                while (end < len && !isWordBreak(text.charAt(end))) end++;
+                Selection.setSelection(text, next, end);
+                return;
+            }
+            int end = offset;
+            while (end > 0 && isWordBreak(text.charAt(end - 1))) end--;
+            int start = end;
+            while (start > 0 && !isWordBreak(text.charAt(start - 1))) start--;
+            if (start < end) Selection.setSelection(text, start, end);
+            return;
+        }
+        int start = offset;
+        while (start > 0 && !isWordBreak(text.charAt(start - 1))) start--;
+        int end = offset + 1;
+        while (end < len && !isWordBreak(text.charAt(end))) end++;
+        if (start < end) Selection.setSelection(text, start, end);
+    }
+
+    /** Selection bounds in this view's coordinates. The floating toolbar anchors here. */
+    private void getSelectionBounds(Rect out) {
+        if (mLayout == null || !hasSelection()) {
+            out.set(0, 0, getWidth(), getHeight());
+            return;
+        }
+        int a = Math.min(getSelectionStart(), getSelectionEnd());
+        int b = Math.max(getSelectionStart(), getSelectionEnd());
+        int startLine = mLayout.getLineForOffset(a);
+        int endLine = mLayout.getLineForOffset(Math.max(a, b - 1));
+        int top = mLayout.getLineTop(startLine);
+        int bottom = mLayout.getLineBottom(endLine);
+        int left;
+        int right;
+        if (startLine == endLine) {
+            float h1 = mLayout.getPrimaryHorizontal(a);
+            float h2 = mLayout.getPrimaryHorizontal(b);
+            left = (int) Math.floor(Math.min(h1, h2));
+            right = (int) Math.ceil(Math.max(h1, h2));
+            if (right <= left) right = left + 1;
+        } else {
+            left = 0;
+            right = mLayout.getWidth();
+        }
+        int dx = getCompoundPaddingLeft();
+        int dy = getExtendedPaddingTop() + verticalOffset(true);
+        out.set(left + dx, top + dy, right + dx, bottom + dy);
+    }
+
+    private android.content.ClipboardManager clipboard() {
+        Object service = getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        if (service instanceof android.content.ClipboardManager) {
+            return (android.content.ClipboardManager) service;
+        }
+        return null;
+    }
 
     public void setTextCursorDrawable(Drawable textCursorDrawable) {}
 
@@ -1993,18 +2136,26 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            mLongPressX = event.getX();
+            mLongPressY = event.getY();
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            mLongPressX = Float.NaN;
+            mLongPressY = Float.NaN;
+        }
         if (action == MotionEvent.ACTION_UP && onCheckIsTextEditor() && isFocusable() && isFocusableInTouchMode()
                 && !isFocused()) {
             requestFocus();
         }
-        if (mMovement != null && mText instanceof Spannable
-                && mMovement.onTouchEvent(this, (Spannable) mText, event)) {
+        boolean handled = false;
+        if (mMovement != null && mText instanceof Spannable) {
+            handled = mMovement.onTouchEvent(this, (Spannable) mText, event);
+        }
+        if (!handled && mLinksClickable && action == MotionEvent.ACTION_UP && handleClickableSpan(event)) {
             return true;
         }
-        if (mLinksClickable && event.getActionMasked() == MotionEvent.ACTION_UP && handleClickableSpan(event)) {
-            return true;
-        }
-        return super.onTouchEvent(event);
+        // A movement method consumes ACTION_DOWN. Still arm View's long-press timer.
+        return super.onTouchEvent(event) || handled;
     }
 
     private boolean handleClickableSpan(MotionEvent event) {
@@ -2318,6 +2469,72 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
                 if (mDigits.indexOf(c) >= 0) sb.append(c);
             }
             return sb;
+        }
+    }
+
+    /** Floating selection toolbar: Cut, Copy, Paste, and Select all. */
+    private final class SelectionModeCallback extends ActionMode.Callback2 {
+        public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+            menu.add(Menu.NONE, android.R.id.cut, 1, "Cut");
+            menu.add(Menu.NONE, android.R.id.copy, 2, "Copy");
+            menu.add(Menu.NONE, android.R.id.paste, 3, "Paste");
+            menu.add(Menu.NONE, android.R.id.selectAll, 4, "Select all");
+            updateMenu(menu);
+            ActionMode.Callback custom = mCustomSelectionActionModeCallback;
+            if (custom != null && !custom.onCreateActionMode(mode, menu)) return false;
+            return true;
+        }
+
+        public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+            updateMenu(menu);
+            ActionMode.Callback custom = mCustomSelectionActionModeCallback;
+            if (custom != null) return custom.onPrepareActionMode(mode, menu);
+            return true;
+        }
+
+        public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+            ActionMode.Callback custom = mCustomSelectionActionModeCallback;
+            if (custom != null && custom.onActionItemClicked(mode, item)) return true;
+            int id = item.getItemId();
+            boolean handled = onTextContextMenuItem(id);
+            if (id == android.R.id.copy || id == android.R.id.cut || id == android.R.id.paste
+                    || id == android.R.id.pasteAsPlainText) {
+                mode.finish();
+            } else if (id == android.R.id.selectAll) {
+                mode.invalidate();
+            }
+            return handled;
+        }
+
+        public void onDestroyActionMode(ActionMode mode) {
+            mSelectionMode = null;
+            finishSelectionVisual();
+            ActionMode.Callback custom = mCustomSelectionActionModeCallback;
+            if (custom != null) custom.onDestroyActionMode(mode);
+            invalidate();
+        }
+
+        public void onGetContentRect(ActionMode mode, View view, Rect outRect) {
+            getSelectionBounds(outRect);
+        }
+
+        private void updateMenu(Menu menu) {
+            boolean editable = mText instanceof Editable;
+            boolean selected = hasSelection();
+            int length = mText != null ? mText.length() : 0;
+            int start = getSelectionStart();
+            int end = getSelectionEnd();
+            boolean whole = length > 0 && Math.min(start, end) == 0 && Math.max(start, end) == length;
+            android.content.ClipboardManager clip = clipboard();
+            setItemVisible(menu, android.R.id.cut, editable && selected);
+            setItemVisible(menu, android.R.id.copy, selected);
+            setItemVisible(menu, android.R.id.paste, editable && clip != null && clip.hasText());
+            setItemVisible(menu, android.R.id.selectAll, length > 0 && !whole);
+        }
+
+        private void setItemVisible(Menu menu, int id, boolean visible) {
+            MenuItem item = menu.findItem(id);
+            if (item != null) item.setVisible(visible);
         }
     }
 }

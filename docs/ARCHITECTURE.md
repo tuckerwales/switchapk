@@ -594,8 +594,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   positions are not animated. `AnimatedVectorDrawable` clones the target
   animators on `start`, sets them on `VectorDrawable.getTargetByName`
   (groups and paths: trim, color, stroke, transforms) and invalidates
-  itself each frame. pathData morphs are not applied
-  (`PathParser.canMorph` is false). View
+  itself each frame. pathData morphs when the two paths have the same
+  commands: `PathParser.canMorph` compares `PathData` nodes, and
+  `setPathData` rebuilds the path. A fraction outside 0..1 extrapolates
+  the first or last keyframe interval, so overshoot and anticipate move
+  a property past its values. View
   tweens apply in `draw(Canvas, ViewGroup, long)`: the animation matrix
   is concatenated
   with the view matrix, and the animation alpha multiplies the view
@@ -605,8 +608,9 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `AnimationUtils.loadAnimation` loads `set`, `alpha`, `scale`, `rotate`
   and `translate`. `loadLayoutAnimation` loads `layoutAnimation` and
   `gridLayoutAnimation`. Other animation tags stay an identity alpha.
-  Cycle, anticipate, overshoot, bounce and path interpolators still load
-  as linear. ProgressBar still
+  `loadInterpolator` loads linear, accelerate, decelerate,
+  accelerateDecelerate, cycle, anticipate, overshoot, anticipateOvershoot,
+  bounce and path. ProgressBar still
   drives its own `AlphaAnimation`. Accessibility classes are value holders
   since no accessibility service runs.
 - ProgressBar family (AOSP ports): determinate progress sets drawable

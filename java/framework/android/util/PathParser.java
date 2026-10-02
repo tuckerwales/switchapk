@@ -1,8 +1,13 @@
 package android.util;
 
 import android.graphics.Path;
+import java.util.ArrayList;
 
-/** Parses SVG path data (as used by VectorDrawable) into android.graphics.Path. */
+/**
+ * Parses SVG path data (as used by VectorDrawable) into android.graphics.Path.
+ * {@link PathData} keeps the commands so two paths with the same shape can morph.
+ * framework-internal: android.jar does not include this class.
+ */
 public class PathParser {
     public static Path createPathFromPathData(String pathData) {
         Path path = new Path();
@@ -10,7 +15,189 @@ public class PathParser {
         return path;
     }
 
-    public static boolean canMorph(Object a, Object b) { return false; }
+    /**
+     * True when both values are {@link PathData} with the same commands and the same
+     * number of parameters on each command. Other objects cannot morph.
+     */
+    public static boolean canMorph(Object a, Object b) {
+        if (!(a instanceof PathData) || !(b instanceof PathData)) return false;
+        PathData pa = (PathData) a;
+        PathData pb = (PathData) b;
+        if (pa.mNodes.length != pb.mNodes.length) return false;
+        for (int i = 0; i < pa.mNodes.length; i++) {
+            if (pa.mNodes[i].type != pb.mNodes[i].type) return false;
+            if (pa.mNodes[i].params.length != pb.mNodes[i].params.length) return false;
+        }
+        return true;
+    }
+
+    /** Writes the interpolated parameters into {@code out}. No-op when the paths cannot morph. */
+    public static void interpolatePathData(PathData out, PathData from, PathData to, float fraction) {
+        if (!canMorph(out, from) || !canMorph(from, to)) return;
+        for (int i = 0; i < from.mNodes.length; i++) {
+            float[] start = from.mNodes[i].params;
+            float[] end = to.mNodes[i].params;
+            float[] dst = out.mNodes[i].params;
+            for (int j = 0; j < start.length; j++) dst[j] = start[j] + (end[j] - start[j]) * fraction;
+        }
+    }
+
+    /** One SVG path, as commands plus their raw parameters (relative commands stay relative). */
+    public static final class PathData {
+        private Node[] mNodes;
+
+        public PathData() {
+            mNodes = new Node[0];
+        }
+
+        public PathData(String pathData) {
+            mNodes = parseNodes(pathData);
+        }
+
+        public PathData(PathData src) {
+            mNodes = new Node[src.mNodes.length];
+            for (int i = 0; i < mNodes.length; i++) mNodes[i] = new Node(src.mNodes[i]);
+        }
+
+        /** Copies parameters when the paths can morph. Replaces the nodes otherwise. */
+        public void setPathData(PathData src) {
+            if (src == null) return;
+            if (!canMorph(this, src)) {
+                mNodes = new PathData(src).mNodes;
+                return;
+            }
+            for (int i = 0; i < mNodes.length; i++) {
+                mNodes[i].type = src.mNodes[i].type;
+                System.arraycopy(src.mNodes[i].params, 0, mNodes[i].params, 0, mNodes[i].params.length);
+            }
+        }
+
+        /** Clears {@code path} and appends this path data. */
+        public void toPath(Path path) {
+            path.reset();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < mNodes.length; i++) {
+                Node node = mNodes[i];
+                sb.append(node.type);
+                for (int j = 0; j < node.params.length; j++) {
+                    sb.append(' ');
+                    sb.append(node.params[j]);
+                }
+                sb.append(' ');
+            }
+            parse(sb.toString(), path);
+        }
+    }
+
+    private static final class Node {
+        char type;
+        float[] params;
+
+        Node(char type, float[] params) {
+            this.type = type;
+            this.params = params;
+        }
+
+        Node(Node other) {
+            type = other.type;
+            params = other.params.clone();
+        }
+    }
+
+    private static Node[] parseNodes(String d) {
+        if (d == null || d.length() == 0) return new Node[0];
+        ArrayList<Node> nodes = new ArrayList<Node>();
+        int n = d.length();
+        int i = 0;
+        char cmd = 0;
+        float[] one = new float[1];
+        while (i < n) {
+            while (i < n && (Character.isWhitespace(d.charAt(i)) || d.charAt(i) == ',')) i++;
+            if (i >= n) break;
+            char c = d.charAt(i);
+            if (Character.isLetter(c) && c != 'e' && c != 'E') {
+                cmd = c;
+                i++;
+                if (cmd == 'z' || cmd == 'Z') {
+                    nodes.add(new Node(cmd, new float[0]));
+                    continue;
+                }
+            } else if (cmd == 'M') {
+                cmd = 'L';
+            } else if (cmd == 'm') {
+                cmd = 'l';
+            } else if (cmd == 0 || cmd == 'z' || cmd == 'Z') {
+                break;
+            }
+            int count = argCount(cmd);
+            if (count < 0) {
+                i++;
+                continue;
+            }
+            float[] args = new float[count];
+            int got = 0;
+            for (int k = 0; k < count; k++) {
+                while (i < n && (Character.isWhitespace(d.charAt(i)) || d.charAt(i) == ',')) i++;
+                if (i >= n) break;
+                if ((cmd == 'a' || cmd == 'A') && (k == 3 || k == 4)) {
+                    args[k] = d.charAt(i) == '1' ? 1f : 0f;
+                    i++;
+                    got++;
+                    continue;
+                }
+                int next = readNumber(d, i, one);
+                if (next < 0) break;
+                args[k] = one[0];
+                i = next;
+                got++;
+            }
+            if (got < count) break;
+            nodes.add(new Node(cmd, args));
+        }
+        return nodes.toArray(new Node[nodes.size()]);
+    }
+
+    private static int argCount(char cmd) {
+        switch (Character.toLowerCase(cmd)) {
+            case 'm': case 'l': case 't': return 2;
+            case 'h': case 'v': return 1;
+            case 'c': return 6;
+            case 's': case 'q': return 4;
+            case 'a': return 7;
+            default: return -1;
+        }
+    }
+
+    /** Reads one SVG number at {@code i}. Returns the index after it, or -1. Writes {@code out[0]}. */
+    private static int readNumber(String d, int i, float[] out) {
+        int n = d.length();
+        if (i >= n) return -1;
+        int start = i;
+        char sign = d.charAt(i);
+        if (sign == '-' || sign == '+') i++;
+        int digits = 0;
+        boolean dot = false;
+        boolean exp = false;
+        while (i < n) {
+            char ch = d.charAt(i);
+            if (ch >= '0' && ch <= '9') {
+                digits++;
+                i++;
+            } else if (ch == '.' && !dot && !exp) {
+                dot = true;
+                i++;
+            } else if ((ch == 'e' || ch == 'E') && !exp && digits > 0) {
+                exp = true;
+                i++;
+                if (i < n && (d.charAt(i) == '-' || d.charAt(i) == '+')) i++;
+            } else {
+                break;
+            }
+        }
+        if (digits == 0 || i == start) return -1;
+        out[0] = Float.parseFloat(d.substring(start, i));
+        return i;
+    }
 
     public static void parse(String d, Path path) {
         if (d == null) return;

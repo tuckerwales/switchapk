@@ -191,7 +191,10 @@ public class VectorDrawable extends Drawable {
                     final TypedArray b = obtainAttributes(r, theme, attrs, PATH_ATTRS);
                     p.mName = b.getString(0);
                     String data = b.getString(2);
-                    if (data != null) p.mPath = PathParser.createPathFromPathData(data);
+                    if (data != null) {
+                        p.mPath = PathParser.createPathFromPathData(data);
+                        p.mNodes = new PathParser.PathData(data);
+                    }
                     p.mFillColor = safeColors(b, 1);
                     p.mStrokeColor = safeColors(b, 3);
                     p.mStrokeWidth = b.getFloat(4, 0);
@@ -213,7 +216,10 @@ public class VectorDrawable extends Drawable {
                     final TypedArray b = obtainAttributes(r, theme, attrs, CLIP_ATTRS);
                     p.mName = b.getString(0);
                     String data = b.getString(1);
-                    if (data != null) p.mPath = PathParser.createPathFromPathData(data);
+                    if (data != null) {
+                        p.mPath = PathParser.createPathFromPathData(data);
+                        p.mNodes = new PathParser.PathData(data);
+                    }
                     b.recycle();
                     current.mChildren.add(p);
                     if (p.mName != null) state.mTargets.put(p.mName, p);
@@ -311,6 +317,7 @@ public class VectorDrawable extends Drawable {
     public static class VPath {
         String mName;
         Path mPath;
+        PathParser.PathData mNodes;
         boolean mClip;
         ColorStateList mFillColor, mStrokeColor;
         float mStrokeWidth, mTrimStart, mTrimEnd = 1, mTrimOffset, mMiter = 4, mStrokeAlpha = 1, mFillAlpha = 1;
@@ -322,6 +329,7 @@ public class VectorDrawable extends Drawable {
         VPath(VPath c) {
             mName = c.mName;
             mPath = c.mPath != null ? new Path(c.mPath) : null;
+            mNodes = c.mNodes != null ? new PathParser.PathData(c.mNodes) : null;
             mClip = c.mClip;
             mFillColor = c.mFillColor;
             mStrokeColor = c.mStrokeColor;
@@ -395,7 +403,19 @@ public class VectorDrawable extends Drawable {
             return (color & 0xFFFFFF) | (a << 24);
         }
 
-        public void setPathData(Object nodes) {}
+        /** Rebuilds the drawn path. A morphable value copies parameters; any other value replaces them. */
+        public void setPathData(PathParser.PathData data) {
+            if (data == null) return;
+            if (mNodes != null && PathParser.canMorph(mNodes, data)) mNodes.setPathData(data);
+            else mNodes = new PathParser.PathData(data);
+            if (mPath == null) mPath = new Path();
+            else mPath.reset();
+            mNodes.toPath(mPath);
+        }
+
+        public PathParser.PathData getPathData() {
+            return mNodes == null ? new PathParser.PathData() : new PathParser.PathData(mNodes);
+        }
         public void setTrimPathStart(float v) { mTrimStart = v; }
         public float getTrimPathStart() { return mTrimStart; }
         public void setTrimPathEnd(float v) { mTrimEnd = v; }

@@ -64,7 +64,9 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   RemoteViews.
 - App model (WS4): lifecycle, configuration changes, dialogs, action bar,
   fragments, services, broadcasts, notifications, JobScheduler.
-- Animation (WS5): view tweens and property animators.
+- Animation (WS5, done): view tweens, property animators, state lists,
+  layout animation, animated vectors, the remaining interpolators and
+  path morph.
 - OpenGL ES (WS8): GLES 1.x to 3.2 bindings, EGL14/EGL10, GLUtils,
   Matrix, GLU and GLSurfaceView; GL frames reach the screen through the
   SurfaceView buffer queue (tests/apps/gles on Mesa llvmpipe).
@@ -242,15 +244,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] audio (audren/audout), rumble, 1080p docked
 
 ### M4
-- [ ] WS5 animation
+- [x] WS5 animation
   - [x] view tween animations applied while drawing (translate, scale,
     rotate, alpha, set; tests/apps/tween)
   - [x] property animators (ValueAnimator, ObjectAnimator,
     ViewPropertyAnimator; tests/apps/prop)
   - [x] StateListAnimator (tests/apps/motion)
   - [x] layout animation, LayoutTransition and AnimatedVectorDrawable
-    (tests/apps/motion). PathInterpolator, the cycle/anticipate/overshoot/
-    bounce interpolators, and path morph remain
+    (tests/apps/motion)
+  - [x] PathInterpolator, cycle, anticipate, overshoot, bounce and path
+    morph (tests/apps/curves)
 - [ ] WS7 audio/media
 - [ ] WS8 OpenGL ES/EGL
   - [x] GLES10/11/20/30/31/32 (+Ext) bindings generated from android.jar and
@@ -316,18 +319,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    labels and icons. View tween animations apply while drawing
    (tests/apps/tween). Property animators run on Choreographer
    (tests/apps/prop). StateListAnimator, layout animation, LayoutTransition
-   and animated vectors land in tests/apps/motion. Still open in WS5:
-   PathInterpolator, the cycle/anticipate/overshoot/bounce interpolators,
-   and path morph (pathData).
+   and animated vectors land in tests/apps/motion. PathInterpolator, the
+   cycle/anticipate/overshoot/bounce interpolators and path morph land in
+   tests/apps/curves. WS5 is done.
 2. WS1 is done. DisplayCutout has landed (tests/apps/cutout), and so
    have ViewDebug (tests/apps/viewdbg), the floating toolbar
    (tests/apps/floating), text selection (tests/apps/select), and
    clipToOutline (tests/apps/outline).
 3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
-   as agents are available: the rest of WS5 (PathInterpolator, the
-   cycle/anticipate/overshoot/bounce interpolators, and path morph), WS13
-   (test runner around the app scripts; packaging CI is
-   `.github/workflows/package.yml`), WS6/WS7/WS11/WS12/WS15.
+   as agents are available: WS13 (test runner around the app scripts;
+   packaging CI is `.github/workflows/package.yml`), WS6/WS7/WS11/WS12/WS15.
 4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
    next is the Switch build with switch-mesa and a device run, then
    SurfaceTexture external textures.
@@ -387,6 +388,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-02 (WS5, touches WS1): `AnimationUtils.loadInterpolator` loads
+  cycle, anticipate, overshoot, anticipateOvershoot, bounce and path
+  interpolators. `PropertyValuesHolder` extrapolates a fraction outside
+  0..1 across the first or last keyframe interval, so overshoot and
+  anticipate move a property past its values. `PathParser.canMorph` is
+  true for two `PathData` values with the same commands.
+  `VectorDrawable` path `setPathData` rebuilds the path, and
+  `AnimatorInflater` runs a pathData animator through that setter. No new
+  native fields. ARCHITECTURE 6.4.
 - 2026-10-02 (WS5, touches WS1): `View.setStateListAnimator` runs the first
   matching animator when the drawable state changes. The view holds that
   animator strongly, because this VM clears weak references on every GC.

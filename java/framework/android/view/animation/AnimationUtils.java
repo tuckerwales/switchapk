@@ -126,7 +126,34 @@ public class AnimationUtils {
                 return new DecelerateInterpolator(factor);
             }
             if ("accelerateDecelerateInterpolator".equals(name)) return new AccelerateDecelerateInterpolator();
-            // TODO(WS5) cycle, anticipate, overshoot, bounce and path interpolators.
+            if ("cycleInterpolator".equals(name)) {
+                TypedArray a = obtain(resources, theme, attrs, new int[] {android.R.attr.cycles});
+                float cycles = a.getFloat(0, 1f);
+                a.recycle();
+                return new CycleInterpolator(cycles);
+            }
+            if ("anticipateInterpolator".equals(name)) {
+                TypedArray a = obtain(resources, theme, attrs, new int[] {android.R.attr.tension});
+                float tension = a.getFloat(0, 2f);
+                a.recycle();
+                return new AnticipateInterpolator(tension);
+            }
+            if ("overshootInterpolator".equals(name)) {
+                TypedArray a = obtain(resources, theme, attrs, new int[] {android.R.attr.tension});
+                float tension = a.getFloat(0, 2f);
+                a.recycle();
+                return new OvershootInterpolator(tension);
+            }
+            if ("anticipateOvershootInterpolator".equals(name)) {
+                TypedArray a = obtain(resources, theme, attrs,
+                        new int[] {android.R.attr.tension, android.R.attr.extraTension});
+                float tension = a.getFloat(0, 2f);
+                float extra = a.getFloat(1, 1.5f);
+                a.recycle();
+                return new AnticipateOvershootInterpolator(tension, extra);
+            }
+            if ("bounceInterpolator".equals(name)) return new BounceInterpolator();
+            if ("pathInterpolator".equals(name)) return new PathInterpolator(resources, theme, attrs);
             android.util.Log.w("AnimationUtils", "Unsupported interpolator " + name + ", using linear");
             return new LinearInterpolator();
         } catch (Resources.NotFoundException e) {

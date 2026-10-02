@@ -323,7 +323,7 @@ public class ToolbarWidgetWrapper implements DecorToolbar {
 
     public View getCustomView() { return mCustomView; }
 
-    /** TODO(WS5) fade: visibility changes immediately. */
+    /** Visibility changes immediately. A fade needs android.transition, which is not in the tree. */
     public void animateToVisibility(int visibility) { mToolbar.setVisibility(visibility); }
 
     public void setNavigationIcon(Drawable icon) {

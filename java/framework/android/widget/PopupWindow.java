@@ -174,7 +174,8 @@ public class PopupWindow {
         setFocusable(focusable);
     }
 
-    // TODO(WS5) setEnterTransition/setExitTransition need android.transition.
+    // Enter and exit transitions need android.transition, which is not in the tree.
+    // Visibility changes immediately until then.
 
     public Rect getEpicenterBounds() { return mEpicenterBounds != null ? new Rect(mEpicenterBounds) : null; }
 

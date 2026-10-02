@@ -6,21 +6,24 @@ import android.content.res.TypedArray;
 import android.content.res.XmlResourceParser;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.PathParser;
 import android.util.StateSet;
 import android.util.TypedValue;
 import android.util.Xml;
+import android.view.InflateException;
 import android.view.animation.AnimationUtils;
 import java.util.ArrayList;
 import org.xmlpull.v1.XmlPullParser;
 
 /**
  * Loads animator, objectAnimator, set and state-list animator XML.
- * A pathData value is not morphed: the animator runs its timing and does not call the setter.
+ * A pathData value morphs when the two paths have the same commands.
  */
 public class AnimatorInflater {
     private static final String TAG = "AnimatorInflater";
     private static final int VALUE_TYPE_FLOAT = 0;
     private static final int VALUE_TYPE_INT = 1;
+    private static final int VALUE_TYPE_PATH = 2;
     private static final int VALUE_TYPE_COLOR = 3;
     private static final int TOGETHER = 0;
 
@@ -180,6 +183,8 @@ public class AnimatorInflater {
         if (object && property != null && holders.isEmpty()) ((ObjectAnimator) anim).setPropertyName(property);
         if (!holders.isEmpty()) {
             anim.setValues(holders.toArray(new PropertyValuesHolder[holders.size()]));
+        } else if (isPathValue(valueType, property, from, to)) {
+            anim.setValues(new PropertyValuesHolder[] {pathHolder(property, from, to)});
         } else if (from instanceof String || to instanceof String) {
             Log.w(TAG, "pathData animation is not applied");
             anim.setFloatValues(0f, 1f);
@@ -241,6 +246,7 @@ public class AnimatorInflater {
                 consume(parser, parser.getDepth());
             }
         }
+        if (frames.isEmpty() && isPathValue(valueType, property, from, to)) return pathHolder(property, from, to);
         if (from instanceof String || to instanceof String) {
             Log.w(TAG, "pathData property " + property + " is not applied");
             PropertyValuesHolder skip = PropertyValuesHolder.ofFloat(property != null ? property : "", 0f, 1f);
@@ -297,6 +303,40 @@ public class AnimatorInflater {
         }
         if (interp != 0) frame.setInterpolator(AnimationUtils.loadInterpolator(res, theme, interp));
         return frame;
+    }
+
+    private static boolean isPathValue(int valueType, String property, Object from, Object to) {
+        if (!(from instanceof String) && !(to instanceof String) && valueType != VALUE_TYPE_PATH) return false;
+        return valueType == VALUE_TYPE_PATH || "pathData".equals(property);
+    }
+
+    /** Object holder whose values are {@link PathParser.PathData}. Incompatible paths throw. */
+    private static PropertyValuesHolder pathHolder(String property, Object from, Object to) {
+        String name = property != null ? property : "pathData";
+        PathParser.PathData fromData = from instanceof String ? new PathParser.PathData((String) from) : null;
+        PathParser.PathData toData = to instanceof String ? new PathParser.PathData((String) to) : null;
+        if (fromData != null && toData != null && !PathParser.canMorph(fromData, toData)) {
+            throw new InflateException("Can't morph from " + from + " to " + to);
+        }
+        PathDataEvaluator eval = new PathDataEvaluator();
+        if (fromData != null && toData != null) return PropertyValuesHolder.ofObject(name, eval, fromData, toData);
+        if (toData != null) return PropertyValuesHolder.ofObject(name, eval, toData);
+        if (fromData != null) return PropertyValuesHolder.ofObject(name, eval, fromData);
+        Log.w(TAG, "pathData animation is not applied");
+        return PropertyValuesHolder.ofFloat(name, 0f, 1f);
+    }
+
+    /** Interpolates path nodes in place and returns the same object each frame. */
+    private static final class PathDataEvaluator implements TypeEvaluator {
+        private PathParser.PathData mNode;
+
+        public Object evaluate(float fraction, Object startValue, Object endValue) {
+            PathParser.PathData start = (PathParser.PathData) startValue;
+            PathParser.PathData end = (PathParser.PathData) endValue;
+            if (mNode == null || !PathParser.canMorph(mNode, start)) mNode = new PathParser.PathData(start);
+            PathParser.interpolatePathData(mNode, start, end, fraction);
+            return mNode;
+        }
     }
 
     private static Object readValue(TypedArray a, int index, int valueType) {

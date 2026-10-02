@@ -20,7 +20,7 @@ import org.xmlpull.v1.XmlPullParserException;
 /**
  * Plays the animators named by {@code target} against the vector's groups and
  * paths. Each {@code start} clones the prototypes so the start values are fresh.
- * pathData is not morphed.
+ * pathData morphs when the two paths have the same commands.
  */
 public class AnimatedVectorDrawable extends Drawable implements Animatable2 {
     private static final String TAG = "AnimatedVectorDrawable";

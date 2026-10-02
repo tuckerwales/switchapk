@@ -567,3 +567,19 @@ what is left in flight.
   trim, and the fade at the middle and the end. prop, tween and progress
   still pass. PathInterpolator, the cycle/anticipate/overshoot/bounce
   interpolators, and path morph remain.
+
+### Session 12 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- WS5 interpolators and path morph. Cycle, anticipate, overshoot,
+  anticipateOvershoot, bounce and PathInterpolator load from XML.
+  A fraction outside 0..1 extrapolates the first or last keyframe interval, so
+  overshoot and anticipate move a property past its from/to values.
+  PathParser keeps SVG commands as PathData. canMorph requires the same
+  commands, and setPathData rebuilds the vector path. AnimatorInflater
+  runs a pathData object animator through that setter. tests/apps/curves
+  checks the halfway frame: overshoot past the end, anticipate behind
+  the start, bounce, cycle back at rest, a path ease, and a stroke that
+  has left both endpoints. prop, tween, motion and progress still pass.
+  WS5 is done. PopupWindow enter/exit transitions and the toolbar
+  visibility fade still apply immediately: android.transition is not in
+  the tree.

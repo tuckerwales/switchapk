@@ -309,21 +309,26 @@ public class PropertyValuesHolder implements Cloneable {
         return null;
     }
 
+    /**
+     * A fraction outside 0..1 extrapolates the first or last interval. Overshoot and anticipate
+     * return those values, and snapping to the endpoint would hide them.
+     */
     void calculateValue(float fraction) {
         if (mKeyframes == null || mKeyframes.length == 0) return;
-        if (fraction <= 0f) {
+        int last = mKeyframes.length - 1;
+        if (last == 0) {
             mAnimatedValue = mKeyframes[0].getValue();
             return;
         }
-        int last = mKeyframes.length - 1;
-        if (fraction >= 1f) {
-            mAnimatedValue = mKeyframes[last].getValue();
-            return;
+        int i;
+        if (fraction < mKeyframes[0].getFraction()) i = 0;
+        else if (fraction > mKeyframes[last].getFraction()) i = last - 1;
+        else {
+            i = 0;
+            while (i < last - 1 && fraction >= mKeyframes[i + 1].getFraction()) i++;
         }
-        int i = 0;
-        while (i < last - 1 && fraction >= mKeyframes[i + 1].getFraction()) i++;
         Keyframe a = mKeyframes[i];
-        Keyframe b = mKeyframes[Math.min(i + 1, last)];
+        Keyframe b = mKeyframes[i + 1];
         float span = b.getFraction() - a.getFraction();
         float interval = span <= 0f ? 0f : (fraction - a.getFraction()) / span;
         if (b.getInterpolator() != null) interval = b.getInterpolator().getInterpolation(interval);

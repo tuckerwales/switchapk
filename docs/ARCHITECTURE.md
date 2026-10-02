@@ -900,10 +900,22 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   descriptors), `__system_property_get` (SDK 29 values), zlib, and GL/EGL
   names resolved from the driver (`sa_gl_proc`, 6.6.1). Struct layouts
   (stat, dirent, tm, timespec) match bionic on 64-bit Linux hosts; the
-  Switch needs translation wrappers for newlib's.
-- Code memory: mmap/mprotect on the host. On the Switch loading fails with
-  a message until `svcMapProcessCodeMemory` + `svcSetProcessMemoryPermission`
-  are wired in (application launches, not applets).
+  Switch needs translation wrappers for newlib's. newlib also has no
+  getpagesize, posix_memalign or pipe: the shim provides the first two
+  and pipe returns ENOSYS.
+- Code memory: mmap/mprotect on the host. On the Switch each mapping is
+  page-aligned heap memory (`memalign`) mirrored into the alias region
+  (`virtmemFindCodeMemory`) with `svcMapProcessCodeMemory` on
+  `envGetOwnProcessHandle()` (the current-process pseudo handle is
+  rejected) and made read-write with `svcSetProcessMemoryPermission`.
+  After relocations, executable segments become read-execute and the rest
+  stay read-write or read-only. Horizon rejects permission values above 5,
+  so a segment that asks for write and execute keeps execute. Releasing a
+  library calls `svcUnmapProcessCodeMemory`, drops the virtmem reservation
+  and frees the heap pages. hbloader hints syscalls 0x73, 0x77 and 0x78
+  only for an application launch; an applet fails the load with that
+  reason in the error string. newlib struct layouts (stat, dirent, O_*
+  flags, clock ids) still need translation wrappers.
 - Not yet: NativeActivity (`ANativeActivity_onCreate`, ALooper,
   AInputQueue, ANativeWindow and EGL window surfaces from native code),
   OpenSL ES and AAudio (WS7), AConfiguration, ASensorManager, libc++_shared
@@ -973,7 +985,8 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
 - GL: Mesa (switch-mesa) is linked when installed (6.6.1); not yet run on
   hardware.
 - Not yet: audio (samples are drained like the headless backend), rumble,
-  native .so loading (needs code memory, 6.7), 1080p docked rendering.
+  1080p docked rendering. Native libraries can be mapped (6.7) but have
+  not been run on hardware.
 
 ## 8. Testing strategy
 

@@ -509,3 +509,15 @@ what is left in flight.
   pass on x86-64 and on the AArch64 host build under qemu.
 - Switch build checked with devkitPro: the NRO links with switch-mesa
   (needed -lstdc++) and compiles without it. Not run on hardware.
+
+### Session 10 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- WS9 Switch code memory. The loader mirrors each library (and its
+  unresolved-import stub page) into the alias region with
+  svcMapProcessCodeMemory and svcSetProcessMemoryPermission, on the
+  own-process handle. Code pages are read-execute and data pages stay
+  read-write; a write+execute request keeps execute. An applet, where
+  hbloader does not hint those syscalls, fails the load with that
+  reason. The NRO links again: newlib has no getpagesize, posix_memalign
+  or pipe, so the shim provides the first two and pipe returns ENOSYS.
+  newlib struct translation is still open. Not run on hardware.

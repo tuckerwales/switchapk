@@ -76,9 +76,10 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   the NRO and sample APKs (`.github/workflows/package.yml`).
 - 35 sample apps in `tests/apps` pass their screenshot checks.
 
-Not yet: sound (WS7), GL and native code on the Switch (Mesa linked but
-not run on hardware; native code needs code memory), NativeActivity,
-SQLite natives (WS6), networking (WS11), AndroidX (WS14), sensors (WS15).
+Not yet: sound (WS7), GL on the Switch (Mesa linked but not run on
+hardware), running a native library on hardware (code memory is mapped;
+newlib struct translation remains), NativeActivity, SQLite natives
+(WS6), networking (WS11), AndroidX (WS14), sensors (WS15).
 
 ## Checklist
 
@@ -267,8 +268,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     system properties, zlib, GL/EGL lookup
   - [x] tests/apps/ndk (19 JNI checks; passes on x86-64 and on the
     AArch64 host build under qemu with arm64-v8a libraries)
-  - [ ] Switch code memory (svcMapProcessCodeMemory) and newlib struct
-    translation (stat, dirent, O_* flags, clock ids)
+  - [x] Switch code memory (svcMapProcessCodeMemory +
+    svcSetProcessMemoryPermission on the alias region; application
+    launches only). newlib struct translation (stat, dirent, O_* flags,
+    clock ids) remains
   - [ ] NativeActivity, ANativeWindow + native EGL window surfaces,
     ALooper/AInputQueue, OpenSL ES/AAudio (with WS7)
   - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
@@ -312,10 +315,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
    next is the Switch build with switch-mesa and a device run, then
    SurfaceTexture external textures.
-5. WS9: JNI libraries load on the host and on AArch64 (qemu). Next:
-   Switch code memory, then NativeActivity with ANativeWindow and native
-   EGL window surfaces (shares the WS8 window path), then OpenSL ES with
-   WS7.
+5. WS9: JNI libraries load on the host and on AArch64 (qemu), and the
+   Switch loader maps executable pages with svcMapProcessCodeMemory
+   (application launches; not yet run on hardware). Next: NativeActivity
+   with ANativeWindow and native EGL window surfaces (shares the WS8
+   window path), then OpenSL ES with WS7. newlib struct translation
+   (stat, dirent, O_* flags, clock ids) is still open.
 
 ## Known issues and gotchas
 
@@ -340,8 +345,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   PhoneWindow does not use them. View tweens (translate, scale, rotate,
   alpha, set) and property animators (ValueAnimator, ObjectAnimator,
   ViewPropertyAnimator) already run.
-- Native libraries load on the host and AArch64 Linux only; the Switch
-  build reports that code memory is not implemented yet.
+- Native libraries map executable pages on the Switch only when hbloader
+  hints code-memory syscalls (an application launch, not an applet). That
+  path is not yet run on hardware. newlib struct layouts still differ
+  from bionic.
 - Host GL tests need Mesa's EGL and GLES libraries (`libegl1`,
   `libgles2`; `libegl-dev`/`libgles-dev` to regenerate the bindings).
   Ubuntu's Mesa cannot create ES1 contexts, so GLES1 rendering is not

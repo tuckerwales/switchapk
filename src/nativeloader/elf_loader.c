@@ -16,8 +16,10 @@
  * Relocations: x86-64 (host tests) and AArch64. ELF TLS (TPREL/DTPMOD/TLSDESC)
  * is not supported: the NDK uses emulated TLS for minSdk < 29.
  *
- * Code memory: mmap/mprotect on the host. The Switch needs
- * svcMapProcessCodeMemory; until that lands, loading fails with a message.
+ * Code memory: mmap/mprotect on the host. On the Switch, heap pages are
+ * mirrored into the code (alias) region with svcMapProcessCodeMemory and
+ * svcSetProcessMemoryPermission. Horizon rejects write+execute, so a
+ * segment that asks for both keeps execute.
  */
 #include "nativeloader.h"
 #include "../core/zip.h"
@@ -25,6 +27,9 @@
 #ifndef __SWITCH__
 #include <sys/mman.h>
 #include <unistd.h>
+#else
+#include <malloc.h>
+#include <switch.h>
 #endif
 
 #define LOG_TAG "linker"
@@ -183,26 +188,129 @@ static bool protect(void *addr, size_t len, int pflags) {
 
 static void unmap(void *addr, size_t len) { munmap(addr, len); }
 #else
-/* TODO(WS9): svcMapProcessCodeMemory + svcSetProcessMemoryPermission (ARCHITECTURE 6.7). */
+/*
+ * Horizon will not mprotect a heap page to executable. An application (not
+ * an applet) may mirror heap pages into the code region:
+ *
+ *   svcMapProcessCodeMemory(own process, dst, src, size)
+ *   svcSetProcessMemoryPermission(own process, dst, size, perm)
+ *
+ * dst comes from virtmemFindCodeMemory (the alias region). The process
+ * handle must be envGetOwnProcessHandle(); the current-process pseudo
+ * handle is rejected. hbloader hints syscalls 0x73, 0x77 and 0x78 only for
+ * an application launch. After the map, the loader writes at dst (the whole
+ * region is read-write), then code pages become read-execute and data pages
+ * stay read-write. Unmap gives the pages back to src so they can be freed.
+ */
+typedef struct CodeRegion {
+    uint8_t *dst;
+    uint8_t *src;
+    size_t size;
+    VirtmemReservation *rv;
+    struct CodeRegion *next;
+} CodeRegion;
+
+static CodeRegion *g_regions;
+
+static bool code_memory_available(void) {
+    return envIsSyscallHinted(0x73) && envIsSyscallHinted(0x77) && envIsSyscallHinted(0x78) &&
+           envGetOwnProcessHandle() != INVALID_HANDLE;
+}
+
 static size_t page_size(void) { return 0x1000; }
+
 static uint8_t *map_rw(size_t size) {
-    SA_UNUSED(size);
-    return NULL;
+    if (size == 0) return NULL;
+    size = (size + 0xFFF) & ~(size_t)0xFFF;
+    if (!code_memory_available()) {
+        LOGE("code memory is unavailable (svcMapProcessCodeMemory is not hinted). Launch switchapk as an "
+             "application, not an applet");
+        return NULL;
+    }
+    void *src = memalign(0x1000, size);
+    if (!src) return NULL;
+    memset(src, 0, size); /* mmap zeroes; memalign does not, and BSS must be zero */
+
+    virtmemLock();
+    void *dst = virtmemFindCodeMemory(size, 0x1000);
+    VirtmemReservation *rv = dst ? virtmemAddReservation(dst, size) : NULL;
+    virtmemUnlock();
+    if (!rv) {
+        free(src);
+        LOGE("code memory: no alias-region address for %zu bytes", size);
+        return NULL;
+    }
+
+    Handle self = envGetOwnProcessHandle();
+    Result rc = svcMapProcessCodeMemory(self, (u64)dst, (u64)src, size);
+    if (R_SUCCEEDED(rc)) {
+        rc = svcSetProcessMemoryPermission(self, (u64)dst, size, Perm_Rw);
+        if (R_FAILED(rc)) svcUnmapProcessCodeMemory(self, (u64)dst, (u64)src, size);
+    }
+    if (R_FAILED(rc)) {
+        LOGE("svcMapProcessCodeMemory(%zu bytes) failed: 0x%08x", size, (unsigned)rc);
+        virtmemLock();
+        virtmemRemoveReservation(rv);
+        virtmemUnlock();
+        free(src);
+        return NULL;
+    }
+
+    CodeRegion *r = sa_calloc(1, sizeof *r);
+    r->dst = dst;
+    r->src = src;
+    r->size = size;
+    r->rv = rv;
+    r->next = g_regions;
+    g_regions = r;
+    return dst;
 }
+
 static bool protect(void *addr, size_t len, int pflags) {
-    SA_UNUSED(addr);
-    SA_UNUSED(len);
-    SA_UNUSED(pflags);
-    return false;
+    if (len == 0) return true;
+    u32 perm = 0;
+    if (pflags & PF_R) perm |= Perm_R;
+    if (pflags & PF_W) perm |= Perm_W;
+    if (pflags & PF_X) perm |= Perm_X;
+    /* perm > 5 (write+execute, or anything with both W and X) is rejected. */
+    if ((perm & Perm_W) && (perm & Perm_X)) {
+        LOGW("code page at %p asks for write and execute; keeping execute", addr);
+        perm &= (u32)~Perm_W;
+    }
+    if (perm == 0) perm = Perm_R;
+    Result rc = svcSetProcessMemoryPermission(envGetOwnProcessHandle(), (u64)addr, len, perm);
+    if (R_FAILED(rc)) {
+        LOGE("svcSetProcessMemoryPermission(%p, %zu, %u) failed: 0x%08x", addr, len, perm, (unsigned)rc);
+        return false;
+    }
+    return true;
 }
+
 static void unmap(void *addr, size_t len) {
-    SA_UNUSED(addr);
     SA_UNUSED(len);
+    CodeRegion **pp = &g_regions;
+    while (*pp && (*pp)->dst != addr) pp = &(*pp)->next;
+    CodeRegion *r = *pp;
+    if (!r) {
+        LOGE("code memory unmap of unknown region %p", addr);
+        return;
+    }
+    *pp = r->next;
+    Result rc = svcUnmapProcessCodeMemory(envGetOwnProcessHandle(), (u64)r->dst, (u64)r->src, r->size);
+    if (R_FAILED(rc)) LOGE("svcUnmapProcessCodeMemory failed: 0x%08x", (unsigned)rc);
+    virtmemLock();
+    virtmemRemoveReservation(r->rv);
+    virtmemUnlock();
+    free(r->src);
+    free(r);
 }
 #endif
 
 static void flush_icache(void *start, size_t len) {
-#if defined(__aarch64__)
+#if defined(__SWITCH__)
+    armDCacheFlush(start, len);
+    armICacheInvalidate(start, len);
+#elif defined(__aarch64__)
     __builtin___clear_cache((char *)start, (char *)start + len);
 #else
     SA_UNUSED(start);
@@ -590,7 +698,7 @@ static SaLib *load_image(const char *name, const uint8_t *data, size_t len, char
     if (!lib->map) {
         snprintf(err, errlen, "dlopen failed: cannot map \"%s\" (%zu bytes)%s", name, lib->map_size,
 #ifdef __SWITCH__
-                 ": native libraries need code memory support on the Switch (TODO WS9)"
+                 " (code memory unavailable: launch switchapk as an application, not an applet)"
 #else
                  ""
 #endif
@@ -677,22 +785,29 @@ static SaLib *load_image(const char *name, const uint8_t *data, size_t len, char
     if (c.unresolved) LOGW("%s: %d imports unresolved (see above)", lib->name, c.unresolved);
 
     /* final protections: segment flags, then RELRO read-only */
-    for (int i = 0; i < eh->e_phnum; i++) {
+    bool prot_ok = true;
+    for (int i = 0; prot_ok && i < eh->e_phnum; i++) {
         if (ph[i].p_type != PT_LOAD) continue;
         uint64_t s = ph[i].p_vaddr & ~(uint64_t)(ps - 1);
         uint64_t e = (ph[i].p_vaddr + ph[i].p_memsz + ps - 1) & ~(uint64_t)(ps - 1);
-        protect(lib->bias + s, (size_t)(e - s), (int)ph[i].p_flags);
-        if (ph[i].p_flags & PF_X) flush_icache(lib->bias + s, (size_t)(e - s));
+        prot_ok = protect(lib->bias + s, (size_t)(e - s), (int)ph[i].p_flags);
+        if (prot_ok && (ph[i].p_flags & PF_X)) flush_icache(lib->bias + s, (size_t)(e - s));
     }
-    for (int i = 0; i < eh->e_phnum; i++) {
+    for (int i = 0; prot_ok && i < eh->e_phnum; i++) {
         if (ph[i].p_type != PT_GNU_RELRO) continue;
         uint64_t s = ph[i].p_vaddr & ~(uint64_t)(ps - 1);
         uint64_t e = (ph[i].p_vaddr + ph[i].p_memsz) & ~(uint64_t)(ps - 1);
-        if (e > s) protect(lib->bias + s, (size_t)(e - s), PF_R);
+        if (e > s) prot_ok = protect(lib->bias + s, (size_t)(e - s), PF_R);
     }
-    if (lib->stubs) {
-        protect(lib->stubs, lib->stubs_size, PF_R | PF_X);
-        flush_icache(lib->stubs, lib->stubs_size);
+    if (prot_ok && lib->stubs) {
+        prot_ok = protect(lib->stubs, lib->stubs_size, PF_R | PF_X);
+        if (prot_ok) flush_icache(lib->stubs, lib->stubs_size);
+    }
+    if (!prot_ok) {
+        snprintf(err, errlen, "dlopen failed: cannot set memory permissions for \"%s\"", name);
+        g_libs = lib->next;
+        free_lib(lib);
+        return NULL;
     }
 
     /* constructors: dependencies ran theirs when they loaded */

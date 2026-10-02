@@ -23,6 +23,9 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#ifdef __SWITCH__
+#include <malloc.h>
+#endif
 #include <math.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -339,8 +342,13 @@ static long sh_sysconf(int name) {
     switch (name) {
     case 0x0002: return CLOCKS_PER_SEC; /* _SC_CLK_TCK */
     case 0x0007: return 1024;           /* _SC_OPEN_MAX */
-    case 0x0027: return (long)getpagesize(); /* _SC_PAGESIZE / _SC_PAGE_SIZE */
-    case 0x0028: return (long)getpagesize();
+    case 0x0027: /* _SC_PAGESIZE / _SC_PAGE_SIZE */
+    case 0x0028:
+#ifdef __SWITCH__
+        return 0x1000; /* newlib has no getpagesize() */
+#else
+        return (long)getpagesize();
+#endif
     case 0x0060:                        /* _SC_NPROCESSORS_CONF */
     case 0x0061:                        /* _SC_NPROCESSORS_ONLN */
 #ifdef __SWITCH__
@@ -546,6 +554,23 @@ static int sh_pthread_setname_np(pthread_t t, const char *name) {
     return 0;
 }
 
+#ifdef __SWITCH__
+/* newlib exports none of these; native code still imports the bionic names. */
+static int sh_getpagesize(void) { return 0x1000; }
+static int sh_posix_memalign(void **memptr, size_t alignment, size_t size) {
+    if (!memptr || alignment < sizeof(void *) || (alignment & (alignment - 1)) != 0) return EINVAL;
+    void *p = memalign(alignment, size ? size : 1);
+    if (!p) return ENOMEM;
+    *memptr = p;
+    return 0;
+}
+static int sh_pipe(int fds[2]) {
+    SA_UNUSED(fds);
+    errno = ENOSYS;
+    return -1;
+}
+#endif
+
 /* ---- the table ---------------------------------------------------------------------------------------- */
 
 #define S(name) {#name, (void *)name}
@@ -558,9 +583,19 @@ static const ShimSym g_syms[] = {
     W(__cxa_thread_atexit_impl, sh_cxa_thread_atexit_impl), W(atexit, sh_atexit),
     W(__register_atfork, sh_register_atfork), W(__assert2, sh_assert2), W(__assert, sh_assert),
     W(getauxval, sh_getauxval), W(gettid, sh_gettid), S(abort), S(exit), S(_exit), S(getpid), S(getenv),
-    S(setenv), S(unsetenv), W(sysconf, sh_sysconf), S(getpagesize),
+    S(setenv), S(unsetenv), W(sysconf, sh_sysconf),
+#ifdef __SWITCH__
+    W(getpagesize, sh_getpagesize),
+#else
+    S(getpagesize),
+#endif
     /* memory */
-    S(malloc), S(free), S(calloc), S(realloc), S(posix_memalign), S(aligned_alloc),
+    S(malloc), S(free), S(calloc), S(realloc), S(aligned_alloc),
+#ifdef __SWITCH__
+    W(posix_memalign, sh_posix_memalign),
+#else
+    S(posix_memalign),
+#endif
 #ifndef __SWITCH__
     S(memalign), S(malloc_usable_size), S(mmap), S(munmap), S(mprotect), S(madvise),
 #endif
@@ -594,7 +629,12 @@ static const ShimSym g_syms[] = {
     /* files */
     W(open, sh_open), W(__open_2, sh_open_2), S(close), S(read), S(write), S(lseek), W(access, sh_access),
     W(unlink, sh_unlink), W(mkdir, sh_mkdir), W(stat, sh_stat), W(lstat, sh_lstat), S(fstat),
-    W(opendir, sh_opendir), S(readdir), S(closedir), S(isatty), S(dup), S(dup2), S(pipe),
+    W(opendir, sh_opendir), S(readdir), S(closedir), S(isatty), S(dup), S(dup2),
+#ifdef __SWITCH__
+    W(pipe, sh_pipe),
+#else
+    S(pipe),
+#endif
     /* time */
     S(time), S(clock), S(gettimeofday), S(clock_gettime), S(nanosleep), S(usleep), S(sleep), S(localtime),
     S(localtime_r), S(gmtime), S(gmtime_r), S(mktime), S(strftime), S(difftime),

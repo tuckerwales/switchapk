@@ -43,7 +43,7 @@ duplicating work.
 | WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO boots on hardware; launcher labels and icons landed (tests/apps/labeled); audio, rumble, 1080p docked remain) | session 7, 2026-10-02 |
 | WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | not started | |
 | WS12 | VM performance and memory | none | not started | |
-| WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip; screenshot runner and VmTest on CI remain) | session 8, 2026-10-02 |
+| WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip with every tests/apps APK; screenshot runner and VmTest on CI remain) | session 15, 2026-10-02 |
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
 | WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | not started | |
 
@@ -337,9 +337,9 @@ tests on Linux.
 `.github/workflows/package.yml` is the packaging half. On push, on a
 pull request from a fork, and on manual dispatch, it fetches the SDK and
 devkitPro, runs `make` and `make -f Makefile.switch dist`, and uploads
-`build/switch/switchapk-sd.zip` as the `switchapk-sd` artifact. Still
-open: the screenshot runner, log scanning, and CI for VmTest and the app
-tests.
+`build/switch/switchapk-sd.zip` as the `switchapk-sd` artifact. The zip
+holds every app under `tests/apps`. Still open: the screenshot runner,
+log scanning, and CI for VmTest and the app tests.
 
 ## WS14: AndroidX / AppCompat / Material
 

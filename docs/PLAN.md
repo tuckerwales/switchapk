@@ -407,6 +407,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-02 (WS13, touches WS10): `make -f Makefile.switch dist`
+  packages every directory under `tests/apps` that has an
+  `AndroidManifest.xml`. Apps with `native/build.sh` are still rebuilt
+  with `NDK_ARM64=1`. The Package NRO check requires each of those APKs
+  in the SD zip, and an arm64-v8a library in each native APK. No new
+  native fields.
 - 2026-10-02 (WS6, touches WS4): `AbstractCursor.fillWindow` copies rows
   through `DatabaseUtils.cursorFillWindow` into a Java `CursorWindow`
   (absolute row indexes, 2 MiB default budget). `simpleQueryForBlobFileDescriptor`

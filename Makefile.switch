@@ -96,11 +96,10 @@ clean:
 -include $(DEPS)
 
 # SD card layout: unzip build/switch/switchapk-sd.zip at the root of the SD card.
-# The sample APKs from tests/apps (tools/build_apk.sh) go in switch/switchapk/apks.
+# Every sample under tests/apps (a directory with AndroidManifest.xml) goes in switch/switchapk/apks.
 # Apps with native code (native/build.sh, needs clang and lld) are always rebuilt with arm64-v8a libraries
 # (NDK_ARM64=1): a host build only carries x86_64 ones.
-SAMPLE_APPS := hello views text widgets scroll list relative appmodel lifecycle progress popups toolbar actionbar grid \
-               gles ndk
+SAMPLE_APPS := $(sort $(patsubst tests/apps/%/AndroidManifest.xml,%,$(wildcard tests/apps/*/AndroidManifest.xml)))
 SD := $(BUILD)/sd
 
 dist: $(BUILD)/switchapk.nro

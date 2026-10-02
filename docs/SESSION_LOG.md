@@ -624,3 +624,12 @@ what is left in flight.
   `make`, the store check and VmTest pass. Not run on hardware.
   Photo-picker and cloud-media helpers on MediaStore are still missing
   and auto-stub. WS6 is done.
+
+### Session 15 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- The SD zip now packages every sample under `tests/apps`, not the old
+  fixed list. `make -f Makefile.switch dist` takes each directory that
+  has an `AndroidManifest.xml`. Apps with `native/build.sh` (ndk, native,
+  audio) are still rebuilt with `NDK_ARM64=1`. The Package NRO workflow
+  fails if any of those APKs is missing from the zip, or if a native APK
+  has no arm64-v8a library. The NRO itself was not rebuilt here.

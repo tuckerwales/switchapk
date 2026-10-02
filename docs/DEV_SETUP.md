@@ -42,10 +42,11 @@ make -f Makefile.switch dist  # build/switch/switchapk-sd.zip: NRO + sample APKs
 requests from forks, and from the Actions tab (workflow dispatch). The
 runner is Ubuntu 24.04 with JDK 17. It fetches the SDK and devkitPro
 (cached between runs), then runs `make` and `make -f Makefile.switch dist`.
-The SD zip includes `gles.apk` and `ndk.apk`. `dist` always rebuilds an
+The SD zip includes every app under `tests/apps`. `dist` always rebuilds an
 app that has `native/build.sh` with `NDK_ARM64=1`, so its APK carries
 arm64-v8a libraries; that needs clang, lld and `libc6-dev-arm64-cross`,
-which the workflow installs. The `switchapk-sd` artifact is
+which the workflow installs. The workflow checks that each sample APK is
+in the zip and that each native APK has an arm64-v8a library. The `switchapk-sd` artifact is
 `build/switch/switchapk-sd.zip`, kept for 14 days. Unzip it at the root of the SD card, the same as a local build.
 
 ## Run on a Switch

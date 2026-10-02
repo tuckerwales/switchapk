@@ -50,45 +50,35 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 5, see SESSION_LOG.md)
+## Current state (end of session 9, see SESSION_LOG.md)
 
-Working:
-- VM core, libcore, JNI, reflection, threads; VmTest passes.
-- `src/gfx` renderer, fonts, images, clip masks (visual test in
-  `tests/c/gfx_test.c`).
-- Multi-package resource table; AssetManager and graphics natives (C).
-- Headless platform with scripted input and screenshots.
-- `tools/fetch_toolchains.py` fetches aapt2, android.jar, builds
-  framework-res.apk, fetches SQLite; devkitPro fetch implemented (Docker
-  Hub may rate-limit: retries built in).
-- `java/framework` compiles to `build/java/framework.dex`; resource,
-  graphics and OS natives are registered; `app_runner` opens an APK and
-  enters `ActivityThread.main`.
-- View system core (WS1, most of it): AOSP ports of View, ViewGroup,
-  MotionEvent/KeyEvent/InputDevice/KeyCharacterMap, ViewConfiguration,
-  VelocityTracker, GestureDetector, ScaleGestureDetector, FocusFinder,
-  ViewTreeObserver, LayoutInflater (include, merge, ViewStub, themes),
-  Choreographer, ViewRootImpl (dirty-rect redraw, touch mode, focus
-  navigation, synthetic D-pad), WindowManagerGlobal (window stack,
-  input routing, A/B fallbacks, dim, compositing), PhoneWindow/DecorView
-  (theme window attributes, screen_simple decor), MenuInflater and an
-  internal menu model, Activity as Window.Callback. FrameLayout and
-  LinearLayout are ported (needed by the decor).
-- `tests/apps/hello`, `tests/apps/views` and `tests/apps/surface` pass their screenshot checks
-  (views: XML layouts with weights, include, ViewStub, selector states,
-  tap, D-pad focus, A/B buttons, long press, dim-behind second window).
-- Text engine (WS2): Spanned/Spannable, spans, TextUtils, TextPaint,
-  StaticLayout, BoringLayout, DynamicLayout. TextView measures and draws
-  through Layout (wrapping, gravity, ellipsize, hints, compound
-  drawables, password and single-line transformations). EditText takes
-  hardware keys and scripted `text` through InputConnection.commitText.
-  Html.fromHtml (basic tags), Linkify and DateUtils/DateFormat/Formatter
-  are in place. autoLink runs Linkify when text is set. `tests/apps/text`
-  checks screenshots and in-process logic.
+Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
+- VM core, libcore, JNI, reflection (including RUNTIME annotations),
+  threads; VmTest passes.
+- Renderer, fonts, images; resource tables with the real framework-res.apk.
+- View system (WS1, done): views, input, focus, windows, decor, menus,
+  action modes and the floating toolbar, clipToOutline, ViewDebug,
+  DisplayCutout.
+- Text and IME (WS2, done) and widgets (WS3, done), including lists,
+  pickers, popups, Toolbar, SearchView, TabHost, VideoView controls and
+  RemoteViews.
+- App model (WS4): lifecycle, configuration changes, dialogs, action bar,
+  fragments, services, broadcasts, notifications, JobScheduler.
+- Animation (WS5): view tweens and property animators.
+- OpenGL ES (WS8): GLES 1.x to 3.2 bindings, EGL14/EGL10, GLUtils,
+  Matrix, GLU and GLSurfaceView; GL frames reach the screen through the
+  SurfaceView buffer queue (tests/apps/gles on Mesa llvmpipe).
+- Native libraries (WS9): ELF loader and bionic shim; JNI libraries from
+  the APK load with their dependencies and JNI_OnLoad (tests/apps/ndk on
+  x86-64 and AArch64).
+- Switch (WS10): the NRO boots on hardware; launcher with APK labels and
+  icons; the build links Mesa when switch-mesa is installed. CI packages
+  the NRO and sample APKs (`.github/workflows/package.yml`).
+- 35 sample apps in `tests/apps` pass their screenshot checks.
 
-Not started: most widgets (WS3), the rest of the app model (WS4: action
-bar decor, ProgressDialog), animation (WS5) and the other
-post-WS0 packages.
+Not yet: sound (WS7), GL and native code on the Switch (Mesa linked but
+not run on hardware; native code needs code memory), NativeActivity,
+SQLite natives (WS6), networking (WS11), AndroidX (WS14), sensors (WS15).
 
 ## Checklist
 
@@ -261,8 +251,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     tests/apps/gles (GLES2 textured cube on host Mesa llvmpipe)
   - [ ] GLES1 rendering verified (Ubuntu's Mesa has no ES1 contexts; the
     sample checks the failure panel there)
-  - [ ] Switch: build with switch-mesa and verify on hardware; direct
-    NWindow presentation for fullscreen GL
+  - [x] Switch build links switch-mesa (with -lstdc++) and builds without it
+  - [ ] Switch: verify GL on hardware; direct NWindow presentation for
+    fullscreen GL
   - [ ] EGL15 syncs/images, SurfaceTexture.updateTexImage, ETC1Util
 - [ ] WS15 sensors and system services
 

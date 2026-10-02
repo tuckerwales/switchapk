@@ -34,7 +34,7 @@ application (NRO). There is no Android OS underneath. Instead we provide:
 | 2D renderer: src/gfx       resource/zip/dex parsing: src/core             |
 +---------------------------------------------------------------------------+
 | platform: src/platform/platform.h                                         |
-|   platform_headless.c (host tests)  |  platform_switch.c (libnx) [todo]   |
+|   platform_headless.c (host tests)  |  platform_switch.c (libnx)          |
 +---------------------------------------------------------------------------+
 ```
 
@@ -64,12 +64,12 @@ src/android/     natives for android.*: android.h (shared helpers),
                  android_media.c, android_sqlite.c
 src/gfx/         gfx.h, raster.c (AA rasterizer/compositor), font.c
                  (stb_truetype text), image.c (stb_image decode, PNG encode)
-src/platform/    platform.h, platform_headless.c, [todo] platform_switch.c
+src/platform/    platform.h, platform_headless.c, platform_switch.c
 src/nativeloader/ nativeloader.h, elf_loader.c (ELF loader, dl*), shim_libc.c
                  (libc/libm), shim_android.c (liblog, libdl, assets,
                  properties, zlib, GL lookup)
-src/app/         main_host.c (host driver), app_stub.c (placeholder for the
-                 APK runner), [todo] app_runner.c, main_switch.c
+src/app/         main_host.c (host driver), app_runner.c (APK runner),
+                 main_switch.c (Switch launcher), apk_info.c (labels/icons)
 java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
 java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
@@ -90,7 +90,7 @@ docs/            this documentation
 | `build/host/switchapk-host` | `make` | host driver, headless platform |
 | `build/java/framework.dex` | `tools/build_java.sh` (via `make`) | libcore + framework in one dex |
 | `build/toolchains/framework-res.apk` | `tools/fetch_toolchains.py sdk` | framework resources from SDK android.jar |
-| `switchapk.nro` | `make -f Makefile.switch` [todo] | NRO with romfs: framework.dex, framework-res.apk, fonts |
+| `switchapk.nro` | `make -f Makefile.switch` | NRO with romfs: framework.dex, framework-res.apk, fonts |
 
 The Java side is compiled with `javac -source 8 -target 8` against our own
 libcore as bootclasspath (never against the JDK), then dexed with d8
@@ -573,7 +573,8 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   its own draw pass (scaled when `setFixedSize` was used) and runs the
   `SurfaceHolder.Callback`s on the UI thread when it is attached, visible
   and sized. `SurfaceTexture.getSoftwareBufferQueue()` (framework-internal)
-  backs `TextureView` and `new Surface(surfaceTexture)`. GL is WS8.
+  backs `TextureView` and `new Surface(surfaceTexture)`. EGL window
+  surfaces post into the same queue (6.6.1).
 - `View.animate()` returns a `ViewPropertyAnimator`. `ValueAnimator` and
   `ObjectAnimator` advance on Choreographer frames and set view
   properties (translation, scale, rotation, alpha, x/y/z). A translation
@@ -969,8 +970,10 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   ending in `.apk` skips the list (nxlink). When the app ends the NRO
   reloads itself through hbloader (`envSetNextLoad`). A non-zero exit
   shows the last 48 INFO+ log lines (`sa_log_recent`) on an error screen.
+- GL: Mesa (switch-mesa) is linked when installed (6.6.1); not yet run on
+  hardware.
 - Not yet: audio (samples are drained like the headless backend), rumble,
-  native .so loading, 1080p docked rendering.
+  native .so loading (needs code memory, 6.7), 1080p docked rendering.
 
 ## 8. Testing strategy
 

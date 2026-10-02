@@ -163,6 +163,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] DatePicker (calendar and spinner delegates), CalendarView
     (material delegate), DatePickerDialog, internal ViewPager, DayPickerView,
     SimpleMonthView, YearPickerView; tests/apps/dates
+  - [x] CalendarView holo week list (CalendarViewLegacyDelegate);
+    tests/apps/holocal
   - [x] TimePicker (clock and spinner delegates), RadialTimePickerView,
     NumericTextView, TextInputTimePickerView, TimePickerDialog;
     tests/apps/times
@@ -175,8 +177,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     LocalActivityManager (embedded activities); tests/apps/tabs
   - [x] CursorTreeAdapter, ResourceCursorTreeAdapter,
     SimpleCursorTreeAdapter; tests/apps/adapters
-  - [ ] the rest (the holo CalendarView week list, VideoView,
-    RemoteViews, ...)
+  - [ ] the rest (VideoView, RemoteViews, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,
@@ -249,10 +250,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
    landed, and so have progress, popups, Toolbar, the action bar,
    adapters, the expandable list, NumberPicker, the clocks, DatePicker,
-   CalendarView, DatePickerDialog, TimePicker, TimePickerDialog and
-   GridLayout, SearchView, TabHost and the CursorTreeAdapter family.
-   Next: the rest of the WS3 widgets (the holo CalendarView week list,
-   VideoView, RemoteViews). WS5 (animation) can start in parallel.
+   CalendarView (material delegate and the holo week list),
+   DatePickerDialog, TimePicker, TimePickerDialog and GridLayout,
+   SearchView, TabHost and the CursorTreeAdapter family.
+   Next: the rest of the WS3 widgets (VideoView, RemoteViews). WS5
+   (animation) can start in parallel.
 2. Finish WS1: floating action modes (text selection toolbar).
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
@@ -418,3 +420,9 @@ and update ARCHITECTURE.md in the same commit.
   `destroyEmbeddedActivity`, which LocalActivityManager drives instead of
   AOSP's client transactions. `isRootNamespace`/`setIsRootNamespace` moved
   from ViewGroup to View (as in AOSP). ARCHITECTURE 6.5 updated.
+- 2026-10-02 (WS3): CalendarView mode 0 constructs
+  CalendarViewLegacyDelegate (the holo week list) instead of the material
+  day picker. `DateUtils.getDayOfWeekString` with `LENGTH_SHORTEST`
+  returns one letter, and `formatDateRange` with `FORMAT_NO_MONTH_DAY`
+  includes the month name. Format pieces still join with ", ", so the
+  week-list title is "March, 2024". ARCHITECTURE 6.4.1 updated.

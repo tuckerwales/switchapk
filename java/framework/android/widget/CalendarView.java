@@ -17,9 +17,9 @@ import java.util.Locale;
 
 /**
  * This class is a calendar widget for displaying and selecting dates (AOSP
- * port). The material mode (DayPickerView) is ported; the holo-era week list
- * ({@code calendarViewMode} 0, used only by the pre-Holo {@code Theme}) falls
- * back to it, so the week-list styling setters are accepted and ignored.
+ * port). Material mode is a {@link DayPickerView}. Holo mode ({@code
+ * calendarViewMode} 0, the {@code Widget.CalendarView} and Holo styles) is the
+ * week list.
  */
 public class CalendarView extends FrameLayout {
     private static final String LOG_TAG = "CalendarView";
@@ -67,8 +67,7 @@ public class CalendarView extends FrameLayout {
 
         switch (mode) {
             case MODE_HOLO:
-                Log.w(LOG_TAG, "holo CalendarView week list is not ported; using the material calendar");
-                mDelegate = new CalendarViewMaterialDelegate(
+                mDelegate = new CalendarViewLegacyDelegate(
                         this, context, attrs, defStyleAttr, defStyleRes);
                 break;
             case MODE_MATERIAL:

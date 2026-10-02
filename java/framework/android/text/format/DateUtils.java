@@ -65,6 +65,7 @@ public class DateUtils {
     private static final String[] WEEKDAYS = {"", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
             "Saturday"};
     private static final String[] WEEKDAYS_SHORT = {"", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    private static final String[] WEEKDAYS_NARROW = {"", "S", "M", "T", "W", "T", "F", "S"};
     private static final String[] MONTHS = {"January", "February", "March", "April", "May", "June", "July", "August",
             "September", "October", "November", "December"};
     private static final String[] MONTHS_SHORT = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
@@ -73,7 +74,9 @@ public class DateUtils {
     public DateUtils() {}
 
     public static String getDayOfWeekString(int dayOfWeek, int abbrev) {
-        String[] table = abbrev == LENGTH_LONG ? WEEKDAYS : WEEKDAYS_SHORT;
+        String[] table = WEEKDAYS_SHORT;
+        if (abbrev == LENGTH_LONG) table = WEEKDAYS;
+        else if (abbrev == LENGTH_SHORTEST) table = WEEKDAYS_NARROW;
         if (dayOfWeek < 0 || dayOfWeek >= table.length) return "";
         return table[dayOfWeek];
     }
@@ -241,10 +244,11 @@ public class DateUtils {
             if (showYear) numeric = numeric + "/" + cal.get(Calendar.YEAR);
             appendPiece(out, numeric);
             showYear = false;
-        } else if ((flags & FORMAT_SHOW_DATE) != 0 && (flags & FORMAT_NO_MONTH_DAY) == 0) {
+        } else if ((flags & FORMAT_SHOW_DATE) != 0) {
             boolean abbrev = abbrevAll || (flags & FORMAT_ABBREV_MONTH) != 0;
             String month = getMonthString(cal.get(Calendar.MONTH), abbrev ? LENGTH_SHORT : LENGTH_LONG);
-            appendPiece(out, month + " " + cal.get(Calendar.DAY_OF_MONTH));
+            if ((flags & FORMAT_NO_MONTH_DAY) != 0) appendPiece(out, month);
+            else appendPiece(out, month + " " + cal.get(Calendar.DAY_OF_MONTH));
         }
         if (showYear) appendPiece(out, Integer.toString(cal.get(Calendar.YEAR)));
         if (showTime) appendPiece(out, formatTime(cal, hour24, abbrevAll || (flags & FORMAT_ABBREV_TIME) != 0, flags));

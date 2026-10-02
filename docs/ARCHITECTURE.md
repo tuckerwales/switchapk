@@ -460,14 +460,23 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `mAllowInconsistentMeasurement`). Dialog sizing depends on it: the
   wrap-content window trial at `config_prefDialogWidth` only succeeds when
   nothing below reports MEASURED_STATE_TOO_SMALL.
-- Date widgets: DatePicker and CalendarView use the material day picker
-  (internal ViewPager of SimpleMonthViews, YearPickerView); the landscape
-  `layout-land` dimens and layouts apply on the Switch screen. The holo
-  CalendarView week list (`calendarViewMode` 0, base `Theme` only) is not
-  ported and falls back to the material calendar. TimePicker uses the
-  radial clock (with the text input mode) or NumberPicker spinners;
-  RadialTimePickerView crossfades hours and minutes on a frame callback
-  rather than an ObjectAnimator until WS5 lands.
+- Date widgets: DatePicker uses the material day picker (internal
+  ViewPager of SimpleMonthViews, YearPickerView); the landscape
+  `layout-land` dimens and layouts apply on the Switch screen.
+  CalendarView follows `calendarViewMode`: material (the Theme.Material
+  default) is that day picker, and holo (`Widget.CalendarView`, mode 0)
+  is CalendarViewLegacyDelegate, a ListView of weeks inflated from the
+  framework `calendar_view` layout (month title, day-name header, week
+  numbers, selected-week tint, vertical bars). There is no
+  libcore.icu.LocaleData, so the default first day of the week is
+  `Calendar.getInstance().getFirstDayOfWeek()` (Sunday on the Gregorian
+  calendar). `DateUtils` joins format pieces with ", ", emits the month
+  for `FORMAT_NO_MONTH_DAY`, and returns a one-letter weekday for
+  `LENGTH_SHORTEST`, so the holo header reads "March, 2024" over
+  "S M T W T F S". TimePicker uses the radial clock (with the text input
+  mode) or NumberPicker spinners; RadialTimePickerView crossfades hours
+  and minutes on a frame callback rather than an ObjectAnimator until
+  WS5 lands.
 - GridLayout is the AOSP port: row and column lines come from a
   difference-constraint solve per axis, cached until the structure (child
   set, spans, GONE changes, `onSetLayoutParams`) or the values (any

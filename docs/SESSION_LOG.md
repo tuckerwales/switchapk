@@ -374,3 +374,19 @@ what is left in flight.
   SimpleCursorTreeAdapter (column to view binding with a ViewBinder).
   tests/apps/adapters gained 13 logic checks (40 in all), including an
   ExpandableListView collapse closing the children cursor.
+
+### Session 7 (2026-10-02, branch ccr-08dbdaa2-6llszo)
+- WS3 holo CalendarView. Mode 0 (`Widget.CalendarView` and the Holo
+  styles) now builds CalendarViewLegacyDelegate: the framework
+  `calendar_view` layout, a month title, single-letter day names, and a
+  ListView of weeks with week numbers, a selected-week tint and the
+  vertical bar drawable. Theme.Material still builds the material
+  delegate, so `new CalendarView(activity)` is unchanged.
+  `DateUtils.getDayOfWeekString` honors `LENGTH_SHORTEST`, and
+  `formatDateRange` with `FORMAT_NO_MONTH_DAY` keeps the month name.
+  Pieces still join with ", ", so the title is "March, 2024".
+  tests/apps/holocal has 19 logic checks and covers March 2024 with the
+  15th selected, a tap on Sunday the 10th, and a swipe that settles on
+  April with the 10th still selected. tests/apps/dates stays green.
+- In flight: the rest of WS3 (VideoView, RemoteViews), WS1 floating
+  action modes, WS5 animation.

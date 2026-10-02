@@ -60,8 +60,8 @@ src/android/     natives for android.*: android.h (shared helpers),
                  android_res.c, android_graphics.c, android_os.c,
                  android_gl.c + android_gl.h (EGL, GLUtils, GL loader),
                  android_gles_gen.c + gles_funcs.h (generated GLES
-                 bindings), android_gles_special.c, [todo]
-                 android_media.c, android_sqlite.c
+                 bindings), android_gles_special.c, android_media.c,
+                 android_sqlite.c, sqlite_vfs_switch.c (Switch VFS)
 src/gfx/         gfx.h, raster.c (AA rasterizer/compositor), font.c
                  (stb_truetype text), image.c (stb_image decode, PNG encode)
 src/platform/    platform.h, platform_headless.c, platform_switch.c
@@ -803,9 +803,22 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `style`, `attrs(...)`), which caches `Resources.getIdentifier`.
 
 ### 6.6 Storage, media, GL (design)
-- SQLite: bundled amalgamation compiled into the binary
-  (`third_party/sqlite`), Java API in `android.database.sqlite` over thin
-  natives (`SQLiteNative`); results are fully materialized per query.
+- SQLite (WS6, host acceptance in): the amalgamation
+  (`third_party/sqlite`, `THREADSAFE=1`, `OMIT_LOAD_EXTENSION`) links into
+  the host binary and the NRO. `SQLiteNative` handles are `sqlite3` and
+  `sqlite3_stmt` pointers. `nOpen` maps Android paths through
+  `platform_map_path` (`:memory:` stays as it is). Queries materialize
+  every row in `SQLiteDatabase.runQuery`. `nFinalize(0)` is a no-op.
+  Result codes become the matching `SQLiteException` subclass.
+  `ContextImpl.openOrCreateDatabase` opens `getDatabasePath`. Natives drop
+  the GIL around open, prepare, step and close. The Switch object is
+  compiled `SQLITE_OS_OTHER` and `SQLITE_OMIT_WAL`; `sqlite_vfs_switch.c`
+  registers a POSIX VFS (libnx routes `sdmc:` paths) and installs pthread
+  mutexes before the first open. Locks are process-local.
+  `tests/apps/store` covers helper create, upgrade on a second process,
+  selection arguments, a rolled-back transaction, a constraint failure, a
+  read-only open, and SharedPreferences across the two runs. Still open:
+  DatabaseUtils, CursorWindow, provider stubs, FileProvider.
 - Audio (WS7, built on the host): one 48 kHz stereo float mixer
   (`src/android/audio_mixer.c`) is the `platform_audio_start` callback.
   It mixes SoundPool clips, MediaPlayer clips, AudioTrack static clips

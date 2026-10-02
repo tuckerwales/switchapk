@@ -17,7 +17,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.DatabaseErrorHandler;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteException;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
@@ -44,7 +43,6 @@ import java.util.HashMap;
 public class ContextImpl extends Context {
     private static final String TAG = "ContextImpl";
     private static boolean sLoggedIpc;
-    private static boolean sLoggedSqlite;
 
     private final String mPackageName;
     private final ApplicationInfo mInfo;
@@ -225,13 +223,16 @@ public class ContextImpl extends Context {
 
     @Override
     public SQLiteDatabase openOrCreateDatabase(String name, int mode, SQLiteDatabase.CursorFactory factory) {
-        return noSqlite();
+        return openOrCreateDatabase(name, mode, factory, null);
     }
 
     @Override
     public SQLiteDatabase openOrCreateDatabase(String name, int mode, SQLiteDatabase.CursorFactory factory,
             DatabaseErrorHandler errorHandler) {
-        return noSqlite();
+        int flags = SQLiteDatabase.CREATE_IF_NECESSARY;
+        if ((mode & MODE_ENABLE_WRITE_AHEAD_LOGGING) != 0) flags |= SQLiteDatabase.ENABLE_WRITE_AHEAD_LOGGING;
+        if ((mode & MODE_NO_LOCALIZED_COLLATORS) != 0) flags |= SQLiteDatabase.NO_LOCALIZED_COLLATORS;
+        return SQLiteDatabase.openDatabase(getDatabasePath(name).getPath(), factory, flags, errorHandler);
     }
 
     @Override public boolean moveDatabaseFrom(Context sourceContext, String name) { return false; }
@@ -478,14 +479,5 @@ public class ContextImpl extends Context {
             sLoggedIpc = true;
             Log.w(TAG, "instrumentation is not supported");
         }
-    }
-
-    /** TODO(WS6) SQLite natives are not registered, so a database is never opened. */
-    private static SQLiteDatabase noSqlite() {
-        if (!sLoggedSqlite) {
-            sLoggedSqlite = true;
-            Log.w(TAG, "SQLite is not available");
-        }
-        throw new SQLiteException("SQLite is not available");
     }
 }

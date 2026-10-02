@@ -16,7 +16,21 @@ DEPS := $(OBJS:.o=.d)
 
 all: $(BUILD)/switchapk-host build/java/framework.dex
 
-$(BUILD)/switchapk-host: $(OBJS)
+SQLITE_SRC := third_party/sqlite/sqlite3.c
+SQLITE_OBJ := $(BUILD)/third_party/sqlite/sqlite3.o
+# THREADSAFE=1 and no loadable extensions. Warnings in the amalgamation stay off this one object.
+SQLITE_CFLAGS := -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION \
+	-Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable \
+	-Wno-implicit-fallthrough -Wno-sign-compare -Wno-cast-function-type
+
+$(SQLITE_SRC):
+	@echo "missing $@; run: python3 tools/fetch_toolchains.py sqlite" && false
+
+$(SQLITE_OBJ): $(SQLITE_SRC)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(SQLITE_CFLAGS) -c -o $@ $<
+
+$(BUILD)/switchapk-host: $(OBJS) $(SQLITE_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD)/%.o: %.c

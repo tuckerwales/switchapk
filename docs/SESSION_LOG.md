@@ -583,3 +583,21 @@ what is left in flight.
   WS5 is done. PopupWindow enter/exit transitions and the toolbar
   visibility fade still apply immediately: android.transition is not in
   the tree.
+
+### Session 13 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- WS6 SQLite natives. `android_sqlite.c` implements `SQLiteNative` over
+  the bundled amalgamation and maps result codes onto the
+  `SQLiteException` subclasses. Paths other than `:memory:` use
+  `platform_map_path`. `ContextImpl.openOrCreateDatabase` opens the file
+  under `getDatabasePath`. The Switch build compiles SQLite as
+  `SQLITE_OS_OTHER` (no WAL) and links `sqlite_vfs_switch.c`, a POSIX VFS
+  with pthread mutexes. That VFS was smoke-tested on the host; the NRO
+  itself was not rebuilt here.
+  tests/apps/store creates `notes.db` at version 1 (selection arguments,
+  a rolled-back row, a kept row, a constraint failure, a read-only
+  insert) and writes a preference. A second host process with the same
+  `--data` directory upgrades to version 2 and reads the preference
+  back. Both runs check a full-screen swatch.
+  DatabaseUtils, CursorWindow, provider stubs and FileProvider remain.
+  WS6 stays in progress.

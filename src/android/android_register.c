@@ -9,5 +9,6 @@ void natives_android_register(void) {
     android_os_register();
     android_media_register();
     android_opengl_register();
+    android_sqlite_register();
     native_activity_register();
 }

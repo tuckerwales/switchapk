@@ -47,7 +47,23 @@ all: $(BUILD)/switchapk.nro
 $(BUILD)/switchapk.nro: $(BUILD)/switchapk.elf $(BUILD)/switchapk.nacp $(ROMFS)/framework.dex $(ROMFS)/framework-res.apk
 	$(TOOLS)/elf2nro $< $@ --icon=$(DEVKITPRO)/libnx/default_icon.jpg --nacp=$(BUILD)/switchapk.nacp --romfsdir=$(ROMFS)
 
-$(BUILD)/switchapk.elf: $(OBJS)
+SQLITE_SRC := third_party/sqlite/sqlite3.c
+SQLITE_OBJ := $(BUILD)/third_party/sqlite/sqlite3.o
+# OS_OTHER: the unix VFS wants mmap and host locking. sqlite_vfs_switch.c is the file layer,
+# and it installs pthread mutexes before the first open. WAL is omitted with that VFS.
+SQLITE_CFLAGS := -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION \
+	-DSQLITE_OS_OTHER=1 -DSQLITE_OMIT_WAL -DSQLITE_MAX_MMAP_SIZE=0 \
+	-Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable \
+	-Wno-implicit-fallthrough -Wno-sign-compare -Wno-cast-function-type
+
+$(SQLITE_SRC):
+	@echo "missing $@; run: python3 tools/fetch_toolchains.py sqlite" && false
+
+$(SQLITE_OBJ): $(SQLITE_SRC)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(SQLITE_CFLAGS) -c -o $@ $<
+
+$(BUILD)/switchapk.elf: $(OBJS) $(SQLITE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(BUILD)/switchapk.nacp:

@@ -106,6 +106,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     private int mRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
     private MenuInflater mMenuInflater;
     private SearchEvent mSearchEvent;
+    private SearchManager mSearchManager;
     private ActionMode mActionMode;
     private ActionBar mActionBar;
     private boolean mEnableDefaultActionBarUp;
@@ -523,6 +524,8 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
             }
             mManagedDialogs = null;
         }
+        // Close any open search dialog
+        if (mSearchManager != null) mSearchManager.stopSearch();
         if (mActionBar != null) mActionBar.onDestroy();
         dispatchActivityDestroyed();
     }
@@ -1137,6 +1140,10 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
             throw new IllegalStateException("System services not available to Activities before onCreate()");
         }
         if (WINDOW_SERVICE.equals(name)) return mWindowManager;
+        if (SEARCH_SERVICE.equals(name)) {
+            ensureSearchManager();
+            return mSearchManager;
+        }
         return super.getSystemService(name);
     }
 
@@ -1333,6 +1340,15 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
             return w.hasFeature(Window.FEATURE_OPTIONS_PANEL)
                     && w.performPanelShortcut(Window.FEATURE_OPTIONS_PANEL, keyCode, event, Menu.FLAG_ALWAYS_PERFORM_CLOSE);
         }
+        if ((mDefaultKeyMode == DEFAULT_KEYS_SEARCH_LOCAL || mDefaultKeyMode == DEFAULT_KEYS_SEARCH_GLOBAL)
+                && event.getRepeatCount() == 0 && !event.isSystem()) {
+            // Type-to-search: a printable key starts the search with that character.
+            int c = event.getUnicodeChar();
+            if (c > 0 && !Character.isISOControl(c)) {
+                startSearch(String.valueOf((char) c), false, null, mDefaultKeyMode == DEFAULT_KEYS_SEARCH_GLOBAL);
+                return true;
+            }
+        }
         return false;
     }
 
@@ -1495,13 +1511,37 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         return result;
     }
 
-    public boolean onSearchRequested() { return false; }
+    /** Starts the search dialog for this activity (not on television or watch UI modes). */
+    public boolean onSearchRequested() {
+        final int uiMode = getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_TYPE_MASK;
+        if (uiMode != android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+                && uiMode != android.content.res.Configuration.UI_MODE_TYPE_WATCH) {
+            startSearch(null, false, null, false);
+            return true;
+        }
+        return false;
+    }
 
     public final SearchEvent getSearchEvent() { return mSearchEvent; }
 
-    public void startSearch(String initialQuery, boolean selectInitialQuery, Bundle appSearchData, boolean globalSearch) {}
+    public void startSearch(String initialQuery, boolean selectInitialQuery, Bundle appSearchData, boolean globalSearch) {
+        ensureSearchManager();
+        mSearchManager.startSearch(initialQuery, selectInitialQuery, getComponentName(), appSearchData, globalSearch);
+    }
 
-    public void triggerSearch(String query, Bundle appSearchData) {}
+    public void triggerSearch(String query, Bundle appSearchData) {
+        ensureSearchManager();
+        mSearchManager.triggerSearch(query, getComponentName(), appSearchData);
+    }
+
+    /** The activity's own SearchManager: its search dialog belongs to this activity's window. */
+    private void ensureSearchManager() {
+        if (mSearchManager != null) return;
+        if (getBaseContext() == null) {
+            throw new IllegalStateException("System services not available to Activities before onCreate()");
+        }
+        mSearchManager = new SearchManager(this, null);
+    }
 
     public ActionMode startActionMode(ActionMode.Callback callback) { return mWindow.getDecorView().startActionMode(callback); }
 

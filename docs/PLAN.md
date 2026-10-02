@@ -168,8 +168,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     tests/apps/times
   - [x] GridLayout (constraint solver, spans, alignments, baselines,
     default margins, weights); tests/apps/gridlayout
-  - [ ] the rest (the holo CalendarView week list, SearchView,
-    TabHost, CursorTreeAdapter family, VideoView, RemoteViews, ...)
+  - [x] SearchView (suggestions adapter, iconified and action view modes),
+    SearchManager, SearchableInfo, the search dialog, RecognizerIntent
+    constants; tests/apps/search
+  - [ ] the rest (the holo CalendarView week list, TabHost,
+    CursorTreeAdapter family, VideoView, RemoteViews, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
     multi choice, custom view) on the framework's material alert layouts,
@@ -243,7 +246,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    landed, and so have progress, popups, Toolbar, the action bar,
    adapters, the expandable list, NumberPicker, the clocks, DatePicker,
    CalendarView, DatePickerDialog, TimePicker, TimePickerDialog and
-   GridLayout. Next: SearchView, TabHost, the rest of the WS3 widgets. WS5 (animation) can start in
+   GridLayout and SearchView. Next: TabHost, the rest of the WS3 widgets. WS5 (animation) can start in
    parallel.
 2. Finish WS1: floating action modes (text selection toolbar).
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
@@ -391,3 +394,13 @@ and update ARCHITECTURE.md in the same commit.
   is now protected (hidden in AOSP) instead of package-private, so
   GridLayout can validate a child's new params and drop its cached
   structure, as on Android. ARCHITECTURE 6.4.1 updated.
+- 2026-10-02 (WS3, WS4 package manager): the manifest parser now fills
+  `PackageItemInfo.metaData` from `<meta-data>` (resource ids as ints,
+  values by type: string, boolean, int, float) for the application,
+  activities, receivers, services and providers, and
+  `PackageManager.getXml` returns the app's XML resources, so
+  `loadXmlMetaData` works. `Context.SEARCH_SERVICE` returns a
+  SearchManager (one per activity, as on Android). TextView handles Enter
+  in a single-line editor before its key listener, so Enter is never
+  inserted. MenuBuilder expands collapsible action views on item taps.
+  ARCHITECTURE 6.4.1 and the boot section updated.

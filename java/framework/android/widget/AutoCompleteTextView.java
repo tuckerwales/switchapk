@@ -319,30 +319,30 @@ public class AutoCompleteTextView extends EditText implements Filter.FilterListe
     /** Watches the text and starts filtering, unless the change came from a completion. */
     private class MyWatcher implements TextWatcher {
         @Override
-        public void afterTextChanged(Editable s) {
-            if (mBlockCompletion) return;
-            // if the list was open before the keystroke, but closed afterwards,
-            // then something in the keystroke processing (an input filter perhaps)
-            // called performCompletion() and we shouldn't do any more processing.
-            if (mOpenBefore && !isPopupShowing()) return;
-            refreshAutoCompleteResults();
-        }
+        public void afterTextChanged(Editable s) { doAfterTextChanged(); }
 
         @Override
-        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            if (mBlockCompletion) return;
-            mOpenBefore = isPopupShowing();
-        }
+        public void beforeTextChanged(CharSequence s, int start, int count, int after) { doBeforeTextChanged(); }
 
         @Override
         public void onTextChanged(CharSequence s, int start, int before, int count) {}
     }
 
     /** framework-internal (AOSP, hidden). */
-    void doBeforeTextChanged() {}
+    void doBeforeTextChanged() {
+        if (mBlockCompletion) return;
+        mOpenBefore = isPopupShowing();
+    }
 
     /** framework-internal (AOSP, hidden). */
-    void doAfterTextChanged() {}
+    void doAfterTextChanged() {
+        if (mBlockCompletion) return;
+        // if the list was open before the keystroke, but closed afterwards,
+        // then something in the keystroke processing (an input filter perhaps)
+        // called performCompletion() and we shouldn't do any more processing.
+        if (mOpenBefore && !isPopupShowing()) return;
+        refreshAutoCompleteResults();
+    }
 
     public final void refreshAutoCompleteResults() {
         // the drop down is shown only when a minimum number of characters

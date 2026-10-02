@@ -1951,13 +1951,15 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (mKeyListener != null && mText instanceof Editable
-                && mKeyListener.onKeyDown(this, (Editable) mText, keyCode, event)) {
-            return true;
-        }
+        // As in AOSP doKeyDown, Enter in a single-line editor is handled before the key
+        // listener, so it is never inserted into the text.
         if (keyCode == KeyEvent.KEYCODE_ENTER && mSingleLine && mBufferType == BufferType.EDITABLE) {
             int action = mImeOptions & EditorInfo.IME_MASK_ACTION;
             onEditorAction(action == EditorInfo.IME_ACTION_UNSPECIFIED ? EditorInfo.IME_ACTION_DONE : action);
+            return true;
+        }
+        if (mKeyListener != null && mText instanceof Editable
+                && mKeyListener.onKeyDown(this, (Editable) mText, keyCode, event)) {
             return true;
         }
         if (mMovement != null && mText instanceof Spannable

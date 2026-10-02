@@ -746,6 +746,10 @@ public final class ActivityThread {
                         if (activity != null) activity.filters.add(filter);
                         else if (service != null) service.filters.add(filter);
                         else filter = null;
+                    } else if ("meta-data".equals(name)) {
+                        android.content.pm.PackageItemInfo owner = activity != null ? activity.info
+                                : service != null ? service.info : provider != null ? provider : sAppInfo;
+                        readMetaData(owner, parser);
                     } else if ("action".equals(name) && filter != null) {
                         String action = attrString(parser, android.R.attr.name, "name");
                         if (action != null) filter.addAction(action);
@@ -815,6 +819,42 @@ public final class ActivityThread {
         sAppInfo.theme = attrRes(parser, android.R.attr.theme, "theme");
         sAppInfo.icon = attrRes(parser, android.R.attr.icon, "icon");
         applyLabel(sAppInfo, parser);
+    }
+
+    /** A meta-data element, stored as PackageParser does: resource ids as ints, values by type. */
+    private static void readMetaData(android.content.pm.PackageItemInfo owner, XmlResourceParser parser) {
+        String key = attrString(parser, android.R.attr.name, "name");
+        if (key == null) return;
+        if (owner.metaData == null) owner.metaData = new Bundle();
+        int n = parser.getAttributeCount();
+        int valueIndex = -1;
+        for (int i = 0; i < n; i++) {
+            int id = parser.getAttributeNameResource(i);
+            if (id == android.R.attr.resource) {
+                owner.metaData.putInt(key, parser.getAttributeResourceValue(i, 0));
+                return;
+            }
+            if (id == android.R.attr.value) valueIndex = i;
+        }
+        if (valueIndex < 0 || !(parser instanceof android.content.res.XmlBlock.Parser)) {
+            String value = attrString(parser, android.R.attr.value, "value");
+            if (value != null) owner.metaData.putString(key, value);
+            return;
+        }
+        android.content.res.XmlBlock.Parser p = (android.content.res.XmlBlock.Parser) parser;
+        int type = p.getAttributeDataType(valueIndex);
+        int data = p.getAttributeData(valueIndex);
+        if (type == android.util.TypedValue.TYPE_STRING) {
+            owner.metaData.putString(key, p.getAttributeValue(valueIndex));
+        } else if (type == android.util.TypedValue.TYPE_INT_BOOLEAN) {
+            owner.metaData.putBoolean(key, data != 0);
+        } else if (type >= android.util.TypedValue.TYPE_FIRST_INT && type <= android.util.TypedValue.TYPE_LAST_INT) {
+            owner.metaData.putInt(key, data);
+        } else if (type == android.util.TypedValue.TYPE_FLOAT) {
+            owner.metaData.putFloat(key, Float.intBitsToFloat(data));
+        } else if (type == android.util.TypedValue.TYPE_REFERENCE) {
+            owner.metaData.putInt(key, data);
+        }
     }
 
     private static void fillComponent(ComponentInfo info, XmlResourceParser parser) {

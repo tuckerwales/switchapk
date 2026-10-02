@@ -1,0 +1,49 @@
+idle 600
+screenshot search_start.png
+log the action bar search item expands its SearchView; ba asks the provider for suggestions
+tap 1243 36
+idle 400
+text ba
+idle 800
+screenshot search_suggest.png
+log tap the Banana suggestion: ResultsActivity gets ACTION_SEARCH with its query
+tap 250 115
+idle 800
+screenshot search_results.png
+key BACK
+idle 600
+screenshot search_back.png
+log collapse the action view with its up button
+tap 42 36
+idle 400
+log the search dialog (onSearchRequested): ch, then enter
+tap 100 120
+idle 600
+text ch
+idle 800
+screenshot search_dialog.png
+key ENTER
+idle 800
+screenshot search_results2.png
+key BACK
+idle 600
+screenshot search_main.png
+log Filter activity: ap in the inline SearchView filters the list, enter submits
+tap 312 132
+idle 800
+tap 300 131
+idle 300
+text ap
+idle 600
+screenshot search_filter.png
+key ENTER
+idle 400
+log tap the iconified SearchView to expand it
+tap 699 131
+idle 400
+screenshot search_expanded.png
+log close with an empty query collapses it again
+tap 1096 131
+idle 400
+screenshot search_collapsed.png
+quit

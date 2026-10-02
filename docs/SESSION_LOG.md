@@ -473,3 +473,10 @@ what is left in flight.
   size, and a named alpha fade is neither solid nor gone in the middle.
 - Next on device: audio (audren/audout), rumble, and 1080p docked. Next
   on WS5: StateListAnimator, layout animation, AVD.
+
+### Session 8 (2026-10-02, branch ccr-08dbdaa2-6llszo)
+- GitHub Actions workflow `.github/workflows/package.yml` fetches the SDK
+  and devkitPro, builds the host tree and `switchapk.nro`, and packages
+  the sample APKs with `make -f Makefile.switch dist`. The run uploads
+  `build/switch/switchapk-sd.zip` as the `switchapk-sd` artifact.
+- WS13 screenshot runner, log scanning, and VmTest on CI are still open.

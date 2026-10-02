@@ -1,5 +1,6 @@
 # Builds switchapk.nro and the sample APKs, then uploads the SD card zip.
-# Locally the same steps are: fetch sdk + devkitpro, make, make -f Makefile.switch dist.
+# Locally the same steps are: fetch sdk, devkitpro and sqlite, make,
+# make -f Makefile.switch dist.
 # ubuntu-24.04 matches the glibc the fetched devkitA64 host tools expect.
 
 name: Package NRO
@@ -73,6 +74,13 @@ jobs:
         with:
           path: build/toolchains
           key: ${{ steps.toolchains.outputs.cache-primary-key }}
+
+      # third_party/sqlite is gitignored, and it is not part of the toolchain cache.
+      - name: Fetch SQLite amalgamation
+        run: |
+          python3 tools/fetch_toolchains.py sqlite
+          test -f third_party/sqlite/sqlite3.c
+          test -f third_party/sqlite/sqlite3.h
 
       - name: Build host binary and framework.dex
         run: make -j"$(nproc)"

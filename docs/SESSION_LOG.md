@@ -600,4 +600,6 @@ what is left in flight.
   `--data` directory upgrades to version 2 and reads the preference
   back. Both runs check a full-screen swatch.
   DatabaseUtils, CursorWindow, provider stubs and FileProvider remain.
-  WS6 stays in progress.
+  WS6 stays in progress. Package NRO fetches the amalgamation before
+  `make`: `third_party/sqlite` is gitignored and is not in the toolchain
+  cache. The Switch objects compile with devkitA64.

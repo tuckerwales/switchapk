@@ -72,17 +72,22 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   the APK load with their dependencies and JNI_OnLoad (tests/apps/ndk on
   x86-64 and AArch64). NativeActivity loads a library, wraps its
   SurfaceView as an ANativeWindow, and native EGL window surfaces post
-  into that queue (tests/apps/native on host Mesa).
+  into that queue (tests/apps/native on host Mesa). The OpenSL ES buffer
+  queue is in the same shim and shares the WS7 mixer.
 - Switch (WS10): the NRO boots on hardware; launcher with APK labels and
   icons; the build links Mesa when switch-mesa is installed. CI packages
   the NRO and sample APKs (`.github/workflows/package.yml`).
+- Audio (WS7): one 48 kHz stereo mixer for SoundPool, MediaPlayer,
+  AudioTrack, ToneGenerator and the OpenSL ES buffer queue. Decoders are
+  WAV, Ogg Vorbis and MP3. tests/apps/audio checks a non-silent mix on
+  the host. The Switch audio thread still discards samples.
 - 35 sample apps in `tests/apps` pass their screenshot checks.
 
-Not yet: sound (WS7), GL on the Switch (Mesa linked but not run on
-hardware), running a native library on hardware (code memory is mapped;
-newlib struct translation remains), ALooper/AInputQueue (NativeActivity
-does not deliver an input queue), SQLite natives (WS6), networking
-(WS11), AndroidX (WS14), sensors (WS15).
+Not yet: GL on the Switch (Mesa linked but not run on hardware), device
+audio output (audren/audout), running a native library on hardware (code
+memory is mapped; newlib struct translation remains), ALooper/AInputQueue
+(NativeActivity does not deliver an input queue) and AAudio, SQLite
+natives (WS6), networking (WS11), AndroidX (WS14), sensors (WS15).
 
 ## Checklist
 
@@ -278,7 +283,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] NativeActivity and ANativeWindow; native eglCreateWindowSurface
     posts through the same Surface queue as Java (tests/apps/native:
     red EGL clear, gold rect from ANativeWindow_lock)
-  - [ ] ALooper/AInputQueue, OpenSL ES/AAudio (with WS7)
+  - [x] OpenSL ES buffer queue (engine, play, volume, Android simple
+    buffer queue) sharing the WS7 mixer (tests/apps/audio on the host)
+  - [ ] ALooper/AInputQueue, AAudio
   - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
 
 ### M6
@@ -324,8 +331,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    Switch loader maps executable pages with svcMapProcessCodeMemory
    (application launches; not yet run on hardware). NativeActivity,
    ANativeWindow and native EGL window surfaces are in
-   (tests/apps/native, host Mesa). Next: OpenSL ES with WS7. Still
-   open: ALooper/AInputQueue, and newlib struct translation (stat,
+   (tests/apps/native, host Mesa). OpenSL ES buffer queues share the
+   WS7 mixer (tests/apps/audio on the host; the Switch build still
+   discards samples and has not been run on hardware). Still open:
+   ALooper/AInputQueue, AAudio, and newlib struct translation (stat,
    dirent, O_* flags, clock ids).
 
 ## Known issues and gotchas
@@ -374,6 +383,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-02 (WS7, touches WS9 and WS10): `platform_audio_start` is called
+  once with the mixer callback (`src/android/audio_mixer.c`, 48 kHz
+  stereo float) and is not stopped. The audio thread takes only the
+  mixer mutex and never the VM lock. `android_media.c` releases the GIL
+  before a decode and before a blocking stream write. OpenSL ES symbols
+  are exported from the WS9 shim: `slCreateEngine`, and each `SL_IID_*`
+  as the address of the pointer object (a GLOB_DAT into the app GOT, then
+  a load of the UUID). `android.media.MixDebug` is framework-internal
+  (`getSourceMask`, `getNonZeroFrames`); it is not in android.jar. The
+  Switch callback still discards its buffer. ARCHITECTURE 6.6.
 - 2026-10-02 (WS9, touches WS8): `android.app.NativeActivity` loads
   `lib/<abi>/lib<name>.so` (meta-data `android.app.lib_name`, default
   entry `ANativeActivity_onCreate`) and installs a full-bleed

@@ -1,13 +1,18 @@
 /*
  * Android system library shim (WS9): liblog, libdl, libandroid's asset
- * manager, system properties, zlib, ANativeWindow, and the GL/EGL entry
- * points, plus the lookup that joins every shim table.
+ * manager, system properties, zlib, ANativeWindow, the GL/EGL entry
+ * points, and the OpenSL ES engine (WS7), plus the lookup that joins
+ * every shim table.
  *
- * Not yet: ALooper/AInputQueue, OpenSL ES and AAudio (WS7), AConfiguration,
- * ASensorManager. Imports of those bind to logging stubs (elf_loader.c).
+ * Not yet: ALooper/AInputQueue, AAudio, AConfiguration, ASensorManager.
+ * Imports of those bind to logging stubs (elf_loader.c).
+ *
+ * SL_IID_* are pointer objects. The dynamic symbol is the address of that
+ * pointer, which the loader stores in the GOT. A load then yields the UUID.
  */
 #include "nativeloader.h"
 #include "ndk_android.h"
+#include "sles.h"
 #include "../android/android_gl.h"
 #include "../core/zip.h"
 
@@ -298,6 +303,16 @@ static const ShimSym g_syms[] = {
     W(ANativeActivity_setWindowFlags, ANativeActivity_setWindowFlags),
     W(ANativeActivity_showSoftInput, ANativeActivity_showSoftInput),
     W(ANativeActivity_hideSoftInput, ANativeActivity_hideSoftInput),
+    /* libOpenSLES. IID symbols are the pointer objects, not the UUID bytes. */
+    W(slCreateEngine, slCreateEngine),
+    {"SL_IID_NULL", (void *)&SL_IID_NULL},
+    {"SL_IID_OBJECT", (void *)&SL_IID_OBJECT},
+    {"SL_IID_ENGINE", (void *)&SL_IID_ENGINE},
+    {"SL_IID_PLAY", (void *)&SL_IID_PLAY},
+    {"SL_IID_BUFFERQUEUE", (void *)&SL_IID_BUFFERQUEUE},
+    {"SL_IID_VOLUME", (void *)&SL_IID_VOLUME},
+    {"SL_IID_OUTPUTMIX", (void *)&SL_IID_OUTPUTMIX},
+    {"SL_IID_ANDROIDSIMPLEBUFFERQUEUE", (void *)&SL_IID_ANDROIDSIMPLEBUFFERQUEUE},
     /* libz */
     S(zlibVersion), S(inflateInit_), S(inflateInit2_), S(inflate), S(inflateEnd), S(inflateReset),
     S(deflateInit_), S(deflateInit2_), S(deflate), S(deflateEnd), S(deflateReset), S(deflateBound), S(crc32),

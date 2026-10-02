@@ -526,12 +526,14 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   WS5 lands.
 - VideoView is the AOSP widget on a SurfaceView, with MediaController as
   the floating transport bar from the framework `media_controller` layout.
-  Nothing is decoded yet: `MediaPlayer.prepareAsync` posts
-  `MEDIA_ERROR_UNKNOWN` / `MEDIA_ERROR_UNSUPPORTED` on the main looper, and
-  VideoView shows the framework "Can't play this video." dialog unless an
-  `OnErrorListener` returns true. `Context.AUDIO_SERVICE` returns an
-  AudioManager that grants focus and never revokes it. Subtitle sources
-  are reported unsupported. The mixer and decoders are WS7.
+  Video is not decoded. A missing file, or a source that is not WAV, Ogg
+  Vorbis or MP3, makes `prepareAsync` post `MEDIA_ERROR_UNKNOWN` /
+  `MEDIA_ERROR_UNSUPPORTED` on the main looper, and VideoView shows the
+  framework "Can't play this video." dialog unless an `OnErrorListener`
+  returns true (tests/apps/video). Audio files play through the mixer in
+  6.6. `Context.AUDIO_SERVICE` returns an
+  AudioManager that grants focus and never revokes it, and stores a
+  volume index per stream. Subtitle sources are reported unsupported.
 - RemoteViews inflates its layout and runs the action list (reflection
   setters, click and checked PendingIntents, fill-in against a template
   tag on an ancestor, and RemoteCollectionItems as a BaseAdapter).
@@ -784,12 +786,18 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - SQLite: bundled amalgamation compiled into the binary
   (`third_party/sqlite`), Java API in `android.database.sqlite` over thin
   natives (`SQLiteNative`); results are fully materialized per query.
-- Audio (not built): one float stereo mixer in C (`platform_audio_start`
-  callback) mixing SoundPool voices, AudioTrack streams and MediaPlayer
-  streams. Decoders: WAV/PCM, OGG Vorbis (stb_vorbis or libvorbis), MP3
-  (mpg123 on Switch portlibs). Switch output via audren or audout. Until
-  that lands, the Java MediaPlayer and AudioManager are the placeholders
-  in 6.4.1 and produce no samples.
+- Audio (WS7, built on the host): one 48 kHz stereo float mixer
+  (`src/android/audio_mixer.c`) is the `platform_audio_start` callback.
+  It mixes SoundPool clips, MediaPlayer clips, AudioTrack static clips
+  and streams, ToneGenerator sines and OpenSL ES buffer queues. Decoders
+  in `audio_decode.c` are WAV (PCM 8/16 and float), Ogg Vorbis
+  (`third_party/stb/stb_vorbis.c`) and MP3 (`third_party/minimp3`, no
+  SIMD). The callback never takes the VM lock. Java natives release that
+  lock before decode and before a blocking stream write. The stream is
+  started on the first play and not stopped. Headless and Switch both
+  pull 1024 frames and, on Switch, discard them; audren/audout is WS10.
+  `android.media.MixDebug` reports which sources have contributed a
+  non-silent sample. Vibrator already calls `platform_vibrate`.
 - OpenGL ES (WS8, built): see 6.6.1.
 
 ### 6.6.1 OpenGL ES and EGL
@@ -947,9 +955,15 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   RGBA bytes (R, G, B, A); the queue stores ARGB, so unlock converts.
   The previous posted frame is copied into the next lock. Input-queue
   callbacks are not invoked.
-- Not yet: ALooper and AInputQueue, OpenSL ES and AAudio (WS7),
-  AConfiguration, ASensorManager, libc++_shared coverage checks, socket
-  APIs. NativeActivity and native EGL have not been run on hardware.
+- OpenSL ES (WS7, symbols in this shim): `slCreateEngine` and the
+  `SL_IID_*` pointer objects (engine, object, play, volume, buffer
+  queue, output mix, Android simple buffer queue). GetInterface matches
+  pointer identity or the 16-byte UUID. A player copies each enqueued
+  buffer and runs the queue callback on the audio thread after the
+  mixer lock is released. AAudio is not implemented.
+- Not yet: ALooper and AInputQueue, AAudio, AConfiguration,
+  ASensorManager, libc++_shared coverage checks, socket APIs.
+  NativeActivity and native EGL have not been run on hardware.
 
 ## 7. Platform layer (src/platform/platform.h)
 
@@ -1014,9 +1028,10 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   shows the last 48 INFO+ log lines (`sa_log_recent`) on an error screen.
 - GL: Mesa (switch-mesa) is linked when installed (6.6.1); not yet run on
   hardware.
-- Not yet: audio (samples are drained like the headless backend), rumble,
-  1080p docked rendering. Native libraries can be mapped (6.7) but have
-  not been run on hardware, and neither has a NativeActivity.
+- Not yet: device audio output (the mixer callback runs and the samples
+  are discarded, as on the headless backend; audren/audout remains),
+  rumble, 1080p docked rendering. Native libraries can be mapped (6.7)
+  but have not been run on hardware, and neither has a NativeActivity.
 
 ## 8. Testing strategy
 

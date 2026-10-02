@@ -403,6 +403,13 @@ and update ARCHITECTURE.md in the same commit.
   and `eglSwapBuffers` reads it back with the same conversion as
   `EGLNative.nReadWindow` (`sa_egl_native_proc` in front of `sa_gl_proc`).
   ALooper and AInputQueue are not called. ARCHITECTURE 6.6.1 and 6.7.
+- 2026-10-02 (WS8/WS9, touches WS10 and WS13): `make -f Makefile.switch
+  dist` packages tests/apps/gles and tests/apps/ndk. Apps with a
+  `native/build.sh` are always rebuilt with `NDK_ARM64=1`, so the APK
+  carries arm64-v8a libraries. The Package NRO workflow installs clang,
+  lld and libc6-dev-arm64-cross, and checks that gles.apk is in the SD zip
+  and that ndk.apk has arm64-v8a libraries. ndk.apk is the first
+  hardware test of the Switch loader (code memory, the shim on newlib).
 - 2026-10-02 (WS9, touches WS4, WS13, libcore): `src/nativeloader/loader_stub.c`
   is replaced by the ELF loader and shim (same `nativeloader_load_library`
   / `nativeloader_find_symbol` contract, ARCHITECTURE 6.7). `os.arch` comes

@@ -603,3 +603,24 @@ what is left in flight.
   WS6 stays in progress. Package NRO fetches the amalgamation before
   `make`: `third_party/sqlite` is gitignored and is not in the toolchain
   cache. The Switch objects compile with devkitA64.
+
+### Session 14 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- WS6 DatabaseUtils, CursorWindow, provider stubs and FileProvider.
+  `CursorWindow` keeps rows in Java. Indexes are absolute, and a put
+  that would pass the byte budget returns false so `fillWindow` stops.
+  `AbstractCursor.fillWindow` delegates to `DatabaseUtils`.
+  `simpleQueryForBlobFileDescriptor` writes the blob to a temp file.
+  Settings and media are process providers installed before the manifest
+  providers. Settings rows persist under `/data/local/tmp/settings`, so
+  the second host run reads the brightness written by the first. Media
+  rows last for the process. `androidx.core.content.FileProvider` reads
+  the paths XML. The manifest parser stores `grantUriPermissions`, and
+  `attachInfo` rejects a provider that is exported or that does not grant
+  URI permissions. A resolved path must stay under its root.
+  tests/apps/store checks the window, a parcel round trip, the blob
+  descriptor, statement types, settings, a media insert, a FileProvider
+  read and a `../` escape, on top of the existing two-run database check.
+  `make`, the store check and VmTest pass. Not run on hardware.
+  Photo-picker and cloud-media helpers on MediaStore are still missing
+  and auto-stub. WS6 is done.

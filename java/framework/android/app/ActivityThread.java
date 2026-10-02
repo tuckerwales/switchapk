@@ -740,6 +740,8 @@ public final class ActivityThread {
                         provider = new ProviderInfo();
                         fillComponent(provider, parser);
                         provider.authority = attrString(parser, android.R.attr.authorities, "authorities");
+                        provider.grantUriPermissions = attrBool(parser, android.R.attr.grantUriPermissions,
+                                "grantUriPermissions", false);
                     } else if ("intent-filter".equals(name)) {
                         filter = new IntentFilter();
                         filter.setPriority(attrInt(parser, android.R.attr.priority, "priority", 0));
@@ -887,6 +889,7 @@ public final class ActivityThread {
     }
 
     private static void installProviders() {
+        android.provider.FrameworkProviders.install(sContext);
         for (int i = 0; i < sProviders.size(); i++) {
             ProviderInfo info = sProviders.get(i);
             if (info.name == null) continue;

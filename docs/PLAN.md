@@ -83,10 +83,12 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   AudioTrack, ToneGenerator and the OpenSL ES buffer queue. Decoders are
   WAV, Ogg Vorbis and MP3. tests/apps/audio checks a non-silent mix on
   the host. The Switch audio thread still discards samples.
-- Storage (WS6, in progress): SQLite natives over the bundled amalgamation.
-  tests/apps/store creates a database, upgrades it on a second host run,
-  and reads the SharedPreferences value written by the first run.
-  DatabaseUtils, CursorWindow, provider stubs and FileProvider remain.
+- Storage (WS6): SQLite natives over the bundled amalgamation.
+  DatabaseUtils, an in-memory CursorWindow, Settings and MediaStore,
+  and androidx.core.content.FileProvider. tests/apps/store creates a
+  database, upgrades it on a second host run, reads the preference and
+  the settings value written by the first run, and checks the window,
+  media rows and a FileProvider file.
 - 35 sample apps in `tests/apps` pass their screenshot checks, and
   tests/apps/store passes its two-run check (it is not in the NRO sample
   list).
@@ -94,9 +96,10 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 Not yet: GL on the Switch (Mesa linked but not run on hardware), device
 audio output (audren/audout), running a native library on hardware (code
 memory is mapped; newlib struct translation remains), ALooper/AInputQueue
-(NativeActivity does not deliver an input queue) and AAudio, the rest of
-WS6 (DatabaseUtils, CursorWindow, provider stubs, FileProvider),
-networking (WS11), AndroidX (WS14), sensors (WS15).
+(NativeActivity does not deliver an input queue) and AAudio,
+networking (WS11), AndroidX (WS14), sensors (WS15). Photo-picker and
+cloud-media helpers on MediaStore (createDeleteRequest, getVersion,
+volume-name sets) are still missing and auto-stub.
 
 ## Checklist
 
@@ -301,13 +304,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
 
 ### M6
-- [ ] WS6 SQLite natives and storage
+- [x] WS6 SQLite natives and storage
   - [x] SQLite natives (open, prepare, bind, step, column, changes, last
     insert id, error subclasses), amalgamation in both Makefiles,
     ContextImpl.openOrCreateDatabase, tests/apps/store (helper create,
     upgrade on the second host run, selection args, transaction,
     SharedPreferences)
-  - [ ] DatabaseUtils, CursorWindow, android.provider stubs, FileProvider
+  - [x] DatabaseUtils, CursorWindow, android.provider stubs, FileProvider
+    (tests/apps/store: window fill, settings across two runs, media
+    insert, FileProvider read and a path escape)
 - [ ] WS11 networking
 - [ ] WS12 VM performance
 - [ ] WS14 AndroidX compatibility
@@ -341,9 +346,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    clipToOutline (tests/apps/outline).
 3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
    as agents are available: WS13 (test runner around the app scripts;
-   packaging CI is `.github/workflows/package.yml`), the rest of WS6
-   (DatabaseUtils, CursorWindow, provider stubs and FileProvider; the
-   natives and tests/apps/store are in), WS7/WS11/WS12/WS15.
+   packaging CI is `.github/workflows/package.yml`), WS11/WS12/WS15.
+   WS6 is done.
 4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
    next is the Switch build with switch-mesa and a device run, then
    SurfaceTexture external textures.
@@ -403,6 +407,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-02 (WS6, touches WS4): `AbstractCursor.fillWindow` copies rows
+  through `DatabaseUtils.cursorFillWindow` into a Java `CursorWindow`
+  (absolute row indexes, 2 MiB default budget). `simpleQueryForBlobFileDescriptor`
+  spills the blob to a temp file. `FrameworkProviders.install` registers
+  the settings authority (rows under `/data/local/tmp/settings`) and the
+  in-memory media authority before manifest providers.
+  `<provider android:grantUriPermissions>` is stored on `ProviderInfo`.
+  `androidx.core.content.FileProvider` serves the paths XML. No new
+  native fields. ARCHITECTURE 6.6.
 - 2026-10-02 (WS6, touches WS4): `SQLiteNative` is registered from
   `android_sqlite.c` over the bundled amalgamation (`SQLITE_THREADSAFE=1`,
   `SQLITE_OMIT_LOAD_EXTENSION`). Paths other than `:memory:` go through

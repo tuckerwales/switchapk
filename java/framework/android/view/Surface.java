@@ -13,8 +13,10 @@ import android.os.Parcelable;
  * a canvas on the back buffer and post it; the consumer (SurfaceView,
  * TextureView) draws the front buffer. A producer thread that posts waits
  * until the previous frame was consumed (or ~2 frames passed), which paces
- * game loops to the display like Android's buffer queue does. GL surfaces
- * are TODO(WS8).
+ * game loops to the display like Android's buffer queue does. EGL window
+ * surfaces render offscreen and post each frame here on eglSwapBuffers
+ * (lockGlBuffer / unlockGlBufferAndPost), so GL and canvas producers share
+ * the consumer path.
  */
 public class Surface implements Parcelable {
     public static final int CHANGE_FRAME_RATE_ALWAYS = 1;
@@ -140,13 +142,46 @@ public class Surface implements Parcelable {
     public void unlockCanvasAndPost(Canvas canvas) {
         final BufferQueue q = mQueue;
         if (q == null) return;
-        Runnable notify;
         synchronized (q.mLock) {
             if (canvas != q.mLocked) {
                 throw new IllegalArgumentException("canvas object must be the same instance that "
                         + "was previously returned by lockCanvas");
             }
             q.mLocked = null;
+        }
+        post(q);
+    }
+
+    /**
+     * framework-internal (EGL window surfaces). Returns the back buffer's ARGB pixels for a whole frame of
+     * width x height, or null when the surface is invalid, locked, or now has another size.
+     */
+    public int[] lockGlBuffer(int width, int height) {
+        final BufferQueue q = mQueue;
+        if (mReleased || q == null) return null;
+        synchronized (q.mLock) {
+            if (!q.mValid || q.mLocked != null || q.mWidth != width || q.mHeight != height) return null;
+            if (q.mBack == null || q.mBack.getWidth() != width || q.mBack.getHeight() != height) {
+                q.mBack = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            }
+            return q.mBack.getPixelArray();
+        }
+    }
+
+    /** framework-internal. Posts the frame written into the array lockGlBuffer returned. */
+    public void unlockGlBufferAndPost() {
+        final BufferQueue q = mQueue;
+        if (q != null) post(q);
+    }
+
+    /** framework-internal. True when the consumer wants opaque frames (alpha is ignored). */
+    public boolean isOpaqueBuffer() {
+        return mQueue != null && mQueue.mOpaque;
+    }
+
+    private static void post(BufferQueue q) {
+        Runnable notify;
+        synchronized (q.mLock) {
             Bitmap tmp = q.mFront;
             q.mFront = q.mBack;
             q.mBack = tmp;

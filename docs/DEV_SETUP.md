@@ -6,6 +6,10 @@
 - JDK 17+ (`javac`, `java`, `javap`) for building the Java side and the
   VM conformance tests
 - Python 3.8+
+- For OpenGL ES samples: Mesa EGL/GLES (`apt install libegl1 libgles2
+  libgl1-mesa-dri`); the headers (`libegl-dev libgles-dev`) only to
+  regenerate the bindings. Without them GL apps show "OpenGL ES
+  unavailable" instead of rendering.
 - Internet access to dl.google.com, sqlite.org and Docker Hub (for devkitPro)
 
 ## Fetch toolchains
@@ -128,6 +132,12 @@ queued input was consumed and the app presented nothing for the quiet time.
   `javac -d /tmp/genr tools/genr/GenR.java && java -cp /tmp/genr GenR build/toolchains/sdk/android.jar > java/framework/android/R.java`
 - `framework-res.apk`:
   `python3 tools/make_framework_res.py build/toolchains/sdk/android.jar build/toolchains/framework-res.apk`
+
+- GLES bindings (`android.opengl.GLES*`, GL10/GL11, GLImpl,
+  `src/android/android_gles_gen.c`, `src/android/gles_funcs.h`):
+  `python3 tools/gen_gles.py` (needs android.jar and the Khronos headers in
+  /usr/include). Hand-written exceptions live in
+  `src/android/android_gles_special.c`.
 
 ## Where the runtime looks for files
 

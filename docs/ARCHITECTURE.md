@@ -57,8 +57,11 @@ src/native/      natives for java.* (java_lang.c, java_io.c incl. Android
                  (argument/return macros), natives.c (registers all tables),
                  android_stub.c (placeholder, replaced by src/android)
 src/android/     natives for android.*: android.h (shared helpers),
-                 android_res.c, android_graphics.c, [todo] android_os.c,
-                 android_media.c, android_opengl.c, android_sqlite.c
+                 android_res.c, android_graphics.c, android_os.c,
+                 android_gl.c + android_gl.h (EGL, GLUtils, GL loader),
+                 android_gles_gen.c + gles_funcs.h (generated GLES
+                 bindings), android_gles_special.c, [todo]
+                 android_media.c, android_sqlite.c
 src/gfx/         gfx.h, raster.c (AA rasterizer/compositor), font.c
                  (stb_truetype text), image.c (stb_image decode, PNG encode)
 src/platform/    platform.h, platform_headless.c, [todo] platform_switch.c
@@ -69,6 +72,7 @@ java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
 java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
 tools/           build_java.sh, fetch_toolchains.py, make_framework_res.py,
+                 gen_gles.py (GLES bindings generator),
                  genr/GenR.java (android.R generator), dexdump.py,
                  build_apk.sh (test APKs), api_check.py (API diff vs android.jar)
 tests/           run_dex_test.sh + tests/dex (VM conformance vs OpenJDK),
@@ -753,13 +757,68 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (mpg123 on Switch portlibs). Switch output via audren or audout. Until
   that lands, the Java MediaPlayer and AudioManager are the placeholders
   in 6.4.1 and produce no samples.
-- OpenGL ES 2/3: GLES20/GLES30 Java bindings generated from the Khronos
-  headers into natives that call the real GLES (mesa/nouveau on Switch via
-  portlibs). EGL14 and `javax.microedition.khronos.egl` map to real EGL
-  with the NWindow from libnx. While a GL surface is active the platform
-  presents through EGL instead of the software framebuffer; views drawn on
-  top of a GLSurfaceView are composited by uploading the software layer as
-  a texture (or unsupported in the first version).
+- OpenGL ES (WS8, built): see 6.6.1.
+
+### 6.6.1 OpenGL ES and EGL
+
+- Bindings: `tools/gen_gles.py` reads the exact Java signatures of
+  `android.opengl.GLES10/10Ext/11/11Ext/20/30/31/31Ext/32` from android.jar
+  (javap) and the C prototypes from the Khronos headers, pairs each method
+  with its C function (array + offset, java.nio buffer at its position,
+  String, int/long offset into a bound buffer) and writes the Java classes,
+  `src/android/android_gles_gen.c` and `src/android/gles_funcs.h`
+  (X-macro of every entry point). It also writes the
+  `javax.microedition.khronos.opengles` GL10/GL11 interfaces and
+  `com.google.android.gles_jni.GLImpl`, which forwards to the GLES10/11
+  statics. Methods that do not pair (sized string outputs, String[]
+  inputs, mapped buffers) are hand-written in `android_gles_special.c`;
+  the generator reads its registration table and emits a logging fallback
+  for the rest (the KHR debug callbacks and message logs). Regenerate after
+  changing the generator; never edit the outputs.
+- Entry points: every GL ES and EGL function is called through the `sa_gl`
+  / `sa_egl` pointer tables (`android_gl.h`). The host dlopens libEGL,
+  libGLESv2 and libGLESv1_CM the first time an EGL display is requested,
+  so the binary does not link GL and a machine without it reports
+  EGL_NO_DISPLAY. The Switch links Mesa statically when the switch-mesa
+  portlib is installed (`SA_HAVE_EGL`, set by Makefile.switch); otherwise
+  GL reports itself unavailable. A GL call with no resolved entry point
+  logs once and returns 0. glFinish, glReadPixels and glClientWaitSync
+  release the GIL; other GL calls hold it.
+- EGL: `EGL14` and the EGL10 implementation (`com.google.android.gles_jni.EGLImpl`,
+  returned by `EGLContext.getEGL()`) are Java over the framework-internal
+  `android.opengl.EGLNative`. Display, config and context handles are the
+  real EGL handles as longs; a surface handle is a pointer to a C `SaSurf`
+  record (real surface, size, window flag), so window surfaces can be
+  replaced under the app. Configs are chosen as pbuffer configs
+  (EGL_WINDOW_BIT is rewritten to EGL_PBUFFER_BIT, and reported back on
+  query); EGL_RECORDABLE_ANDROID and EGL_FRAMEBUFFER_TARGET_ANDROID are
+  dropped. The host uses the surfaceless Mesa platform.
+- Window surfaces: `eglCreateWindowSurface` accepts a Surface,
+  SurfaceView, SurfaceHolder or SurfaceTexture (as AOSP) and creates a
+  pbuffer the size of the Surface's software buffer queue. On
+  `eglSwapBuffers` the frame is read back (`EGLNative.nReadWindow`: default
+  framebuffer, any bound FBO or pixel pack buffer restored, rows flipped,
+  RGBA to unpremultiplied ARGB, alpha forced for opaque queues) into the
+  queue's back buffer through `Surface.lockGlBuffer` /
+  `unlockGlBufferAndPost`, which posts and paces it like
+  `unlockCanvasAndPost`. When the queue size changed, the pbuffer is
+  replaced after the swap (kept current). SurfaceView and TextureView
+  therefore show GL frames with no special casing, and views over a
+  GLSurfaceView composite normally. A direct NWindow path for fullscreen
+  GL on the Switch is a later optimisation.
+- GLSurfaceView is AOSP's (GLThread state machine, EglHelper, the default
+  config, context and window surface factories). If the GL thread cannot
+  bring EGL up, it logs the exception and the view draws an "OpenGL ES
+  unavailable" panel (#202020) instead of crashing the app.
+- GLUtils uploads Bitmaps (unpremultiplied ARGB in Java, D10) as
+  premultiplied data like Android, converting to RGBA/RGB/ALPHA/LUMINANCE
+  bytes or 565/4444/5551 shorts. `android.opengl.Matrix` and `GLU` are
+  full ports. Not yet: EGL15 syncs and images, eglCreatePbufferFromClientBuffer,
+  pixmaps, ETC1/ETC1Util, GLDebugHelper, SurfaceTexture.updateTexImage
+  (external textures).
+- Java fields read from C: `java.nio.Buffer.position`, `limit` and
+  `elementSizeShift` (by `gles_buffer`), besides `backing` and
+  `byteOffset` (by `vm_buffer_address`, declared in vm.h).
 
 ### 6.7 Native libraries (design)
 - ELF64 loader for `lib/arm64-v8a/*.so` from the APK: map segments,

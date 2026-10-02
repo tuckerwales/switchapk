@@ -408,6 +408,8 @@ void *vm_java_vm(void);
 bool vm_jni_bind(VMThread *t, Method *m); /* find a JNI implementation in loaded libs */
 JValue vm_jni_call(VMThread *t, Method *m, uint64_t *args);
 Object *vm_jni_decode(VMThread *t, void *ref);
+/* Address of element 0 of a java.nio buffer (its backing array data + byteOffset), NULL if none. */
+void *vm_buffer_address(Object *buf);
 void *vm_jni_new_local(VMThread *t, Object *o);
 void vm_jni_push_frame(VMThread *t);
 void vm_jni_pop_frame(VMThread *t);

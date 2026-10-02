@@ -429,3 +429,18 @@ what is left in flight.
   48dp corner is the page color, and the inside of the arc stays the
   child's yellow.
 - In flight: WS1 ViewDebug annotations, DisplayCutout, WS5 animation.
+
+### Session 8 (2026-10-02, branch ccr-9f2fb326-x1o1g3)
+
+- WS8 OpenGL ES and EGL. `tools/gen_gles.py` generates GLES10/11/20/30/31/32
+  (+Ext) from android.jar signatures and the Khronos headers (850 natives,
+  561 entry points), the GL10/GL11 interfaces and GLImpl; 24 irregular
+  methods are hand-written, and the KHR debug callbacks log as unsupported.
+  EGL14, EGL10/EGL11, EGLExt, GLUtils, Matrix and GLU (full ports) and an
+  AOSP GLSurfaceView sit on `EGLNative`. Window surfaces are pbuffers read
+  back into the SurfaceView buffer queue on swap, so GL frames reach the
+  screen through the existing consumer path. GL is loaded with dlopen on
+  the host (no link dependency) and linked from switch-mesa on the Switch
+  when installed. tests/apps/gles renders a GLES2 textured cube on Mesa
+  llvmpipe and checks it; Ubuntu's Mesa has no ES1 contexts, so the GLES1
+  half checks the "OpenGL ES unavailable" panel there.

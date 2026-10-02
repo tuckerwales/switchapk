@@ -238,6 +238,18 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - [ ] WS5 animation
 - [ ] WS7 audio/media
 - [ ] WS8 OpenGL ES/EGL
+  - [x] GLES10/11/20/30/31/32 (+Ext) bindings generated from android.jar and
+    the Khronos headers (tools/gen_gles.py), GL10/GL11 interfaces and GLImpl
+  - [x] EGL14, EGL10/EGL11 (javax.microedition), EGLExt constants, GLUtils,
+    Matrix, GLU, GLSurfaceView (AOSP port) with a graceful failure panel
+  - [x] window surfaces as pbuffers read back into the Surface buffer
+    queue on swap (SurfaceView/TextureView consume GL frames);
+    tests/apps/gles (GLES2 textured cube on host Mesa llvmpipe)
+  - [ ] GLES1 rendering verified (Ubuntu's Mesa has no ES1 contexts; the
+    sample checks the failure panel there)
+  - [ ] Switch: build with switch-mesa and verify on hardware; direct
+    NWindow presentation for fullscreen GL
+  - [ ] EGL15 syncs/images, SurfaceTexture.updateTexImage, ETC1Util
 - [ ] WS15 sensors and system services
 
 ### M5
@@ -272,7 +284,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
-4. WS8 once WS10 can present.
+4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
+   next is the Switch build with switch-mesa and a device run, then
+   SurfaceTexture external textures. WS9 (native loader) is under way.
 
 ## Known issues and gotchas
 
@@ -294,6 +308,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   (AOSP selectDefaultTheme for targetSdk 24+), so they now show an action
   bar with the activity label. Action bar show/hide and action mode
   transitions are immediate until WS5 animators land.
+- Host GL tests need Mesa's EGL and GLES libraries (`libegl1`,
+  `libgles2`; `libegl-dev`/`libgles-dev` to regenerate the bindings).
+  Ubuntu's Mesa cannot create ES1 contexts, so GLES1 rendering is not
+  verified on the host; tests/apps/gles checks the failure panel instead.
 - The headless `idle` script command now waits until queued input is
   consumed and nothing was presented for the quiet time since the command
   started.
@@ -302,6 +320,17 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-02 (WS8, touches WS1 and the VM): `Surface` gained
+  framework-internal `lockGlBuffer(w, h)`, `unlockGlBufferAndPost()` and
+  `isOpaqueBuffer()` so EGL window surfaces post frames through the
+  software buffer queue (posting shares `unlockCanvasAndPost`'s pacing).
+  `vm_buffer_address(Object *buf)` (jni.c) is now declared in vm.h; the
+  GL natives also read `Buffer.position`, `limit` and `elementSizeShift`.
+  `natives_android_register` registers `android_opengl_register`.
+  Makefile.switch links Mesa (`-lEGL -lglapi -ldrm_nouveau`, defines
+  `SA_HAVE_EGL`) only when the switch-mesa portlib is installed.
+  ARCHITECTURE 6.6.1 added.
 
 - 2026-10-01 (WS10): Switch backend. `platform_switch_pump()` and
   `platform_switch_buttons_down()` are Switch-only extras used by

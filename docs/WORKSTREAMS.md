@@ -38,7 +38,7 @@ duplicating work.
 | WS5 | Animation: android.animation, view.animation, ViewPropertyAnimator, AVD animation | WS1 | not started (the tween core ProgressBar needs landed early from WS3: TimeInterpolator, Interpolator and the basic interpolators, Animation, AlphaAnimation, Transformation, AnimationUtils.loadInterpolator) | |
 | WS6 | Storage: SQLite natives, database/content provider checks, file APIs, SharedPreferences tests | WS0 | not started | |
 | WS7 | Audio/media: mixer, SoundPool, MediaPlayer, AudioTrack, decoders, platform audio | WS0 | not started | |
-| WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | in progress (GLES20/30 bindings, EGL, GLSurfaceView on host Mesa) | session 8, 2026-10-02 |
+| WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | in progress (bindings, EGL, GLSurfaceView, window surfaces and tests/apps/gles done on host Mesa; Switch build with switch-mesa, GLES1 verification, EGL15 syncs/images and SurfaceTexture left) | session 8, 2026-10-02 |
 | WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, shim, JNI sample on host) | session 8, 2026-10-02 |
 | WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO build, platform_switch.c, launcher) | ws4 session 6, 2026-10-01 |
 | WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | not started | |

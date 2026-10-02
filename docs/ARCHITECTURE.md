@@ -389,7 +389,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   ToolbarActionBar after setActionBar(Toolbar), which wraps the window
   callback. DecorView owns the primary ActionMode: the window callback
   may supply it (the action bar's context bar), else DecorView inflates
-  `action_mode_bar_stub` for a StandaloneActionMode. BACK finishes it.
+  `action_mode_bar_stub` for a StandaloneActionMode. TYPE_FLOATING
+  creates a FloatingActionMode: a popup row of the menu items above the
+  content rect from Callback2.onGetContentRect, or below it when the row
+  does not fit. hide dismisses the popup without finishing the mode.
+  Text selection does not open one yet. BACK finishes a floating mode
+  before a primary one.
 - Default theme: a context whose component and application set no theme
   uses `Resources.selectDefaultTheme(0, targetSdk)` (DeviceDefault Light
   DarkActionBar for targetSdk 24+), as AOSP ContextImpl and

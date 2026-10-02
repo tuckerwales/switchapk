@@ -408,4 +408,12 @@ what is left in flight.
   logic checks, including a parcel snapshot, a landscape and sized
   choice, a two-row list whose fill-in delivers the row extra, and an
   Open click that reapply()s an orange swatch.
-- In flight: WS1 floating action modes, WS5 animation.
+- WS1 floating action mode toolbar. TYPE_FLOATING now builds a
+  FloatingActionMode. The menu is a horizontal popup above the content
+  rect from Callback2.onGetContentRect (below it when there is no room).
+  hide dismisses the popup without ending the mode, and BACK finishes a
+  floating mode before a primary one. Text selection does not open one
+  yet. tests/apps/floating has 9 logic checks: Copy and Share sit above
+  a yellow selection, and tapping Copy finishes the mode.
+- In flight: WS1 text selection on the floating toolbar, clipToOutline,
+  ViewDebug annotations, DisplayCutout, WS5 animation.

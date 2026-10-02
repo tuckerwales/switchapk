@@ -124,7 +124,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] context menu presentation (MenuDialogHelper, from WS4)
   - [x] action mode presentation: primary modes in the action bar's
     context bar (WindowDecorActionBar) or standalone in the decor's
-    action_mode_bar stub; floating (text selection) modes are not done
+    action_mode_bar stub; floating toolbar (TYPE_FLOATING) shows the menu
+    above the content rect (tests/apps/floating). Text selection does not
+    open it yet
   - [ ] clipToOutline, ViewDebug annotations, DisplayCutout
 - [x] WS2 text and IME
   - [x] Spanned/Spannable, spans, TextUtils, Layout/StaticLayout/BoringLayout/DynamicLayout
@@ -258,9 +260,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    (transport controls and the error dialog; decoding is WS7) and
    RemoteViews (inflate, actions and reapply; notification content
    views stay unsupported).
-   Next: WS1 floating action modes. WS5 (animation) can start in
-   parallel.
-2. Finish WS1: floating action modes (text selection toolbar).
+   Next: WS1 text selection, which should open the floating toolbar.
+   WS5 (animation) can start in parallel.
+2. Finish WS1: floating action modes. The toolbar is in
+   (tests/apps/floating); text selection does not open it yet.
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
    launcher labels/icons. In parallel as agents are available: WS13
    (test runner around the app scripts), WS6/WS7/WS9/WS11/WS12/WS15.
@@ -437,3 +440,8 @@ and update ARCHITECTURE.md in the same commit.
   `MEDIA_ERROR_UNSUPPORTED` until WS7 has a decoder. VideoView shows the
   framework error dialog when no OnErrorListener consumes the error.
   ARCHITECTURE 6.4.1 and 6.6 updated.
+- 2026-10-02 (WS1): `View.startActionMode(callback, TYPE_FLOATING)` creates
+  a FloatingActionMode. Its toolbar is a popup of the menu items above
+  the content rect from `Callback2.onGetContentRect` (below it when the
+  row does not fit). `hide` dismisses the popup without finishing the
+  mode. Text selection does not open one yet. ARCHITECTURE 6.4 updated.

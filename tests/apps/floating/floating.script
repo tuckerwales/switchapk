@@ -1,0 +1,6 @@
+idle 800
+screenshot floating_bar.png
+tap 138 252
+idle 800
+screenshot floating_done.png
+quit

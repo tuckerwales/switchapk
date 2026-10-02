@@ -166,7 +166,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] TimePicker (clock and spinner delegates), RadialTimePickerView,
     NumericTextView, TextInputTimePickerView, TimePickerDialog;
     tests/apps/times
-  - [ ] the rest (the holo CalendarView week list, GridLayout, SearchView,
+  - [x] GridLayout (constraint solver, spans, alignments, baselines,
+    default margins, weights); tests/apps/gridlayout
+  - [ ] the rest (the holo CalendarView week list, SearchView,
     TabHost, CursorTreeAdapter family, VideoView, RemoteViews, ...)
 - [ ] WS4 app model
   - [x] Dialog, AlertDialog (+Builder: message, buttons, items, single and
@@ -240,8 +242,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    EdgeEffect) and lists (ListView, AbsListView, ArrayAdapter) have
    landed, and so have progress, popups, Toolbar, the action bar,
    adapters, the expandable list, NumberPicker, the clocks, DatePicker,
-   CalendarView, DatePickerDialog, TimePicker and TimePickerDialog.
-   Next: GridLayout, the rest of the WS3 widgets. WS5 (animation) can start in
+   CalendarView, DatePickerDialog, TimePicker, TimePickerDialog and
+   GridLayout. Next: SearchView, TabHost, the rest of the WS3 widgets. WS5 (animation) can start in
    parallel.
 2. Finish WS1: floating action modes (text selection toolbar).
 3. Boot the WS10 NRO on hardware and fix what breaks; then audio and
@@ -385,3 +387,7 @@ and update ARCHITECTURE.md in the same commit.
   `MathUtils.lerpDeg` added. RadialTimePickerView animates its
   hours/minutes crossfade on a frame callback until WS5 brings
   ObjectAnimator. ARCHITECTURE 6.4.1 updated.
+- 2026-10-02 (WS3, WS1 hook): `ViewGroup.onSetLayoutParams(View, LayoutParams)`
+  is now protected (hidden in AOSP) instead of package-private, so
+  GridLayout can validate a child's new params and drop its cached
+  structure, as on Android. ARCHITECTURE 6.4.1 updated.

@@ -468,6 +468,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   radial clock (with the text input mode) or NumberPicker spinners;
   RadialTimePickerView crossfades hours and minutes on a frame callback
   rather than an ObjectAnimator until WS5 lands.
+- GridLayout is the AOSP port: row and column lines come from a
+  difference-constraint solve per axis, cached until the structure (child
+  set, spans, GONE changes, `onSetLayoutParams`) or the values (any
+  `requestLayout`) are invalidated. Subclasses of ViewGroup outside
+  android.view can override the hidden `onSetLayoutParams` hook, which
+  View.setLayoutParams calls after storing the params.
 - CompoundButton draws only its button drawable; with none (an explicit
   `@null`) nothing is drawn, as on Android. Dates format through
   `DateFormat.getBestDateTimePattern`, which maps skeletons to en-US

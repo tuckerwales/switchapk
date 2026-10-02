@@ -326,3 +326,13 @@ what is left in flight.
   now, and tests/apps/widgets checks the real checkbox and radio drawables
   instead. tests/apps/times covers radial hour and minute taps, AM/PM, the
   spinner wrap, the 24-hour dialog and typing an hour in text input mode.
+- WS3 GridLayout. Ported GridLayout whole: auto placement around explicit
+  indices and spans, the per-axis Bellman-Ford constraint solve with
+  topologically sorted arcs, alignment groups (start, end, left, right,
+  center, fill, baseline), default margins (half of `default_gap`, none
+  for Space), ALIGN_BOUNDS, row and column weights (binary search for the
+  largest share that still solves), GONE handling and the consistency
+  check. ViewGroup.onSetLayoutParams became protected so GridLayout can
+  hook it. tests/apps/gridlayout has 29 logic checks and a calculator
+  grid with row and column spans, a weighted row that re-splits when a
+  cell goes GONE, and an alignment column with a row-weighted cell.

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="#FFFFFF">
+
+    <GridLayout
+        android:id="@+id/calc"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="#EEEEEE"
+        android:columnCount="4"
+        android:useDefaultMargins="true">
+
+        <TextView android:id="@+id/display" style="@style/Key"
+            android:layout_width="wrap_content"
+            android:layout_columnSpan="4"
+            android:layout_gravity="fill_horizontal"
+            android:gravity="end|center_vertical"
+            android:paddingEnd="12dp"
+            android:background="#212121"
+            android:text="0" />
+
+        <TextView style="@style/Key" android:text="7" />
+        <TextView style="@style/Key" android:text="8" />
+        <TextView style="@style/Key" android:text="9" />
+        <TextView style="@style/Key.Op" android:text="+"
+            android:layout_rowSpan="2" android:layout_gravity="fill_vertical" />
+        <TextView style="@style/Key" android:text="4" />
+        <TextView style="@style/Key" android:text="5" />
+        <TextView style="@style/Key" android:text="6" />
+        <TextView style="@style/Key" android:text="1" />
+        <TextView style="@style/Key" android:text="2" />
+        <TextView style="@style/Key" android:text="3" />
+        <TextView style="@style/Key.Op" android:text="="
+            android:layout_rowSpan="2" android:layout_gravity="fill_vertical" />
+        <TextView style="@style/Key" android:text="0"
+            android:layout_columnSpan="2" android:layout_gravity="fill_horizontal" />
+        <TextView style="@style/Key.Op" android:text="C" />
+    </GridLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical">
+
+        <GridLayout
+            android:id="@+id/weights"
+            android:layout_width="360dp"
+            android:layout_height="wrap_content"
+            android:columnCount="3">
+            <View android:layout_width="0dp" android:layout_height="48dp"
+                android:layout_columnWeight="1" android:background="#F44336" />
+            <View android:id="@+id/middle" android:layout_width="0dp" android:layout_height="48dp"
+                android:layout_columnWeight="1" android:background="#4CAF50" />
+            <View android:layout_width="0dp" android:layout_height="48dp"
+                android:layout_columnWeight="1" android:background="#2196F3" />
+        </GridLayout>
+
+        <GridLayout
+            android:id="@+id/align"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#E0E0E0"
+            android:orientation="vertical"
+            android:rowCount="4">
+            <View android:layout_width="160dp" android:layout_height="24dp"
+                android:background="#616161" />
+            <View android:layout_width="40dp" android:layout_height="24dp"
+                android:layout_gravity="right" android:background="#F44336" />
+            <View android:layout_width="40dp" android:layout_height="24dp"
+                android:layout_gravity="center_horizontal" android:background="#4CAF50" />
+            <View android:layout_width="40dp" android:layout_height="24dp"
+                android:layout_gravity="fill_horizontal" android:background="#2196F3" />
+            <View android:layout_width="64dp" android:layout_height="0dp"
+                android:layout_rowSpan="4" android:layout_rowWeight="1"
+                android:background="#FFEB3B" />
+        </GridLayout>
+    </LinearLayout>
+</LinearLayout>

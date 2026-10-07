@@ -82,10 +82,9 @@
 
 ## Git and collaboration
 
-- Integration branch: the branch named in the session instructions (so
-  far `ccr-7d62ed8a-m0sd12`). Agents working in parallel should use their
-  own branches and merge (not rebase shared history) into the
-  integration branch when their build is green.
+- Integration branch: `main`, which is also the repository default.
+  Agents working in parallel should use their own branches and merge
+  (not rebase shared history) into `main` when their build is green.
 - One logical change per commit, imperative subject line, body explaining
   why. End commit messages with the attribution lines required by the
   session instructions. No model names in commits or code.

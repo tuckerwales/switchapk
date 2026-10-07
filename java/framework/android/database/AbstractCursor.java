@@ -73,7 +73,10 @@ public abstract class AbstractCursor implements CrossProcessCursor {
         return result;
     }
 
-    public void fillWindow(int position, CursorWindow window) {}
+    public void fillWindow(int position, CursorWindow window) {
+        if (window == null) return;
+        DatabaseUtils.cursorFillWindow(this, position, window);
+    }
     public final boolean move(int offset) { return moveToPosition(mPos + offset); }
     public final boolean moveToFirst() { return moveToPosition(0); }
     public final boolean moveToLast() { return moveToPosition(getCount() - 1); }

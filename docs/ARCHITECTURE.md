@@ -817,8 +817,31 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   mutexes before the first open. Locks are process-local.
   `tests/apps/store` covers helper create, upgrade on a second process,
   selection arguments, a rolled-back transaction, a constraint failure, a
-  read-only open, and SharedPreferences across the two runs. Still open:
-  DatabaseUtils, CursorWindow, provider stubs, FileProvider.
+  read-only open, and SharedPreferences across the two runs. It also
+  checks DatabaseUtils, a cursor window, settings, media and FileProvider.
+- `CursorWindow` is a Java row table. Get and put use absolute indexes
+  (`row - startPosition`). The default budget is 2 MiB. A value that does
+  not fit is refused and `fillWindow` drops that row and stops.
+  `AbstractCursor.fillWindow` calls `DatabaseUtils.cursorFillWindow`.
+  `SQLiteStatement.simpleQueryForBlobFileDescriptor` writes the bytes to
+  a temp file and returns a read-only `ParcelFileDescriptor`. A SQL NULL
+  returns null. No row throws `SQLiteDoneException`.
+- Settings and media providers are installed by
+  `FrameworkProviders.install` at the start of
+  `ActivityThread.installProviders`, before manifest providers. Settings
+  name/value rows persist as URL-encoded lines under
+  `/data/local/tmp/settings/{system,secure,global}` (mapped with the data
+  root, so a second host run sees them). Media rows live in the process.
+  `Settings.System`/`Secure`/`Global` get and put go through
+  `ContentResolver`. A null put deletes the row.
+- `androidx.core.content.FileProvider` is the framework copy of the
+  AndroidX class (boot dex wins over an app copy). The manifest parser
+  stores `android:grantUriPermissions`. `attachInfo` rejects an exported
+  provider and a provider that does not grant URI permissions. Paths come
+  from `android.support.FILE_PROVIDER_PATHS`. A file must sit on a
+  configured root or on `root + "/"`. Photo-picker and cloud-media
+  helpers on `MediaStore` (`createDeleteRequest`, `getVersion`, volume
+  sets) are not implemented; a missing method returns the VM stub.
 - Audio (WS7, built on the host): one 48 kHz stereo float mixer
   (`src/android/audio_mixer.c`) is the `platform_audio_start` callback.
   It mixes SoundPool clips, MediaPlayer clips, AudioTrack static clips

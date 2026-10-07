@@ -604,7 +604,37 @@ what is left in flight.
   `make`: `third_party/sqlite` is gitignored and is not in the toolchain
   cache. The Switch objects compile with devkitA64.
 
-### Session 11 (2026-10-07, branch ccr-9f2fb326-x1o1g3)
+### Session 14 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- WS6 DatabaseUtils, CursorWindow, provider stubs and FileProvider.
+  `CursorWindow` keeps rows in Java. Indexes are absolute, and a put
+  that would pass the byte budget returns false so `fillWindow` stops.
+  `AbstractCursor.fillWindow` delegates to `DatabaseUtils`.
+  `simpleQueryForBlobFileDescriptor` writes the blob to a temp file.
+  Settings and media are process providers installed before the manifest
+  providers. Settings rows persist under `/data/local/tmp/settings`, so
+  the second host run reads the brightness written by the first. Media
+  rows last for the process. `androidx.core.content.FileProvider` reads
+  the paths XML. The manifest parser stores `grantUriPermissions`, and
+  `attachInfo` rejects a provider that is exported or that does not grant
+  URI permissions. A resolved path must stay under its root.
+  tests/apps/store checks the window, a parcel round trip, the blob
+  descriptor, statement types, settings, a media insert, a FileProvider
+  read and a `../` escape, on top of the existing two-run database check.
+  `make`, the store check and VmTest pass. Not run on hardware.
+  Photo-picker and cloud-media helpers on MediaStore are still missing
+  and auto-stub. WS6 is done.
+
+### Session 15 (2026-10-02, branch ccr-7d62ed8a-m0sd12)
+
+- The SD zip now packages every sample under `tests/apps`, not the old
+  fixed list. `make -f Makefile.switch dist` takes each directory that
+  has an `AndroidManifest.xml`. Apps with `native/build.sh` (ndk, native,
+  audio) are still rebuilt with `NDK_ARM64=1`. The Package NRO workflow
+  fails if any of those APKs is missing from the zip, or if a native APK
+  has no arm64-v8a library. The NRO itself was not rebuilt here.
+
+### Session 16 (2026-10-07, branch ccr-9f2fb326-x1o1g3)
 
 - WS9 ALooper, AInputQueue and AConfiguration. ALooper is plain C over
   poll and a wake pipe with AOSP semantics (callbacks, idents, wake,

@@ -93,10 +93,22 @@ jobs:
           unzip -t build/switch/switchapk-sd.zip
           unzip -l build/switch/switchapk-sd.zip > /tmp/sd-list.txt
           grep -q 'switch/switchapk/switchapk.nro' /tmp/sd-list.txt
-          grep -q 'switch/switchapk/apks/hello.apk' /tmp/sd-list.txt
-          grep -q 'switch/switchapk/apks/gles.apk' /tmp/sd-list.txt
-          # the NDK sample must carry Switch (arm64-v8a) libraries
+          fail=0
+          for manifest in tests/apps/*/AndroidManifest.xml; do
+            app=$(basename "$(dirname "$manifest")")
+            if ! grep -q "switch/switchapk/apks/${app}.apk" /tmp/sd-list.txt; then
+              echo "missing ${app}.apk"
+              fail=1
+            fi
+            if [ -x "tests/apps/${app}/native/build.sh" ]; then
+              if ! unzip -l "build/apps/${app}/${app}.apk" | grep -q 'lib/arm64-v8a/.*\.so'; then
+                echo "missing arm64-v8a library in ${app}.apk"
+                fail=1
+              fi
+            fi
+          done
           unzip -l build/apps/ndk/ndk.apk | grep -q 'lib/arm64-v8a/libndktest.so'
+          test "$fail" = 0
           ls -lh build/switch/switchapk.nro build/switch/switchapk-sd.zip
           {
             echo "## SD card package"

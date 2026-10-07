@@ -45,6 +45,19 @@ void *shim_lookup(const char *name);
 const ShimSym *shim_libc_symbols(size_t *n);
 const ShimSym *shim_android_symbols(size_t *n);
 
+/*
+ * Runs VM code from any thread. Native code runs without the GIL, and the app's own threads (the
+ * android_native_app_glue thread) are not VM threads at all: enter attaches such a thread (it stays
+ * attached and is detached when the thread exits) and takes the GIL; leave drops what enter took and
+ * clears a pending exception. Nesting is fine.
+ */
+typedef struct {
+    VMThread *t;
+    bool had_gil;
+} NlVm;
+bool nl_vm_enter(NlVm *c);
+void nl_vm_leave(NlVm *c);
+
 /* Called by native code through a stub when it reaches an import nothing provides. */
 uintptr_t loader_unresolved_trap(const char *name);
 

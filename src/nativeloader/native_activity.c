@@ -3,8 +3,13 @@
  * library and calls ANativeActivity_onCreate; this file fills the
  * ANativeActivity the NDK header describes and forwards lifecycle and
  * surface callbacks. The window is an ANativeWindow over the activity's
- * SurfaceView (native_window.c). Input queues are not delivered.
+ * SurfaceView (native_window.c). The input queue (native_input.c) is fed
+ * from Java dispatchKeyEvent/dispatchTouchEvent/dispatchGenericMotionEvent.
+ *
+ * The ANativeActivity_* functions are called from threads the app created
+ * (android_native_app_glue's thread), so they attach to the VM as needed.
  */
+#include "native_input.h"
 #include "native_window.h"
 #include "nativeloader.h"
 #include "../android/android.h"
@@ -28,6 +33,7 @@ typedef struct NaHandle {
     ANativeActivityCallbacks callbacks;
     Object *java_activity; /* vm_add_root; activity.clazz points here */
     ANativeWindow *window;
+    AInputQueue *queue;
     char *internal_path;
     char *external_path;
     char *obb_path;
@@ -48,6 +54,10 @@ static void na_free(NaHandle *h) {
         anw_release(h->window);
         h->window = NULL;
     }
+    if (h->queue) {
+        native_input_queue_free(h->queue);
+        h->queue = NULL;
+    }
     if (h->java_activity) vm_remove_root(&h->java_activity);
     free(h->internal_path);
     free(h->external_path);
@@ -55,71 +65,44 @@ static void na_free(NaHandle *h) {
     free(h);
 }
 
-static void clear_exc(VMThread *t) {
-    if (!t->exception) return;
-    vm_print_exception(t, t->exception);
-    t->exception = NULL;
-}
-
 /* A long argument occupies two Dalvik slots. Surface and the ints follow the pad. */
 #define NA_SURF 3
 #define NA_INT0 3
 
-static VMThread *na_thread(void) {
-    VMThread *t = vm_current_thread();
-    if (!t) LOGE("ANativeActivity call requires the VM thread");
-    return t;
-}
-
 void ANativeActivity_finish(ANativeActivity *activity) {
-    VMThread *t = na_thread();
-    if (!t || !activity || !activity->clazz) return;
-    bool had = t->has_gil;
-    if (!had) vm_gil_acquire(t);
-    vm_call_virtual(t, (Object *)activity->clazz, "finish", "()V");
-    clear_exc(t);
-    if (!had) vm_gil_release(t);
+    NlVm c;
+    if (!activity || !activity->clazz || !nl_vm_enter(&c)) return;
+    vm_call_virtual(c.t, (Object *)activity->clazz, "finish", "()V");
+    nl_vm_leave(&c);
 }
 
 void ANativeActivity_setWindowFormat(ANativeActivity *activity, int32_t format) {
-    VMThread *t = na_thread();
-    if (!t || !activity || !activity->clazz) return;
-    bool had = t->has_gil;
-    if (!had) vm_gil_acquire(t);
-    vm_call_virtual(t, (Object *)activity->clazz, "setWindowFormat", "(I)V", format);
-    clear_exc(t);
-    if (!had) vm_gil_release(t);
+    NlVm c;
+    if (!activity || !activity->clazz || !nl_vm_enter(&c)) return;
+    vm_call_virtual(c.t, (Object *)activity->clazz, "setWindowFormat", "(I)V", format);
+    nl_vm_leave(&c);
 }
 
 void ANativeActivity_setWindowFlags(ANativeActivity *activity, uint32_t add_flags, uint32_t remove_flags) {
-    VMThread *t = na_thread();
-    if (!t || !activity || !activity->clazz) return;
-    bool had = t->has_gil;
-    if (!had) vm_gil_acquire(t);
+    NlVm c;
+    if (!activity || !activity->clazz || !nl_vm_enter(&c)) return;
     int32_t mask = (int32_t)(add_flags | remove_flags);
-    vm_call_virtual(t, (Object *)activity->clazz, "setWindowFlags", "(II)V", (int32_t)add_flags, mask);
-    clear_exc(t);
-    if (!had) vm_gil_release(t);
+    vm_call_virtual(c.t, (Object *)activity->clazz, "setWindowFlags", "(II)V", (int32_t)add_flags, mask);
+    nl_vm_leave(&c);
 }
 
 void ANativeActivity_showSoftInput(ANativeActivity *activity, uint32_t flags) {
-    VMThread *t = na_thread();
-    if (!t || !activity || !activity->clazz) return;
-    bool had = t->has_gil;
-    if (!had) vm_gil_acquire(t);
-    vm_call_virtual(t, (Object *)activity->clazz, "showIme", "(I)V", (int32_t)flags);
-    clear_exc(t);
-    if (!had) vm_gil_release(t);
+    NlVm c;
+    if (!activity || !activity->clazz || !nl_vm_enter(&c)) return;
+    vm_call_virtual(c.t, (Object *)activity->clazz, "showIme", "(I)V", (int32_t)flags);
+    nl_vm_leave(&c);
 }
 
 void ANativeActivity_hideSoftInput(ANativeActivity *activity, uint32_t flags) {
-    VMThread *t = na_thread();
-    if (!t || !activity || !activity->clazz) return;
-    bool had = t->has_gil;
-    if (!had) vm_gil_acquire(t);
-    vm_call_virtual(t, (Object *)activity->clazz, "hideIme", "(I)V", (int32_t)flags);
-    clear_exc(t);
-    if (!had) vm_gil_release(t);
+    NlVm c;
+    if (!activity || !activity->clazz || !nl_vm_enter(&c)) return;
+    vm_call_virtual(c.t, (Object *)activity->clazz, "hideIme", "(I)V", (int32_t)flags);
+    nl_vm_leave(&c);
 }
 
 /* loadNativeCode(path, func, queue, internal, obb, external, sdk, assets, saved, loader, libPath) */
@@ -313,8 +296,57 @@ NATIVE(NativeActivity_onContentRectChanged) {
     h->callbacks.onContentRectChanged(&h->activity, &rect);
 }
 
-NATIVE(NativeActivity_onInputQueueCreated) { UNUSED_ARGS(); }
-NATIVE(NativeActivity_onInputQueueDestroyed) { UNUSED_ARGS(); }
+/* An event the app did not handle: BACK ends the activity, as the platform default does. */
+static void na_unhandled_input(void *user, const AInputEvent *event) {
+    NaHandle *h = user;
+    if (AInputEvent_getType(event) == AINPUT_EVENT_TYPE_KEY && AKeyEvent_getKeyCode(event) == 4 /* KEYCODE_BACK */ &&
+        AKeyEvent_getAction(event) == AKEY_EVENT_ACTION_UP)
+        ANativeActivity_finish(&h->activity);
+}
+
+NATIVE(NativeActivity_onInputQueueCreated) {
+    NaHandle *h = na_of(args);
+    if (!h || h->queue) return;
+    h->queue = native_input_queue_new(na_unhandled_input, h);
+    if (!h->queue) {
+        LOGW("no input queue (no pipe on this platform): the app gets no input events");
+        return;
+    }
+    if (h->callbacks.onInputQueueCreated) h->callbacks.onInputQueueCreated(&h->activity, h->queue);
+}
+
+NATIVE(NativeActivity_onInputQueueDestroyed) {
+    NaHandle *h = na_of(args);
+    if (!h || !h->queue) return;
+    if (h->callbacks.onInputQueueDestroyed) h->callbacks.onInputQueueDestroyed(&h->activity, h->queue);
+    native_input_queue_free(h->queue);
+    h->queue = NULL;
+}
+
+/* enqueueKeyNative(J action keyCode scanCode meta repeat flags source device J downTime J eventTime) -> Z */
+NATIVE(NativeActivity_enqueueKey) {
+    NaHandle *h = na_of(args);
+    if (!h || !h->queue) {
+        R_BOOL(false);
+        return;
+    }
+    R_BOOL(native_input_enqueue_key(h->queue, A_INT(3), A_INT(4), A_INT(5), A_INT(6), A_INT(7), A_INT(8), A_INT(9),
+                                    A_INT(10), A_LONG(11), A_LONG(13)));
+}
+
+/* enqueueMotionNative(J action source device flags meta buttons edge J downTime J eventTime count [I ids [F axes) */
+NATIVE(NativeActivity_enqueueMotion) {
+    NaHandle *h = na_of(args);
+    ArrayObject *ids = A_ARR(15), *axes = A_ARR(16);
+    int32_t count = A_INT(14);
+    if (!h || !h->queue || !ids || !axes || count < 1 || ids->length < count || axes->length < count * 24) {
+        R_BOOL(false);
+        return;
+    }
+    R_BOOL(native_input_enqueue_motion(h->queue, A_INT(3), A_INT(4), A_INT(5), A_INT(6), A_INT(7), A_INT(8),
+                                       A_INT(9), A_LONG(10), A_LONG(12), count, ARRAY_DATA(ids, int32_t),
+                                       ARRAY_DATA(axes, float)));
+}
 
 static const NativeMethodReg g_regs[] = {
     {"Landroid/app/NativeActivity;", "loadNativeCode",
@@ -338,8 +370,10 @@ static const NativeMethodReg g_regs[] = {
     {"Landroid/app/NativeActivity;", "onSurfaceRedrawNeededNative", "(JLandroid/view/Surface;)V",
      NativeActivity_onSurfaceRedrawNeeded},
     {"Landroid/app/NativeActivity;", "onSurfaceDestroyedNative", "(J)V", NativeActivity_onSurfaceDestroyed},
-    {"Landroid/app/NativeActivity;", "onInputQueueCreatedNative", "(JJ)V", NativeActivity_onInputQueueCreated},
-    {"Landroid/app/NativeActivity;", "onInputQueueDestroyedNative", "(JJ)V", NativeActivity_onInputQueueDestroyed},
+    {"Landroid/app/NativeActivity;", "onInputQueueCreatedNative", "(J)V", NativeActivity_onInputQueueCreated},
+    {"Landroid/app/NativeActivity;", "onInputQueueDestroyedNative", "(J)V", NativeActivity_onInputQueueDestroyed},
+    {"Landroid/app/NativeActivity;", "enqueueKeyNative", "(JIIIIIIIIJJ)Z", NativeActivity_enqueueKey},
+    {"Landroid/app/NativeActivity;", "enqueueMotionNative", "(JIIIIIIIJJI[I[F)Z", NativeActivity_enqueueMotion},
     {"Landroid/app/NativeActivity;", "onContentRectChangedNative", "(JIIII)V", NativeActivity_onContentRectChanged},
 };
 

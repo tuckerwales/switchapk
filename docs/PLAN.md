@@ -95,8 +95,8 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 
 Not yet: GL on the Switch (Mesa linked but not run on hardware), device
 audio output (audren/audout), running a native library on hardware (code
-memory is mapped; newlib struct translation remains), ALooper/AInputQueue
-(NativeActivity does not deliver an input queue) and AAudio,
+memory is mapped; newlib struct translation remains), ALooper and the
+input queue on the Switch (no pipe/poll in newlib) and AAudio,
 networking (WS11), AndroidX (WS14), sensors (WS15). Photo-picker and
 cloud-media helpers on MediaStore (createDeleteRequest, getVersion,
 volume-name sets) are still missing and auto-stub.
@@ -300,7 +300,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     red EGL clear, gold rect from ANativeWindow_lock)
   - [x] OpenSL ES buffer queue (engine, play, volume, Android simple
     buffer queue) sharing the WS7 mixer (tests/apps/audio on the host)
-  - [ ] ALooper/AInputQueue, AAudio
+  - [x] ALooper, AInputQueue/AInputEvent and AConfiguration; NativeActivity
+    delivers key, touch and joystick events; native threads enter the VM
+    (tests/apps/input, a glue-style app, on x86-64 and AArch64)
+  - [ ] ALooper/input on the Switch (needs virtual descriptors: no
+    pipe/poll in newlib), AAudio
   - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
 
 ### M6
@@ -358,8 +362,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    (tests/apps/native, host Mesa). OpenSL ES buffer queues share the
    WS7 mixer (tests/apps/audio on the host; the Switch build still
    discards samples and has not been run on hardware). Still open:
-   ALooper/AInputQueue, AAudio, and newlib struct translation (stat,
-   dirent, O_* flags, clock ids).
+   ALooper and input on the Switch (virtual descriptors), AAudio, and
+   newlib struct translation (stat, dirent, O_* flags, clock ids).
 
 ## Known issues and gotchas
 
@@ -387,9 +391,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - Native libraries map executable pages on the Switch only when hbloader
   hints code-memory syscalls (an application launch, not an applet). That
   path is not yet run on hardware. newlib struct layouts still differ
-  from bionic. NativeActivity does not call onInputQueueCreated: there
-  is no ALooper or AInputQueue yet, and a dummy queue would crash apps
-  that attach it. Native EGL window surfaces are pbuffers read back into
+  from bionic. ALooper and the NativeActivity input queue need pipe and
+  poll, which newlib lacks, so on the Switch they report failure and the
+  app gets no input. Native EGL window surfaces are pbuffers read back into
   the Surface queue, the same path as Java, and have not been run on
   hardware.
 - Host GL tests need Mesa's EGL and GLES libraries (`libegl1`,
@@ -472,7 +476,21 @@ and update ARCHITECTURE.md in the same commit.
   `eglCreateWindowSurface` accepts an ANativeWindow, makes a pbuffer,
   and `eglSwapBuffers` reads it back with the same conversion as
   `EGLNative.nReadWindow` (`sa_egl_native_proc` in front of `sa_gl_proc`).
-  ALooper and AInputQueue are not called. ARCHITECTURE 6.6.1 and 6.7.
+  ARCHITECTURE 6.6.1 and 6.7.
+- 2026-10-07 (WS9, touches WS4 and the loader): ALooper, AInputQueue,
+  AInputEvent and AConfiguration are in the NDK shim (native_looper.c,
+  native_input.c, native_config.c; declarations in ndk_android.h).
+  `android.app.NativeActivity` creates the native input queue with the
+  first surface and, once the app attaches it to an ALooper, copies key,
+  touch and generic motion events into it from `dispatchKeyEvent`,
+  `dispatchTouchEvent` and `dispatchGenericMotionEvent` instead of
+  dispatching them (new private natives `enqueueKeyNative` and
+  `enqueueMotionNative`; `onInputQueueCreatedNative` and
+  `onInputQueueDestroyedNative` lost their queue pointer argument). The
+  framework-internal `nl_vm_enter`/`nl_vm_leave` (nativeloader.h) let
+  threads the app created call into the VM: the ANativeActivity_*
+  functions and ANativeWindow posting now work from the glue thread.
+  ARCHITECTURE 6.7 updated.
 - 2026-10-02 (WS8/WS9, touches WS10 and WS13): `make -f Makefile.switch
   dist` packages tests/apps/gles and tests/apps/ndk. Apps with a
   `native/build.sh` are always rebuilt with `NDK_ARM64=1`, so the APK

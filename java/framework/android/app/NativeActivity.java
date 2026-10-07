@@ -11,6 +11,8 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.os.MessageQueue;
 import android.view.InputQueue;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -30,8 +32,13 @@ import java.io.File;
  * (ANativeActivity_onCreate by default) runs from onCreate, before the
  * surface exists; surface callbacks follow the first draw.
  *
- * <p>Input queues are not delivered yet (ALooper and AInputQueue are still
- * open). The callback methods exist so the class matches the platform API.
+ * <p>Input: the native input queue is created with the first surface. Once
+ * the app attaches it to an ALooper, key, touch and joystick events are
+ * copied into it instead of reaching views; before that (or for an app that
+ * never attaches) they are dispatched normally. An event the app reports as
+ * unhandled gets the platform default only for BACK (the activity finishes).
+ * Touch coordinates are relative to the content view, as AOSP delivers them.
+ * The InputQueue.Callback methods exist so the class matches the platform API.
  */
 public class NativeActivity extends Activity implements SurfaceHolder.Callback2,
         InputQueue.Callback, OnGlobalLayoutListener {
@@ -54,6 +61,10 @@ public class NativeActivity extends Activity implements SurfaceHolder.Callback2,
     private long mNativeHandle;
     private SurfaceHolder mCurSurfaceHolder;
     private boolean mDestroyed;
+    private boolean mInputQueueCreated;
+
+    /** Axes copied per pointer: AMOTION_EVENT_AXIS_X .. AMOTION_EVENT_AXIS_BRAKE (native_input.c). */
+    private static final int NATIVE_AXES = 24;
 
     final int[] mLocation = new int[2];
     int mLastContentX;
@@ -78,8 +89,13 @@ public class NativeActivity extends Activity implements SurfaceHolder.Callback2,
     private native void onSurfaceChangedNative(long handle, Surface surface, int format, int width, int height);
     private native void onSurfaceRedrawNeededNative(long handle, Surface surface);
     private native void onSurfaceDestroyedNative(long handle);
-    private native void onInputQueueCreatedNative(long handle, long queuePtr);
-    private native void onInputQueueDestroyedNative(long handle, long queuePtr);
+    private native void onInputQueueCreatedNative(long handle);
+    private native void onInputQueueDestroyedNative(long handle);
+    private native boolean enqueueKeyNative(long handle, int action, int keyCode, int scanCode, int metaState,
+            int repeat, int flags, int source, int deviceId, long downTime, long eventTime);
+    private native boolean enqueueMotionNative(long handle, int action, int source, int deviceId, int flags,
+            int metaState, int buttonState, int edgeFlags, long downTime, long eventTime, int pointerCount,
+            int[] ids, float[] axes);
     private native void onContentRectChangedNative(long handle, int x, int y, int w, int h);
 
     @Override
@@ -148,6 +164,10 @@ public class NativeActivity extends Activity implements SurfaceHolder.Callback2,
             onSurfaceDestroyedNative(mNativeHandle);
             mCurSurfaceHolder = null;
         }
+        if (mInputQueueCreated) {
+            mInputQueueCreated = false;
+            onInputQueueDestroyedNative(mNativeHandle);
+        }
         unloadNativeCode(mNativeHandle);
         super.onDestroy();
     }
@@ -203,6 +223,10 @@ public class NativeActivity extends Activity implements SurfaceHolder.Callback2,
 
     public void surfaceCreated(SurfaceHolder holder) {
         if (!mDestroyed) {
+            if (!mInputQueueCreated) {
+                mInputQueueCreated = true;
+                onInputQueueCreatedNative(mNativeHandle);
+            }
             mCurSurfaceHolder = holder;
             onSurfaceCreatedNative(mNativeHandle, holder.getSurface());
         }
@@ -228,11 +252,53 @@ public class NativeActivity extends Activity implements SurfaceHolder.Callback2,
     }
 
     public void onInputQueueCreated(InputQueue queue) {
-        /* ALooper / AInputQueue are not implemented. A queue handed out here
-         * would be attached by the app and then crash. */
+        /* the native queue is created with the first surface (surfaceCreated) */
     }
 
     public void onInputQueueDestroyed(InputQueue queue) {}
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (mInputQueueCreated && !mDestroyed && enqueueKeyNative(mNativeHandle, event.getAction(),
+                event.getKeyCode(), event.getScanCode(), event.getMetaState(), event.getRepeatCount(),
+                event.getFlags(), event.getSource(), event.getDeviceId(), event.getDownTime() * 1000000L,
+                event.getEventTime() * 1000000L)) {
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (enqueueMotion(event, true)) return true;
+        return super.dispatchTouchEvent(event);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (enqueueMotion(event, false)) return true;
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    /** Copies a MotionEvent into the native queue. False when the app has no attached queue. */
+    private boolean enqueueMotion(MotionEvent event, boolean contentRelative) {
+        if (!mInputQueueCreated || mDestroyed) return false;
+        final int count = event.getPointerCount();
+        int[] ids = new int[count];
+        float[] axes = new float[count * NATIVE_AXES];
+        // pointer coordinates are in the window; the app sees them relative to its surface
+        float dx = contentRelative ? -mLastContentX : 0;
+        float dy = contentRelative ? -mLastContentY : 0;
+        for (int i = 0; i < count; i++) {
+            ids[i] = event.getPointerId(i);
+            for (int a = 0; a < NATIVE_AXES; a++) axes[i * NATIVE_AXES + a] = event.getAxisValue(a, i);
+            axes[i * NATIVE_AXES + MotionEvent.AXIS_X] += dx;
+            axes[i * NATIVE_AXES + MotionEvent.AXIS_Y] += dy;
+        }
+        return enqueueMotionNative(mNativeHandle, event.getAction(), event.getSource(), event.getDeviceId(),
+                event.getFlags(), event.getMetaState(), event.getButtonState(), event.getEdgeFlags(),
+                event.getDownTime() * 1000000L, event.getEventTime() * 1000000L, count, ids, axes);
+    }
 
     public void onGlobalLayout() {
         mSurfaceView.getLocationInWindow(mLocation);

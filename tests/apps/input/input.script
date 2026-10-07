@@ -1,0 +1,8 @@
+wait 1500
+tap 400 300
+key DPAD_CENTER
+idle 600
+screenshot input.png
+key BACK
+wait 1000
+quit

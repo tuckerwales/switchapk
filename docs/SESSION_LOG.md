@@ -603,3 +603,22 @@ what is left in flight.
   WS6 stays in progress. Package NRO fetches the amalgamation before
   `make`: `third_party/sqlite` is gitignored and is not in the toolchain
   cache. The Switch objects compile with devkitA64.
+
+### Session 11 (2026-10-07, branch ccr-9f2fb326-x1o1g3)
+
+- WS9 ALooper, AInputQueue and AConfiguration. ALooper is plain C over
+  poll and a wake pipe with AOSP semantics (callbacks, idents, wake,
+  fds changed while blocked). NativeActivity creates the input queue with
+  the first surface; once the app attaches it, key, touch and joystick
+  events are copied into it from the Activity's dispatch methods (10
+  pointers, 24 axes each), and an unhandled BACK finishes the activity.
+  AConfiguration follows the display. Threads the app created now enter
+  the VM through `nl_vm_enter` (attach on first use, detach at thread
+  exit), which fixes ANativeWindow posting and the ANativeActivity_*
+  calls from the glue thread. tests/apps/input is a glue-style app (own
+  thread and looper, command pipe, fd callback, wake from another thread,
+  tap, DPAD_CENTER, BACK); it passes on x86-64 and on the AArch64 host
+  build under qemu. The Switch NRO links; there ALooper and input report
+  failure because newlib has no pipe or poll. The NDK's own
+  android_native_app_glue.c was not available here, so the sample
+  re-implements its pattern.

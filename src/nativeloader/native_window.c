@@ -11,6 +11,49 @@
 
 #define LOG_TAG "nativewindow"
 
+/* ---- entering the VM from any thread (nativeloader.h) ---- */
+
+static pthread_key_t g_detach_key;
+static pthread_once_t g_detach_once = PTHREAD_ONCE_INIT;
+
+static void detach_at_thread_exit(void *p) {
+    SA_UNUSED(p);
+    void *vm = vm_java_vm();
+    if (vm && vm_current_thread()) {
+        const void **table = *(const void ***)vm;
+        ((int (*)(void *))table[5])(vm); /* DetachCurrentThread: only affects threads we attached */
+    }
+}
+
+static void make_detach_key(void) { pthread_key_create(&g_detach_key, detach_at_thread_exit); }
+
+bool nl_vm_enter(NlVm *c) {
+    c->t = vm_current_thread();
+    if (!c->t) {
+        void *vm = vm_java_vm();
+        void *env = NULL;
+        const void **table = *(const void ***)vm;
+        if (((int (*)(void *, void **, void *))table[4])(vm, &env, NULL) != 0) {
+            LOGE("cannot attach the calling thread to the VM");
+            return false;
+        }
+        c->t = vm_current_thread();
+        pthread_once(&g_detach_once, make_detach_key);
+        pthread_setspecific(g_detach_key, (void *)1);
+    }
+    c->had_gil = c->t->has_gil;
+    if (!c->had_gil) vm_gil_acquire(c->t);
+    return true;
+}
+
+void nl_vm_leave(NlVm *c) {
+    if (c->t->exception) {
+        vm_print_exception(c->t, c->t->exception);
+        c->t->exception = NULL;
+    }
+    if (!c->had_gil) vm_gil_release(c->t);
+}
+
 #define ANW_MAGIC 0x53414e57u /* 'SANW' */
 
 struct ANativeWindow {
@@ -77,8 +120,11 @@ void anw_release(ANativeWindow *w) {
     int refs = --w->refs;
     pthread_mutex_unlock(&w->mu);
     if (refs > 0) return;
-    VMThread *t = vm_current_thread();
-    if (t) vm_remove_root(&w->surface);
+    NlVm vm;
+    if (nl_vm_enter(&vm)) {
+        vm_remove_root(&w->surface);
+        nl_vm_leave(&vm);
+    }
     free(w->bits);
     free(w->last);
     pthread_mutex_destroy(&w->mu);
@@ -123,13 +169,19 @@ static void rgba_to_argb(const uint8_t *src, uint32_t *dst, int n, bool opaque) 
     }
 }
 
+static bool anw_post_locked(ANativeWindow *w, VMThread *t, const uint32_t *argb, int width, int height);
+
 bool anw_post_argb(ANativeWindow *w, const uint32_t *argb, int width, int height) {
     if (!anw_is(w) || !argb || width < 1 || height < 1) return false;
-    VMThread *t = vm_current_thread();
-    if (!t || !t->has_gil) {
-        LOGE("posting a native window frame requires the VM thread");
-        return false;
-    }
+    NlVm vm;
+    if (!nl_vm_enter(&vm)) return false;
+    bool ok = anw_post_locked(w, vm.t, argb, width, height);
+    nl_vm_leave(&vm);
+    return ok;
+}
+
+/* The body of anw_post_argb, with the VM entered. */
+static bool anw_post_locked(ANativeWindow *w, VMThread *t, const uint32_t *argb, int width, int height) {
     size_t n = (size_t)width * (size_t)height;
     uint32_t *keep = malloc(n * 4);
     if (!keep) return false;

@@ -45,8 +45,11 @@ Early and experimental. It has not yet been confirmed on real hardware.
   hardware). Native libraries can be mapped as executable code there,
   but that path is not yet run on hardware. NativeActivity with
   ANativeWindow and native EGL window surfaces works on the host
-  (tests/apps/native); it has not been run on device, and there is no
-  ALooper input queue yet, so most games do not run on device yet
+  (tests/apps/native), and so do ALooper, AInputQueue and touch, key and
+  controller input for native apps built on android_native_app_glue
+  (tests/apps/input). None of it has been run on device, and ALooper
+  and input are not available on the Switch yet (no pipe or poll), so
+  native games do not run on device yet
 - AndroidX/AppCompat apps are not targeted yet
 - Networking and SQLite
 

@@ -986,16 +986,53 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   ANativeWindow and calls `onNativeWindowCreated`;
   `onNativeWindowResized` fires only when the size changes. Lock returns
   RGBA bytes (R, G, B, A); the queue stores ARGB, so unlock converts.
-  The previous posted frame is copied into the next lock. Input-queue
-  callbacks are not invoked.
+  The previous posted frame is copied into the next lock.
+- NativeActivity input (native_input.c, native_looper.c, native_config.c):
+  - ALooper is plain C over poll(2) and a wake pipe, with AOSP Looper
+    semantics: a looper belongs to the thread that prepared it; pollOnce
+    runs the callbacks of ready descriptors (result ALOOPER_POLL_CALLBACK)
+    and returns the ident of the next one without a callback; descriptors
+    added or removed from another thread take effect on a poll that is
+    blocking, and only ALooper_wake yields ALOOPER_POLL_WAKE. Message
+    queues are not part of the NDK API and are not implemented.
+  - The AInputQueue is created with the first surface (`surfaceCreated`)
+    and handed to `onInputQueueCreated`; it is freed after
+    `onInputQueueDestroyed`. A pipe holds one byte per queued event, and
+    `AInputQueue_attachLooper` registers its read end with the app's
+    looper. Until the app attaches it, events reach views as usual.
+  - Once attached, `NativeActivity.dispatchKeyEvent`, `dispatchTouchEvent`
+    and `dispatchGenericMotionEvent` copy each event into a C record
+    (`enqueueKeyNative`, `enqueueMotionNative`; up to 10 pointers with
+    the 24 MotionEvent axes AXIS_X..AXIS_BRAKE each, so joystick and
+    trigger axes work through `AMotionEvent_getAxisValue`) instead of
+    dispatching it. Touch coordinates are relative to the content view.
+    No motion history is kept. At most 1024 events are queued.
+  - `AInputQueue_finishEvent(handled = 0)` gives the platform default for
+    BACK only: the activity finishes. Other unhandled events are dropped
+    (the framework's key fallbacks, such as B to BACK, do not apply).
+  - AConfiguration is a struct filled by `AConfiguration_fromAssetManager`
+    from the display (orientation, density, dp sizes, touch, SDK 29,
+    en-US); all getters and setters exist. `match` returns 1 and
+    `isBetterThan` 0, because resources are resolved in Java.
+  - Threads: the app's own thread (android_native_app_glue's) is not a VM
+    thread, so everything that reaches into the VM from native code
+    (`ANativeActivity_finish` and friends, `ANativeWindow_unlockAndPost`,
+    `ANativeWindow_release`, EGL swaps on a native window) goes through
+    `nl_vm_enter`/`nl_vm_leave` (nativeloader.h). It attaches the thread
+    on first use and takes the GIL; a pthread key detaches the thread
+    when it exits.
+  - The Switch has no pipe or poll in newlib, so ALooper_prepare returns
+    NULL there, polls fail with ALOOPER_POLL_ERROR and NativeActivity
+    creates no input queue (a warning is logged). Making it work needs
+    virtual descriptors in the shim.
 - OpenSL ES (WS7, symbols in this shim): `slCreateEngine` and the
   `SL_IID_*` pointer objects (engine, object, play, volume, buffer
   queue, output mix, Android simple buffer queue). GetInterface matches
   pointer identity or the 16-byte UUID. A player copies each enqueued
   buffer and runs the queue callback on the audio thread after the
   mixer lock is released. AAudio is not implemented.
-- Not yet: ALooper and AInputQueue, AAudio, AConfiguration,
-  ASensorManager, libc++_shared coverage checks, socket APIs.
+- Not yet: AAudio, ASensorManager, ALooper and input on the Switch
+  (no pipe/poll), libc++_shared coverage checks, socket APIs.
   NativeActivity and native EGL have not been run on hardware.
 
 ## 7. Platform layer (src/platform/platform.h)

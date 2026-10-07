@@ -672,6 +672,8 @@ what is left in flight.
   and a sticky CONNECTIVITY_ACTION that follows changes (3 s poll while
   anyone listens). tests/apps/net checks HTTP, UDP, https and DNS
   failures, and the callbacks and broadcasts across Wi-Fi, none and
-  Ethernet. `make`, VmTest, NetTest and the sample checks pass. The
-  Switch NRO was not rebuilt here (no devkitPro in this container).
+  Ethernet. `make`, VmTest, NetTest and the sample checks pass (gles
+  needs host Mesa, absent here; curves misses its mid-animation frame
+  here on the base commit too). `make -f Makefile.switch` builds the NRO
+  without warnings; sockets and nifm have not been run on hardware.
 

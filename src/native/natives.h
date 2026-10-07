@@ -49,6 +49,7 @@ void natives_java_io_register(void);
 void natives_java_reflect_register(void);
 void natives_java_annotation_register(void);
 void natives_java_misc_register(void);
+void natives_java_net_register(void);
 void natives_android_register(void);
 
 /* Path translation between Android paths and the platform file system. */

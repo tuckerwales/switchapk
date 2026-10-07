@@ -9,5 +9,6 @@ void vm_natives_init(void) {
     natives_java_reflect_register();
     natives_java_annotation_register();
     natives_java_misc_register();
+    natives_java_net_register();
     natives_android_register();
 }

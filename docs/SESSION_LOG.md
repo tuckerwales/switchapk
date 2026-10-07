@@ -652,3 +652,26 @@ what is left in flight.
   failure because newlib has no pipe or poll. The NDK's own
   android_native_app_glue.c was not available here, so the sample
   re-implements its pattern.
+
+### Session 17 (2026-10-07, branch ccr-bd2ea933-rl940q)
+
+- WS11 networking, host side. `libcore.io.Net` natives
+  (`src/native/java_net.c`) over BSD sockets with the GIL released
+  around every wait, and on top of them InetAddress (getaddrinfo),
+  InetSocketAddress, Socket, ServerSocket, DatagramSocket and the
+  javax.net factories. `URL.openConnection()` for http is now a real
+  HTTP/1.1 client (chunked, fixed and until-close bodies, streamed
+  uploads, redirects, Android's FileNotFoundException and error-stream
+  behaviour); https fails with SSLHandshakeException until TLS lands.
+  New `tests/dex/NetTest.java` runs TCP, timeout, refused,
+  close-during-accept, UDP and HTTP scenarios over loopback and matches
+  OpenJDK. New platform call `platform_network_state` (headless with a
+  `/data/local/tmp/network` override, nifm on the Switch) feeds
+  `android.net.ConnectivityManager`, NetworkInfo, Network,
+  NetworkCapabilities, NetworkRequest, LinkProperties, network callbacks
+  and a sticky CONNECTIVITY_ACTION that follows changes (3 s poll while
+  anyone listens). tests/apps/net checks HTTP, UDP, https and DNS
+  failures, and the callbacks and broadcasts across Wi-Fi, none and
+  Ethernet. `make`, VmTest, NetTest and the sample checks pass. The
+  Switch NRO was not rebuilt here (no devkitPro in this container).
+

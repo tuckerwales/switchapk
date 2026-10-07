@@ -439,8 +439,15 @@ bool platform_init(int argc, char **argv) {
     return g_fb_ready;
 }
 
+/* nifm is opened on first use (platform_network_state) and closed here. */
+static bool g_nifm;
+
 void platform_shutdown(void) {
     appletUnhook(&g_hook_cookie);
+    if (g_nifm) {
+        nifmExit();
+        g_nifm = false;
+    }
     /* A Java thread may still be presenting: wait for it, then stop presenting for good. */
     pthread_mutex_lock(&g_fb_lock);
     if (g_fb_ready) {
@@ -481,5 +488,22 @@ bool platform_audio_start(int sample_rate, PlatformAudioCallback cb, void *user)
 void platform_audio_stop(void) { g_audio_run = false; }
 
 void platform_vibrate(int ms) { SA_UNUSED(ms); }
+
+void platform_network_state(PlatformNetwork *n) {
+    n->connected = false;
+    n->transport = PLATFORM_NET_NONE;
+    n->signal = -1;
+    if (!g_nifm) {
+        if (R_FAILED(nifmInitialize(NifmServiceType_User))) return;
+        g_nifm = true;
+    }
+    NifmInternetConnectionType type;
+    u32 strength = 0;
+    NifmInternetConnectionStatus status;
+    if (R_FAILED(nifmGetInternetConnectionStatus(&type, &strength, &status))) return;
+    n->connected = status == NifmInternetConnectionStatus_Connected;
+    n->transport = type == NifmInternetConnectionType_Ethernet ? PLATFORM_NET_ETHERNET : PLATFORM_NET_WIFI;
+    n->signal = type == NifmInternetConnectionType_Ethernet ? -1 : (int)(strength > 3 ? 3 : strength);
+}
 
 const char *platform_framework_path(void) { return "romfs:"; }

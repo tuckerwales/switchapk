@@ -102,6 +102,12 @@ final class BroadcastQueue {
         ArrayList<Intent> sticky = new ArrayList<Intent>();
         synchronized (sRegistered) {
             initSticky();
+            if (filter.hasAction(android.net.ConnectivityManager.CONNECTIVITY_ACTION)) {
+                // the current state, kept up to date from now on by ConnectivityManager (WS11)
+                Intent connectivity = android.net.ConnectivityManager.stickyConnectivityIntent(context);
+                removeStickyLocked(connectivity);
+                sSticky.add(connectivity);
+            }
             for (int i = 0; i < sSticky.size(); i++) {
                 Intent s = sSticky.get(i);
                 if (filterMatches(filter, s)) sticky.add(s);

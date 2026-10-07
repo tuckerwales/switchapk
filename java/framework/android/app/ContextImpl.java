@@ -360,6 +360,7 @@ public class ContextImpl extends Context {
             return mSearchManager;
         }
         if (AUDIO_SERVICE.equals(name)) return AudioManager.getInstance();
+        if (CONNECTIVITY_SERVICE.equals(name)) return android.net.ConnectivityManager.from(this);
         if (CLIPBOARD_SERVICE.equals(name)) {
             if (sClipboard == null) sClipboard = new ClipboardManager();
             return sClipboard;
@@ -383,6 +384,7 @@ public class ContextImpl extends Context {
         if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;
         if (serviceClass == SearchManager.class) return SEARCH_SERVICE;
         if (serviceClass == AudioManager.class) return AUDIO_SERVICE;
+        if (serviceClass == android.net.ConnectivityManager.class) return CONNECTIVITY_SERVICE;
         if (serviceClass == ClipboardManager.class) return CLIPBOARD_SERVICE;
         return null;
     }

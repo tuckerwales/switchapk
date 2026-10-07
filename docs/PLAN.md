@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 13, see SESSION_LOG.md)
+## Current state (end of session 17, see SESSION_LOG.md)
 
 Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 - VM core, libcore, JNI, reflection (including RUNTIME annotations),
@@ -89,7 +89,15 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   database, upgrades it on a second host run, reads the preference and
   the settings value written by the first run, and checks the window,
   media rows and a FileProvider file.
-- 35 sample apps in `tests/apps` pass their screenshot checks, and
+- Networking (WS11): java.net sockets (TCP, UDP, server), DNS through
+  getaddrinfo, and an HTTP/1.1 HttpURLConnection (chunked and fixed
+  bodies, streaming uploads, redirects, Android error semantics).
+  ConnectivityManager reports the platform network (nifm on the Switch)
+  with callbacks and CONNECTIVITY_ACTION. tests/dex/NetTest matches
+  OpenJDK; tests/apps/net checks HTTP, UDP and network switches on the
+  host. No TLS yet: https fails with SSLHandshakeException.
+- The sample apps in `tests/apps` pass their screenshot checks (gles needs
+  host Mesa; curves can miss its mid-animation frame on a loaded machine), and
   tests/apps/store passes its two-run check (it is not in the NRO sample
   list).
 
@@ -97,7 +105,8 @@ Not yet: GL on the Switch (Mesa linked but not run on hardware), device
 audio output (audren/audout), running a native library on hardware (code
 memory is mapped; newlib struct translation remains), ALooper and the
 input queue on the Switch (no pipe/poll in newlib) and AAudio,
-networking (WS11), AndroidX (WS14), sensors (WS15). Photo-picker and
+TLS for https and running the sockets on hardware (WS11), AndroidX
+(WS14), sensors (WS15). Photo-picker and
 cloud-media helpers on MediaStore (createDeleteRequest, getVersion,
 volume-name sets) are still missing and auto-stub.
 
@@ -318,6 +327,23 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     (tests/apps/store: window fill, settings across two runs, media
     insert, FileProvider read and a path escape)
 - [ ] WS11 networking
+  - [x] socket natives (resolve, TCP client and server, UDP, options,
+    timeouts, close wakes blocked threads) with the GIL released;
+    InetAddress, InetSocketAddress, Socket, ServerSocket,
+    DatagramSocket, javax.net socket factories (tests/dex/NetTest
+    against OpenJDK)
+  - [x] HttpURLConnection over HTTP/1.1: chunked, fixed and until-close
+    bodies, buffered and streamed uploads, redirects, error stream,
+    header and date accessors (NetTest, tests/apps/net)
+  - [x] ConnectivityManager, NetworkInfo, Network, NetworkCapabilities,
+    NetworkRequest, LinkProperties, callbacks and sticky
+    CONNECTIVITY_ACTION from `platform_network_state` (nifm on the
+    Switch; tests/apps/net flips the host state)
+  - [ ] TLS: javax.net.ssl (SSLSocketFactory, SSLContext, trust
+    managers, HttpsURLConnection) over mbedtls, with a CA bundle
+  - [ ] java.util.zip (GZIPInputStream) so HTTP can ask for gzip
+  - [ ] connection pooling, CookieManager, proxies; NIO socket channels
+  - [ ] sockets and nifm on hardware
 - [ ] WS12 VM performance
 - [ ] WS14 AndroidX compatibility
 - [ ] docs/COMPATIBILITY.md with a tested APK corpus
@@ -364,6 +390,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    discards samples and has not been run on hardware). Still open:
    ALooper and input on the Switch (virtual descriptors), AAudio, and
    newlib struct translation (stat, dirent, O_* flags, clock ids).
+
+6. WS11: sockets, HTTP and ConnectivityManager are in (host). Next is
+   TLS (mbedtls on both targets, `javax.net.ssl` and
+   HttpsURLConnection), then java.util.zip for gzip, then a device run
+   of tests/apps/net.
 
 ## Known issues and gotchas
 
@@ -704,3 +735,12 @@ and update ARCHITECTURE.md in the same commit.
   properties (translation, scale, rotation, alpha, and x/y/z).
   Invalidation reuses `invalidateChild`'s child-matrix transform. No new
   native fields. ARCHITECTURE 6.4 updated.
+- 2026-10-07 (WS11): new platform call `platform_network_state(PlatformNetwork*)`
+  (connected, `PLATFORM_NET_*` transport, Wi-Fi bars), implemented by
+  the headless backend (`/data/local/tmp/network` or `SWITCHAPK_NETWORK`
+  override) and the Switch backend (nifm, opened lazily, closed in
+  `platform_shutdown`). New native classes `libcore.io.Net`
+  (`src/native/java_net.c`) and `ConnectivityManager.nGetState`
+  (`src/android/android_net.c`). `BroadcastQueue.register` asks
+  ConnectivityManager for the sticky CONNECTIVITY_ACTION when a filter
+  has that action. ARCHITECTURE 5.1 and 7 updated.

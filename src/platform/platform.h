@@ -60,6 +60,16 @@ typedef void (*PlatformAudioCallback)(float *out, int frames, void *user);
 bool platform_audio_start(int sample_rate, PlatformAudioCallback cb, void *user);
 void platform_audio_stop(void);
 
+/* ---- network ---- */
+enum { PLATFORM_NET_NONE = 0, PLATFORM_NET_WIFI = 1, PLATFORM_NET_ETHERNET = 2 };
+typedef struct {
+    bool connected; /* internet reachable as far as the system knows */
+    int transport;  /* PLATFORM_NET_* */
+    int signal;     /* Wi-Fi bars 0..3, -1 when unknown */
+} PlatformNetwork;
+/* Cheap enough to poll every few seconds. */
+void platform_network_state(PlatformNetwork *n);
+
 /* ---- misc ---- */
 void platform_vibrate(int ms);
 /* Root of the writable data tree and the location of bundled files. */

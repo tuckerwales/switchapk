@@ -82,7 +82,11 @@ public final class URL implements java.io.Serializable {
         if (getProtocol().equals("file")) {
             return new FileURLConnection(this);
         }
-        return new HttpURLConnection.Impl(this);
+        String p = getProtocol();
+        if (p.equals("http") || p.equals("https")) {
+            return new HttpURLConnectionImpl(this);
+        }
+        throw new java.net.MalformedURLException("unknown protocol: " + p);
     }
 
     public URLConnection openConnection(Proxy proxy) throws java.io.IOException {

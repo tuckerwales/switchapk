@@ -409,6 +409,34 @@ void platform_audio_stop(void) { g_audio_run = false; }
 
 void platform_vibrate(int ms) { LOGD("vibrate %d ms", ms); }
 
+/* The host reports Wi-Fi with full signal. "none", "wifi" or "ethernet" in <data root>/tmp/network (Android path
+ * /data/local/tmp/network) or else in SWITCHAPK_NETWORK overrides it. Read on every call, so a test can change it
+ * while the app runs. */
+void platform_network_state(PlatformNetwork *n) {
+    char mode[16] = "";
+    char *path = sa_sprintf("%s/tmp/network", platform_data_root());
+    FILE *f = fopen(path, "r");
+    free(path);
+    if (f) {
+        if (!fgets(mode, sizeof mode, f)) mode[0] = 0;
+        fclose(f);
+        mode[strcspn(mode, " \r\n")] = 0;
+    } else if (getenv("SWITCHAPK_NETWORK")) {
+        snprintf(mode, sizeof mode, "%s", getenv("SWITCHAPK_NETWORK"));
+    }
+    n->connected = true;
+    n->transport = PLATFORM_NET_WIFI;
+    n->signal = 3;
+    if (!strcmp(mode, "none")) {
+        n->connected = false;
+        n->transport = PLATFORM_NET_NONE;
+        n->signal = -1;
+    } else if (!strcmp(mode, "ethernet")) {
+        n->transport = PLATFORM_NET_ETHERNET;
+        n->signal = -1;
+    }
+}
+
 const char *platform_framework_path(void) { return "build/java"; }
 
 void *platform_native_window(void) { return NULL; }

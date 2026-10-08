@@ -1,0 +1,4 @@
+wait 14000
+idle 500
+screenshot net.png
+quit

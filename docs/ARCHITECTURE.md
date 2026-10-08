@@ -224,7 +224,7 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
 Our own implementation of the `java.*` subset Android apps use: lang,
 lang.reflect (+ Proxy), lang.invoke (lambdas), util (+ concurrent, atomic,
 locks, function, stream, regex, zip), io, nio (buffers, charset, basic
-file APIs), text, math, net (URL/URI only so far), security (digests).
+file APIs), text, math, net (sockets, DNS and HTTP/1.1; 5.1), security (digests).
 Natives in `src/native`. File paths from Java are translated by
 `platform_map_path()` (src/native/java_io.c):
 
@@ -237,6 +237,56 @@ Natives in `src/native`. File paths from Java are translated by
 
 Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 `--data` (default `build/data`).
+
+### 5.1 Networking (WS11)
+
+- Natives: `libcore.io.Net` (`src/native/java_net.c`) is a thin static
+  layer over BSD sockets. Descriptors are ints held by the Java objects;
+  addresses cross as 4- or 16-byte arrays in network order. Resolve,
+  connect, accept, recv, recvfrom, send and sendto release the GIL;
+  waits use `poll`, so `setSoTimeout` and connect timeouts work, and
+  `close` does `shutdown` first so a thread blocked in accept or recv on
+  the same socket wakes with "Socket closed". Errors map errno to the
+  java.net class Android throws (ECONNREFUSED: ConnectException,
+  EHOSTUNREACH: NoRouteToHostException, EADDRINUSE: BindException,
+  timeouts: SocketTimeoutException, else SocketException). Socket
+  options use the `java.net.SocketOptions` ids.
+- java.net: `InetAddress` (getaddrinfo, IPv4 first; literals never hit
+  DNS; reverse lookup through getnameinfo on demand; IPv6 text per
+  RFC 5952 like Android), `InetSocketAddress`, `Socket` (descriptor
+  created on bind or connect once the family is known; options set
+  earlier are replayed), `ServerSocket` (SO_REUSEADDR on), and
+  `DatagramSocket`/`DatagramPacket`. `getChannel()` returns null:
+  NIO socket channels and selectors are not implemented.
+- `URL.openConnection()` for http returns `HttpURLConnectionImpl`, an
+  HTTP/1.1 client with one socket per request (sends `Connection:
+  close`; no pool, cache, cookies, proxy or gzip, because libcore has
+  no java.util.zip yet). Bodies: Content-Length, chunked and
+  read-until-close; request bodies buffered (Content-Length) or streamed
+  with `setFixedLengthStreamingMode` / `setChunkedStreamingMode`. 1xx
+  responses are skipped. Redirects are followed within the same scheme
+  up to 20 (303, and 301/302 after POST, become GET; 307/308 resend a
+  buffered body). Errors follow Android's OkHttp-based client:
+  `getInputStream` throws FileNotFoundException for any status >= 400
+  and `getErrorStream` returns that body. https throws
+  `SSLHandshakeException` until TLS exists; `javax.net.ssl` holds only
+  the exception classes so far. `javax.net.SocketFactory` and
+  `ServerSocketFactory` return plain sockets.
+- `android.net.ConnectivityManager` (`Context.CONNECTIVITY_SERVICE`,
+  one instance per process) reads `platform_network_state` through
+  `ConnectivityManager.nGetState()` (`src/android/android_net.c`: bit 0
+  connected, bits 1-3 `PLATFORM_NET_*`, bits 4-7 signal bars + 1). There
+  is one default network (net id 101 Wi-Fi, 102 Ethernet), never
+  metered or roaming; `NetworkCapabilities` carry INTERNET, VALIDATED,
+  NOT_METERED and the usual NOT_* bits, and `NetworkInfo` is null when
+  offline. Network callbacks get onAvailable, onCapabilitiesChanged,
+  onLinkPropertiesChanged and onBlockedStatusChanged when they register
+  on a matching network. While a callback is registered, or once a
+  receiver for `CONNECTIVITY_ACTION` registered (the broadcast queue
+  asks `ConnectivityManager.stickyConnectivityIntent` for the sticky),
+  the state is polled every 3 s on the main looper; a change sends
+  onLost / onAvailable and replaces the sticky CONNECTIVITY_ACTION.
+  `Network` binding calls are no-ops (there is only one network).
 
 ## 6. Android framework (java/framework)
 
@@ -1070,6 +1120,13 @@ Single C interface implemented once per target:
   `platform_push_event(ev)` (thread-safe)
 - text: `platform_request_text(id, initial, hint, input_type, max_len)`
 - audio: `platform_audio_start(rate, cb, user)`, `platform_audio_stop()`
+- network: `platform_network_state(PlatformNetwork*)` fills `connected`,
+  `transport` (`PLATFORM_NET_NONE/WIFI/ETHERNET`) and `signal` (Wi-Fi
+  bars 0..3, -1 unknown); cheap enough to poll. Headless reports Wi-Fi
+  with full signal unless `<data root>/tmp/network` (Android
+  `/data/local/tmp/network`) or `SWITCHAPK_NETWORK` says `none`, `wifi`
+  or `ethernet`, read on every call. The Switch asks nifm
+  (`nifmGetInternetConnectionStatus`, service opened on first use).
 - misc: `platform_vibrate(ms)`, `platform_framework_path()`,
   `platform_native_window()` (NWindow* for EGL), `platform_is_headless()`,
   `platform_screenshot(path)`, headless-only `platform_set_headless_script`
@@ -1121,6 +1178,9 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   shows the last 48 INFO+ log lines (`sa_log_recent`) on an error screen.
 - GL: Mesa (switch-mesa) is linked when installed (6.6.1); not yet run on
   hardware.
+- Network: `main_switch.c` already calls `socketInitializeDefault()`, so
+  BSD sockets and getaddrinfo come from libnx; connectivity comes from
+  nifm. Neither has been run on hardware yet.
 - Not yet: device audio output (the mixer callback runs and the samples
   are discarded, as on the headless backend; audren/audout remains),
   rumble, 1080p docked rendering. Native libraries can be mapped (6.7)

@@ -130,6 +130,21 @@ for `x86_64-linux-android21` (plus `aarch64-linux-android21` when
 The screenshot directory must exist. `idle` in a script waits until the
 queued input was consumed and the app presented nothing for the quiet time.
 
+## Networking tests
+
+`tests/run_dex_test.sh tests/dex/NetTest.java` runs sockets, UDP and
+HTTP over loopback on OpenJDK and on switchapk and diffs the output; it
+needs no internet (one lookup of an `.invalid` name must fail fast).
+`tests/apps/net` does the same through the framework and switches the
+reported network (see its `check_shots.py` for the commands). On the
+host the network is Wi-Fi unless `<data>/tmp/network` (the app's
+`/data/local/tmp/network`) or the `SWITCHAPK_NETWORK` environment
+variable says `none`, `wifi` or `ethernet`:
+
+```
+SWITCHAPK_NETWORK=none build/host/switchapk-host --data build/data app.apk
+```
+
 ## Inspecting things
 
 - `python3 tools/api_check.py android.view.View android.view.ViewGroup`

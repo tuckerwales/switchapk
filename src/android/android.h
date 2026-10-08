@@ -40,6 +40,7 @@ void android_os_register(void);
 void android_media_register(void);
 void android_opengl_register(void);
 void android_sqlite_register(void);
+void android_net_register(void);
 void native_activity_register(void);
 
 /* Platform event plumbing between android_os.c and the app runner. */

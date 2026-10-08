@@ -41,7 +41,7 @@ duplicating work.
 | WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | in progress (bindings, EGL, GLSurfaceView, window surfaces and tests/apps/gles done on host Mesa; Switch GL on hardware, GLES1 verification, EGL15 syncs/images and SurfaceTexture left) | session 9, 2026-10-02 |
 | WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, bionic shim, JNI_OnLoad, System.load/loadLibrary and tests/apps/ndk done on x86-64 and AArch64 Linux; Switch code memory via svcMapProcessCodeMemory done, not run on hardware; NativeActivity, ANativeWindow and native EGL window surfaces done on the host, tests/apps/native; OpenSL ES buffer queue is in the shim and shares the WS7 mixer; ALooper, AInputQueue and AConfiguration done on the host (tests/apps/input); newlib struct translation, ALooper/input on the Switch (no pipe/poll in newlib) and AAudio left) | session 16, 2026-10-07 |
 | WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO boots on hardware; launcher labels and icons landed (tests/apps/labeled); audio, rumble, 1080p docked remain) | session 7, 2026-10-02 |
-| WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | not started | |
+| WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | in progress (sockets, DNS, UDP, HttpURLConnection over HTTP/1.1 and ConnectivityManager done on the host (tests/dex/NetTest, tests/apps/net); TLS, gzip, pooling/cookies and a device run left) | session 17, 2026-10-07 |
 | WS12 | VM performance and memory | none | not started | |
 | WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip with every tests/apps APK; screenshot runner and VmTest on CI remain) | session 15, 2026-10-02 |
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
@@ -310,6 +310,12 @@ mbedtls on Switch and host OpenSSL or mbedtls, android.net.
 ConnectivityManager/NetworkInfo reporting WiFi state (nifm on Switch).
 Many apps only need "no network" to work gracefully: make offline
 behaviour clean (UnknownHostException) before full support.
+
+Status: sockets, DNS, UDP, HTTP/1.1 and ConnectivityManager are in (see
+ARCHITECTURE 5.1). Remaining: TLS (mbedtls; `javax.net.ssl` has only the
+exception classes, https throws SSLHandshakeException), java.util.zip so
+HTTP can use gzip, connection pooling, CookieManager, NIO socket
+channels, and running tests/apps/net on hardware.
 
 ## WS12: VM performance and memory
 

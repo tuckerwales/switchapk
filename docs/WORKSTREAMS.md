@@ -45,7 +45,7 @@ duplicating work.
 | WS12 | VM performance and memory | none | not started | |
 | WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip with every tests/apps APK; screenshot runner and VmTest on CI remain) | session 15, 2026-10-02 |
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
-| WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | not started | |
+| WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress | session 18, 2026-10-08 |
 
 Parallelism: after WS0 lands, WS1, WS4, WS6, WS7, WS9, WS10, WS11, WS12,
 WS13, WS15 can all run at once. WS2, WS3, WS5 start once the View API of

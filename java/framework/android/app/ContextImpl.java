@@ -350,6 +350,12 @@ public class ContextImpl extends Context {
         if (VIBRATOR_MANAGER_SERVICE.equals(name)) return new android.os.VibratorManager.SystemVibratorManager();
         if (SENSOR_SERVICE.equals(name)) return android.hardware.SystemSensorManager.getInstance();
         if (BATTERY_SERVICE.equals(name)) return new android.os.BatteryManager();
+        if (LOCATION_SERVICE.equals(name)) {
+            if (sLocationManager == null) sLocationManager = new android.location.LocationManager();
+            return sLocationManager;
+        }
+        if (TELEPHONY_SERVICE.equals(name)) return new android.telephony.TelephonyManager();
+        if (CAMERA_SERVICE.equals(name)) return new android.hardware.camera2.CameraManager();
         if (POWER_SERVICE.equals(name)) {
             if (sPowerManager == null) sPowerManager = new android.os.PowerManager();
             return sPowerManager;
@@ -377,6 +383,7 @@ public class ContextImpl extends Context {
 
     private static ClipboardManager sClipboard;
     private static android.os.PowerManager sPowerManager;
+    private static android.location.LocationManager sLocationManager;
     private android.view.LayoutInflater mLayoutInflater;
     private SearchManager mSearchManager;
 
@@ -391,6 +398,9 @@ public class ContextImpl extends Context {
         if (serviceClass == android.hardware.SensorManager.class) return SENSOR_SERVICE;
         if (serviceClass == android.os.BatteryManager.class) return BATTERY_SERVICE;
         if (serviceClass == android.os.PowerManager.class) return POWER_SERVICE;
+        if (serviceClass == android.location.LocationManager.class) return LOCATION_SERVICE;
+        if (serviceClass == android.telephony.TelephonyManager.class) return TELEPHONY_SERVICE;
+        if (serviceClass == android.hardware.camera2.CameraManager.class) return CAMERA_SERVICE;
         if (serviceClass == InputMethodManager.class) return INPUT_METHOD_SERVICE;
         if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;
         if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;

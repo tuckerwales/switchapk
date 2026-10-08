@@ -11,8 +11,9 @@
 The script sets the headless accelerometer and gyroscope (sensor command) and the battery (battery command). The
 app reads the sensors at rest, after a quarter turn about z (gyroscope only, so the fused rotation must integrate
 it) and after the top edge is lifted by 45 degrees (the accelerometer pulls the fused tilt there), then follows the
-battery to 12 percent and onto a charger. It also rumbles a two-pulse waveform and checks PowerManager. The swatch
-turns green when every expected event arrived.
+battery to 12 percent and onto a charger. It also rumbles a two-pulse waveform, checks PowerManager, and checks that
+location (turned off), telephony and the cameras (absent) answer like a device without them. The swatch turns green
+when every expected event arrived.
 """
 import os
 import sys
@@ -51,6 +52,13 @@ LINES = [
     "I/SENSORS: charging level 50",
     "I/SENSORS: POWER_CONNECTED",
     "I/SENSORS: BATTERY_OKAY",
+    'I/SENSORS: location enabled=false gps=false all=[passive, network, fused, gps] enabled=[] last=null',
+    'I/SENSORS: location provider "moon" does not exist',
+    "I/SENSORS: location disabled gps",
+    "I/SENSORS: distance 341 km bearing 149 convert -122:5:2.76 back -122.0841 set bearing 270.0 hasAccuracy false",
+    "I/SENSORS: phone type=0 sim=1 operator='' iso='' id=null net=0 sms=false",
+    "I/SENSORS: torch Camera id 0 not found",
+    "I/SENSORS: camera n=0 open=null open0threw=true ids=0 feature=false accel=true",
     "I/SENSORS: all ok",
 ]
 

@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
+import android.content.pm.PackageManager;
+import android.hardware.Camera;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventCallback;
@@ -14,6 +16,11 @@ import android.hardware.SensorListener;
 import android.hardware.SensorManager;
 import android.hardware.TriggerEvent;
 import android.hardware.TriggerEventListener;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -22,6 +29,7 @@ import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.Gravity;
 import android.widget.FrameLayout;
@@ -40,6 +48,7 @@ public class MainActivity extends Activity {
 
     private static final String[] EXPECTED = {
         "rest", "yaw", "tilt", "legacy", "flush", "trigger", "low", "connected", "okay", "charging", "vibrate", "power",
+        "location", "absent",
     };
 
     private final Handler mMain = new Handler(Looper.getMainLooper());
@@ -191,6 +200,73 @@ public class MainActivity extends Activity {
         battery();
         vibrate();
         power();
+        absent();
+    }
+
+    /** Location (off), telephony and cameras (none) answer without crashing. */
+    private void absent() {
+        LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        log("location enabled=" + lm.isLocationEnabled() + " gps=" + lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                + " all=" + lm.getAllProviders() + " enabled=" + lm.getProviders(true) + " last="
+                + lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER));
+        lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+                log("unexpected fix " + location);
+            }
+
+            @Override
+            public void onProviderDisabled(String provider) {
+                log("location disabled " + provider);
+                done("location");
+            }
+        });
+        try {
+            lm.requestLocationUpdates("moon", 1000, 0, new LocationListener() {
+                @Override
+                public void onLocationChanged(Location location) {}
+            });
+        } catch (IllegalArgumentException e) {
+            log("location " + e.getMessage());
+        }
+        float[] d = new float[3];
+        Location.distanceBetween(51.5007, -0.1246, 48.8584, 2.2945, d);
+        Location a = new Location("test");
+        a.setLatitude(37.4220);
+        a.setLongitude(-122.0841);
+        a.setBearing(-90);
+        log("distance " + Math.round(d[0] / 1000) + " km bearing " + Math.round(d[1]) + " convert "
+                + Location.convert(-122.0841, Location.FORMAT_SECONDS) + " back "
+                + String.format(Locale.US, "%.4f", Location.convert("-122:5:2.76")) + " set bearing " + a.getBearing()
+                + " hasAccuracy " + a.hasAccuracy());
+
+        TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+        log("phone type=" + tm.getPhoneType() + " sim=" + tm.getSimState() + " operator='" + tm.getNetworkOperatorName()
+                + "' iso='" + tm.getSimCountryIso().toUpperCase(Locale.US) + "' id=" + tm.getDeviceId() + " net="
+                + tm.getNetworkType() + " sms=" + tm.isSmsCapable());
+
+        CameraManager cm = getSystemService(CameraManager.class);
+        int ids = -1;
+        try {
+            ids = cm.getCameraIdList().length;
+            cm.setTorchMode("0", true);
+        } catch (CameraAccessException e) {
+            log("camera access " + e.getReason());
+        } catch (IllegalArgumentException e) {
+            log("torch " + e.getMessage());
+        }
+        Camera c = Camera.open();
+        boolean threw = false;
+        try {
+            Camera.open(0);
+        } catch (RuntimeException e) {
+            threw = true;
+        }
+        log("camera n=" + Camera.getNumberOfCameras() + " open=" + c + " open0threw=" + threw + " ids="
+                + ids + " feature=" + getPackageManager().hasSystemFeature(
+                        PackageManager.FEATURE_CAMERA_ANY) + " accel="
+                + getPackageManager().hasSystemFeature(PackageManager.FEATURE_SENSOR_ACCELEROMETER));
+        done("absent");
     }
 
     @SuppressWarnings("deprecation")

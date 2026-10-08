@@ -13,6 +13,8 @@
  *   keydown|keyup <NAME|code>
  *   text <string>        answer to the next soft keyboard request
  *   screen <W>x<H>@<dpi> change the display and send PEV_RESIZE (docked/handheld switch)
+ *   sensor accel|gyro <x> <y> <z>  the value the sensor reports from now on (m/s^2 or rad/s, device axes)
+ *   battery <level> [none|ac|usb]  battery percentage and charger
  *   screenshot <file>    write the last frame as PNG
  *   log <message>
  *   quit
@@ -254,6 +256,86 @@ static void wait_idle(int quiet_ms) {
     }
 }
 
+/* ---- sensors and battery: values set by the script, sampled by a thread while a sensor is on ---- */
+
+static pthread_mutex_t g_sensor_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_sensor_cond = PTHREAD_COND_INITIALIZER;
+static bool g_sensor_thread;
+/* index 0 accelerometer, 1 gyroscope; the device lies flat, screen up */
+static float g_sensor_value[2][3] = {{0.0f, 0.0f, 9.80665f}, {0.0f, 0.0f, 0.0f}};
+static int g_sensor_period_us[2];
+static int64_t g_sensor_due[2];
+static PlatformBattery g_battery = {100, PLATFORM_PLUGGED_NONE, false, 4200, 250};
+
+static int sensor_slot(int type) {
+    return type == PLATFORM_SENSOR_ACCELEROMETER ? 0 : type == PLATFORM_SENSOR_GYROSCOPE ? 1 : -1;
+}
+
+static void set_sensor_value(int type, const float v[3]) {
+    pthread_mutex_lock(&g_sensor_lock);
+    memcpy(g_sensor_value[sensor_slot(type)], v, sizeof g_sensor_value[0]);
+    pthread_mutex_unlock(&g_sensor_lock);
+}
+
+static void *sensor_thread(void *arg) {
+    static const int types[2] = {PLATFORM_SENSOR_ACCELEROMETER, PLATFORM_SENSOR_GYROSCOPE};
+    pthread_mutex_lock(&g_sensor_lock);
+    for (;;) {
+        int64_t now = (int64_t)sa_time_ns();
+        int64_t next = -1;
+        for (int i = 0; i < 2; i++) {
+            if (g_sensor_period_us[i] <= 0) continue;
+            if (now >= g_sensor_due[i]) {
+                PlatformEvent ev = {0};
+                ev.kind = PEV_SENSOR;
+                ev.a = types[i];
+                memcpy(ev.f, g_sensor_value[i], sizeof g_sensor_value[i]);
+                ev.time_ns = now;
+                platform_push_event(&ev);
+                g_sensor_due[i] += (int64_t)g_sensor_period_us[i] * 1000;
+                if (g_sensor_due[i] <= now) g_sensor_due[i] = now + (int64_t)g_sensor_period_us[i] * 1000;
+            }
+            if (next < 0 || g_sensor_due[i] < next) next = g_sensor_due[i];
+        }
+        if (next < 0) {
+            pthread_cond_wait(&g_sensor_cond, &g_sensor_lock);
+        } else {
+            pthread_mutex_unlock(&g_sensor_lock);
+            sa_sleep_ns((uint64_t)(next - now));
+            pthread_mutex_lock(&g_sensor_lock);
+        }
+    }
+    return arg;
+}
+
+unsigned platform_sensor_mask(void) {
+    return (1u << PLATFORM_SENSOR_ACCELEROMETER) | (1u << PLATFORM_SENSOR_GYROSCOPE);
+}
+
+/* Host samples are paced by a thread at no faster than 200 Hz. */
+void platform_sensor_set_rate(int type, int period_us) {
+    int i = sensor_slot(type);
+    if (i < 0) return;
+    if (period_us > 0 && period_us < 5000) period_us = 5000;
+    pthread_mutex_lock(&g_sensor_lock);
+    if (period_us > 0 && g_sensor_period_us[i] <= 0) g_sensor_due[i] = (int64_t)sa_time_ns();
+    g_sensor_period_us[i] = period_us > 0 ? period_us : 0;
+    if (!g_sensor_thread) {
+        g_sensor_thread = true;
+        pthread_t th;
+        pthread_create(&th, NULL, sensor_thread, NULL);
+        pthread_detach(th);
+    }
+    pthread_cond_broadcast(&g_sensor_cond);
+    pthread_mutex_unlock(&g_sensor_lock);
+}
+
+void platform_battery_state(PlatformBattery *b) {
+    pthread_mutex_lock(&g_sensor_lock);
+    *b = g_battery;
+    pthread_mutex_unlock(&g_sensor_lock);
+}
+
 static void *script_thread(void *arg) {
     FILE *f = fopen(g_script_path, "r");
     if (!f) {
@@ -341,6 +423,29 @@ static void *script_thread(void *arg) {
                 } else {
                     LOGW("script line %d: screen wants WxH@dpi", lineno);
                 }
+            } else if (!strcmp(cmd, "sensor")) {
+                char which[16];
+                float v[3];
+                if (sscanf(rest, "%15s %f %f %f", which, &v[0], &v[1], &v[2]) == 4 &&
+                    (!strcmp(which, "accel") || !strcmp(which, "gyro"))) {
+                    set_sensor_value(!strcmp(which, "accel") ? PLATFORM_SENSOR_ACCELEROMETER : PLATFORM_SENSOR_GYROSCOPE,
+                                     v);
+                } else {
+                    LOGW("script line %d: sensor wants accel|gyro x y z", lineno);
+                }
+            } else if (!strcmp(cmd, "battery")) {
+                int level;
+                char plug[16] = "none";
+                if (sscanf(rest, "%d %15s", &level, plug) >= 1 && level >= 0 && level <= 100) {
+                    pthread_mutex_lock(&g_sensor_lock);
+                    g_battery.level = level;
+                    g_battery.plugged = !strcmp(plug, "ac") ? PLATFORM_PLUGGED_AC
+                                        : !strcmp(plug, "usb") ? PLATFORM_PLUGGED_USB : PLATFORM_PLUGGED_NONE;
+                    g_battery.charging = g_battery.plugged != PLATFORM_PLUGGED_NONE && level < 100;
+                    pthread_mutex_unlock(&g_sensor_lock);
+                } else {
+                    LOGW("script line %d: battery wants <level 0..100> [none|ac|usb]", lineno);
+                }
             } else if (!strcmp(cmd, "screenshot")) {
                 char *path = (g_shot_dir && rest[0] != '/') ? sa_sprintf("%s/%s", g_shot_dir, rest) : sa_strdup(rest);
                 platform_screenshot(path);
@@ -407,7 +512,7 @@ bool platform_audio_start(int sample_rate, PlatformAudioCallback cb, void *user)
 
 void platform_audio_stop(void) { g_audio_run = false; }
 
-void platform_vibrate(int ms) { LOGD("vibrate %d ms", ms); }
+void platform_vibrate(int ms, int amplitude) { LOGI("vibrate %d ms amplitude %d", ms, amplitude); }
 
 /* The host reports Wi-Fi with full signal. "none", "wifi" or "ethernet" in <data root>/tmp/network (Android path
  * /data/local/tmp/network) or else in SWITCHAPK_NETWORK overrides it. Read on every call, so a test can change it

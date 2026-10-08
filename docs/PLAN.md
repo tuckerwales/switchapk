@@ -744,3 +744,15 @@ and update ARCHITECTURE.md in the same commit.
   (`src/android/android_net.c`). `BroadcastQueue.register` asks
   ConnectivityManager for the sticky CONNECTIVITY_ACTION when a filter
   has that action. ARCHITECTURE 5.1 and 7 updated.
+- 2026-10-08 (WS15): new platform calls `platform_sensor_mask()`,
+  `platform_sensor_set_rate(type, period_us)` (samples as PEV_SENSOR in
+  Android units and axes) and `platform_battery_state(PlatformBattery*)`;
+  `platform_vibrate` takes an amplitude (`platform_vibrate(ms, amplitude)`).
+  Headless script commands `sensor accel|gyro x y z` and
+  `battery <level> [none|ac|usb]`. New natives
+  `SystemSensorManager.nGetSensorMask/nSetRate` and
+  `BatteryManager.nGetState`; `Vibrator$SystemVibrator.nativeVibrate` is
+  now `(II)V`. `SystemSensorManager` installs itself as the
+  `PlatformInput` sensor sink. `BroadcastQueue.register` asks
+  `BatteryManager.stickyBatteryIntent` for ACTION_BATTERY_CHANGED when a
+  filter has a battery action. ARCHITECTURE 6.4, 6.8 and 7 updated.

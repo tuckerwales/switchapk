@@ -1,0 +1,17 @@
+# at rest, screen up
+wait 1500
+# a quarter turn counterclockwise about z
+sensor gyro 0 0 1.5707963
+wait 1000
+sensor gyro 0 0 0
+wait 800
+# top edge lifted by 45 degrees
+sensor accel 0 6.9345 6.9345
+wait 5000
+battery 12 none
+wait 3000
+battery 50 ac
+wait 3000
+idle 500
+screenshot sensors.png
+quit

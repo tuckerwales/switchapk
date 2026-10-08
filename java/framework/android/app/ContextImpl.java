@@ -347,6 +347,13 @@ public class ContextImpl extends Context {
             return android.app.job.JobSchedulerImpl.getInstance(mApplication != null ? mApplication : this);
         }
         if (VIBRATOR_SERVICE.equals(name)) return new Vibrator.SystemVibrator();
+        if (VIBRATOR_MANAGER_SERVICE.equals(name)) return new android.os.VibratorManager.SystemVibratorManager();
+        if (SENSOR_SERVICE.equals(name)) return android.hardware.SystemSensorManager.getInstance();
+        if (BATTERY_SERVICE.equals(name)) return new android.os.BatteryManager();
+        if (POWER_SERVICE.equals(name)) {
+            if (sPowerManager == null) sPowerManager = new android.os.PowerManager();
+            return sPowerManager;
+        }
         if (INPUT_METHOD_SERVICE.equals(name)) return InputMethodManager.systemInstance();
         if (LAYOUT_INFLATER_SERVICE.equals(name)) {
             if (mLayoutInflater == null) mLayoutInflater = new com.android.internal.policy.PhoneLayoutInflater(this);
@@ -369,6 +376,7 @@ public class ContextImpl extends Context {
     }
 
     private static ClipboardManager sClipboard;
+    private static android.os.PowerManager sPowerManager;
     private android.view.LayoutInflater mLayoutInflater;
     private SearchManager mSearchManager;
 
@@ -379,6 +387,10 @@ public class ContextImpl extends Context {
         if (serviceClass == NotificationManager.class) return NOTIFICATION_SERVICE;
         if (serviceClass == android.app.job.JobScheduler.class) return JOB_SCHEDULER_SERVICE;
         if (serviceClass == Vibrator.class) return VIBRATOR_SERVICE;
+        if (serviceClass == android.os.VibratorManager.class) return VIBRATOR_MANAGER_SERVICE;
+        if (serviceClass == android.hardware.SensorManager.class) return SENSOR_SERVICE;
+        if (serviceClass == android.os.BatteryManager.class) return BATTERY_SERVICE;
+        if (serviceClass == android.os.PowerManager.class) return POWER_SERVICE;
         if (serviceClass == InputMethodManager.class) return INPUT_METHOD_SERVICE;
         if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;
         if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;

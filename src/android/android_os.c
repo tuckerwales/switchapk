@@ -135,9 +135,37 @@ NATIVE(InputMethodManager_nRequestText) {
     free(hint);
 }
 
-/* static native void nativeVibrate(int ms) */
+/* static native void nativeVibrate(int ms, int amplitude) */
 NATIVE(Vibrator_nativeVibrate) {
-    platform_vibrate(A_INT(0));
+    platform_vibrate(A_INT(0), A_INT(1));
+}
+
+/* static native int nGetSensorMask() */
+NATIVE(SystemSensorManager_nGetSensorMask) {
+    UNUSED_ARGS();
+    R_INT((int32_t)platform_sensor_mask());
+}
+
+/* static native void nSetRate(int type, int periodUs) */
+NATIVE(SystemSensorManager_nSetRate) {
+    platform_sensor_set_rate(A_INT(0), A_INT(1));
+}
+
+/* static native void nGetState(int[] out): level, plugged, charging, voltage mV, temperature (0.1 C) */
+NATIVE(BatteryManager_nGetState) {
+    ArrayObject *out = A_ARR(0);
+    if (!out || out->length < 5) return;
+    PlatformBattery b;
+    memset(&b, 0, sizeof b);
+    vm_gil_release(t);
+    platform_battery_state(&b);
+    vm_gil_acquire(t);
+    int32_t *p = ARRAY_DATA(out, int32_t);
+    p[0] = b.level;
+    p[1] = b.plugged;
+    p[2] = b.charging ? 1 : 0;
+    p[3] = b.voltage_mv;
+    p[4] = b.temperature;
 }
 
 /* static native void nGetInfo(int[] out) */
@@ -170,7 +198,10 @@ static const NativeMethodReg g_regs[] = {
     {"Landroid/view/PlatformInput;", "nTakeText", "()Ljava/lang/String;", PlatformInput_nTakeText},
     {"Landroid/view/inputmethod/InputMethodManager;", "nRequestText",
      "(ILjava/lang/String;Ljava/lang/String;II)V", InputMethodManager_nRequestText},
-    {"Landroid/os/Vibrator$SystemVibrator;", "nativeVibrate", "(I)V", Vibrator_nativeVibrate},
+    {"Landroid/os/Vibrator$SystemVibrator;", "nativeVibrate", "(II)V", Vibrator_nativeVibrate},
+    {"Landroid/hardware/SystemSensorManager;", "nGetSensorMask", "()I", SystemSensorManager_nGetSensorMask},
+    {"Landroid/hardware/SystemSensorManager;", "nSetRate", "(II)V", SystemSensorManager_nSetRate},
+    {"Landroid/os/BatteryManager;", "nGetState", "([I)V", BatteryManager_nGetState},
     {"Landroid/view/Display;", "nGetInfo", "([I)V", Display_nGetInfo},
 };
 

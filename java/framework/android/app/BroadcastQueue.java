@@ -108,6 +108,12 @@ final class BroadcastQueue {
                 removeStickyLocked(connectivity);
                 sSticky.add(connectivity);
             }
+            if (watchesBattery(filter)) {
+                // the current level, kept up to date while a receiver listens (WS15)
+                Intent battery = BatteryManager.stickyBatteryIntent(receiver != null ? context : null);
+                removeStickyLocked(battery);
+                sSticky.add(battery);
+            }
             for (int i = 0; i < sSticky.size(); i++) {
                 Intent s = sSticky.get(i);
                 if (filterMatches(filter, s)) sticky.add(s);
@@ -196,15 +202,14 @@ final class BroadcastQueue {
     private static void initSticky() {
         if (sStickyInit) return;
         sStickyInit = true;
-        Intent battery = new Intent(Intent.ACTION_BATTERY_CHANGED);
-        battery.putExtra(BatteryManager.EXTRA_PRESENT, true);
-        battery.putExtra(BatteryManager.EXTRA_LEVEL, 100);
-        battery.putExtra(BatteryManager.EXTRA_SCALE, 100);
-        battery.putExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_DISCHARGING);
-        battery.putExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_GOOD);
-        battery.putExtra(BatteryManager.EXTRA_PLUGGED, 0);
-        battery.putExtra(BatteryManager.EXTRA_TECHNOLOGY, "Li-ion");
-        sSticky.add(battery);
+        sSticky.add(BatteryManager.stickyBatteryIntent(null));
+    }
+
+    private static boolean watchesBattery(IntentFilter filter) {
+        for (int i = 0; i < filter.countActions(); i++) {
+            if (BatteryManager.isBatteryAction(filter.getAction(i))) return true;
+        }
+        return false;
     }
 
     // ---------------------------------------------------------------- sending

@@ -1148,6 +1148,16 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - Power: `PowerManager` (POWER_SERVICE) counts wake locks (timed
   acquires release themselves); the screen is always on, power save,
   idle and thermal states never change.
+- Absent hardware answers like an Android device without it, never with
+  a null service: `LocationManager` (LOCATION_SERVICE) lists the gps,
+  network, fused and passive providers, all disabled (location off), has
+  no last fix, accepts requests and tells the listener
+  onProviderDisabled, and throws only for unknown providers as AOSP does;
+  `Location` is complete (AOSP Vincenty distance and bearing, convert).
+  `TelephonyManager` (TELEPHONY_SERVICE) reports no phone, an absent SIM,
+  empty operator strings and null identifiers. `Camera` has no cameras
+  (`open()` null, `open(int)` throws) and camera2 `CameraManager`
+  (CAMERA_SERVICE) an empty id list.
 - `PackageManager.hasSystemFeature` reports the touch screen
   (multi-touch), gamepad, Wi-Fi, audio output, both screen orientations
   and the accelerometer and gyroscope when the sensor service lists them.

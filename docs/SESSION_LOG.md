@@ -677,3 +677,37 @@ what is left in flight.
   here on the base commit too). `make -f Makefile.switch` builds the NRO
   without warnings; sockets and nifm have not been run on hardware.
 
+### Session 18 (2026-10-08, branch ccr-3bd2dbb6-k37rb5)
+
+- WS15 system services, host side. New platform calls for the motion
+  sensors (`platform_sensor_mask`, `platform_sensor_set_rate`, samples
+  as PEV_SENSOR in Android units) and the battery
+  (`platform_battery_state`); `platform_vibrate` gained an amplitude.
+  The headless backend samples script-set values on a thread (`sensor`
+  and `battery` script commands). The Switch backend reads the six-axis
+  sensor of the handheld Joy-Cons or player 1's controller, psm for the
+  battery, and sends HD rumble; it builds without warnings but has not
+  been run on a console, so the IMU axis signs are unverified.
+- `android.hardware`: Sensor, SensorManager with AOSP's rotation math,
+  the listener types, and SystemSensorManager. It paces each listener
+  and fuses gravity, linear acceleration, both rotation vectors and the
+  legacy orientation sensor from the accelerometer and gyroscope with a
+  Mahony filter (no magnetometer, so the heading follows the gyroscope).
+  BatteryManager reads live state and keeps ACTION_BATTERY_CHANGED
+  current, with power connected/disconnected and battery low/okay
+  broadcasts. VibrationEffect is a real waveform played by
+  SystemVibrator on its own thread; VibratorManager, CombinedVibration,
+  WorkSource and the rest of PowerManager were added. hasSystemFeature
+  now reports the console's hardware. POWER_SERVICE was missing from
+  ContextImpl before and is now there.
+- Absent hardware no longer gives null services: LocationManager
+  (providers present, location off), a complete Location, Criteria,
+  TelephonyManager (no phone, no SIM, empty operator strings), the
+  legacy Camera (no cameras) and camera2 CameraManager.
+- tests/apps/sensors drives it all from its script (rest, a quarter
+  turn, a 45 degree tilt, battery to 12 % then onto AC, a rumble
+  waveform) and passes, also with three copies running at once. `make`,
+  VmTest and every sample check pass except gles and native, which need
+  host Mesa (libEGL is absent here). `make -f Makefile.switch` builds
+  the NRO.
+

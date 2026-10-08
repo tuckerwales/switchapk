@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 17, see SESSION_LOG.md)
+## Current state (end of session 18, see SESSION_LOG.md)
 
 Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 - VM core, libcore, JNI, reflection (including RUNTIME annotations),
@@ -96,6 +96,12 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   with callbacks and CONNECTIVITY_ACTION. tests/dex/NetTest matches
   OpenJDK; tests/apps/net checks HTTP, UDP and network switches on the
   host. No TLS yet: https fails with SSLHandshakeException.
+- System services (WS15): accelerometer and gyroscope from the platform
+  (headless script values; the Switch six-axis sensor) with gravity,
+  linear acceleration, rotation vectors and orientation fused from them;
+  live battery state and broadcasts; rumble waveforms; PowerManager.
+  Location (off), telephony and cameras (none) answer like a device
+  without them. tests/apps/sensors checks all of it on the host.
 - The sample apps in `tests/apps` pass their screenshot checks (gles needs
   host Mesa; curves can miss its mid-animation frame on a loaded machine), and
   tests/apps/store passes its two-run check (it is not in the NRO sample
@@ -106,7 +112,8 @@ audio output (audren/audout), running a native library on hardware (code
 memory is mapped; newlib struct translation remains), ALooper and the
 input queue on the Switch (no pipe/poll in newlib) and AAudio,
 TLS for https and running the sockets on hardware (WS11), AndroidX
-(WS14), sensors (WS15). Photo-picker and
+(WS14), and running the sensors, rumble and battery on a console
+(WS15). Photo-picker and
 cloud-media helpers on MediaStore (createDeleteRequest, getVersion,
 volume-name sets) are still missing and auto-stub.
 
@@ -289,6 +296,21 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     fullscreen GL
   - [ ] EGL15 syncs/images, SurfaceTexture.updateTexImage, ETC1Util
 - [ ] WS15 sensors and system services
+  - [x] platform sensors (accelerometer, gyroscope) and battery calls;
+    headless `sensor` and `battery` script commands; Switch six-axis,
+    psm and HD rumble (built, not run on hardware)
+  - [x] SensorManager API and AOSP math, SystemSensorManager with
+    per-listener pacing, gravity, linear acceleration, rotation vectors
+    and orientation fused from the IMU (tests/apps/sensors: rest, a
+    quarter turn, a 45 degree tilt)
+  - [x] BatteryManager live state, sticky ACTION_BATTERY_CHANGED kept
+    current, power connected and battery low/okay broadcasts
+  - [x] Vibrator waveforms (amplitudes, repeat, predefined effects,
+    compositions), VibratorManager, PowerManager wake locks and thermal
+    listeners, hasSystemFeature for the console's hardware
+  - [x] LocationManager (location off), Location, TelephonyManager (no
+    telephony), Camera and camera2 CameraManager (no cameras)
+  - [ ] IMU axis signs, rumble and battery checked on a console
 
 ### M5
 - [ ] WS9 native loader, bionic shim, NativeActivity
@@ -374,10 +396,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    have ViewDebug (tests/apps/viewdbg), the floating toolbar
    (tests/apps/floating), text selection (tests/apps/select), and
    clipToOutline (tests/apps/outline).
-3. Audio (audren/audout), rumble, and 1080p docked rendering. In parallel
+3. Audio (audren/audout), and 1080p docked rendering (rumble is written,
+   see item 7). In parallel
    as agents are available: WS13 (test runner around the app scripts;
    packaging CI is `.github/workflows/package.yml`), WS11/WS12/WS15.
-   WS6 is done.
+   WS6 is done. WS15 is in on the host (item 7).
 4. WS8: the bindings, EGL, GLSurfaceView and the host sample are in;
    next is the Switch build with switch-mesa and a device run, then
    SurfaceTexture external textures.
@@ -395,6 +418,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    TLS (mbedtls on both targets, `javax.net.ssl` and
    HttpsURLConnection), then java.util.zip for gzip, then a device run
    of tests/apps/net.
+
+7. WS15: sensors, battery, rumble, power and the absent-hardware
+   services are in (host). Next is a console run: check the six-axis
+   axis signs (tilt a game that uses the accelerometer), rumble and the
+   battery level.
 
 ## Known issues and gotchas
 
@@ -427,6 +455,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   app gets no input. Native EGL window surfaces are pbuffers read back into
   the Surface queue, the same path as Java, and have not been run on
   hardware.
+- Sensor listeners keep the headless sampling thread posting events.
+  An app that redraws on every sample never lets the script's `idle`
+  settle (it gives up after 20 s); tests/apps/sensors unregisters once
+  its checks are done. The Switch six-axis axis signs are a guess until
+  checked on hardware (`ACCEL_SIGN` in platform_switch.c).
 - Host GL tests need Mesa's EGL and GLES libraries (`libegl1`,
   `libgles2`; `libegl-dev`/`libgles-dev` to regenerate the bindings).
   Ubuntu's Mesa cannot create ES1 contexts, so GLES1 rendering is not

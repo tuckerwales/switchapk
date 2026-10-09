@@ -8,6 +8,13 @@ public final class Formatter implements Closeable, Flushable {
     private final Appendable a;
     private final Locale l;
     private IOException lastException;
+    private boolean closed;
+
+    private void ensureOpen() {
+        if (closed) {
+            throw new FormatterClosedException();
+        }
+    }
 
     public Formatter() {
         this(new StringBuilder(), Locale.getDefault());
@@ -27,22 +34,91 @@ public final class Formatter implements Closeable, Flushable {
     }
 
     public Formatter(java.io.PrintStream ps) {
-        this((Appendable) ps, Locale.getDefault());
+        this((Appendable) java.util.Objects.requireNonNull(ps), Locale.getDefault());
+    }
+
+    public Formatter(String fileName) throws java.io.FileNotFoundException {
+        this(new java.io.File(fileName));
+    }
+
+    public Formatter(String fileName, String csn) throws java.io.FileNotFoundException,
+            java.io.UnsupportedEncodingException {
+        this(new java.io.File(fileName), csn);
+    }
+
+    public Formatter(String fileName, String csn, Locale l) throws java.io.FileNotFoundException,
+            java.io.UnsupportedEncodingException {
+        this(new java.io.File(fileName), csn, l);
+    }
+
+    public Formatter(String fileName, java.nio.charset.Charset charset, Locale l) throws IOException {
+        this(new java.io.File(fileName), charset, l);
+    }
+
+    public Formatter(java.io.File file) throws java.io.FileNotFoundException {
+        this(new java.io.FileOutputStream(file));
+    }
+
+    public Formatter(java.io.File file, String csn) throws java.io.FileNotFoundException,
+            java.io.UnsupportedEncodingException {
+        this(file, csn, Locale.getDefault());
+    }
+
+    public Formatter(java.io.File file, String csn, Locale l) throws java.io.FileNotFoundException,
+            java.io.UnsupportedEncodingException {
+        this(writer(new java.io.FileOutputStream(file), toCharset(csn)), l);
+    }
+
+    public Formatter(java.io.File file, java.nio.charset.Charset charset, Locale l) throws IOException {
+        this(writer(new java.io.FileOutputStream(file), java.util.Objects.requireNonNull(charset)), l);
+    }
+
+    public Formatter(java.io.OutputStream os) {
+        this(writer(os, java.nio.charset.Charset.defaultCharset()), Locale.getDefault());
+    }
+
+    public Formatter(java.io.OutputStream os, String csn) throws java.io.UnsupportedEncodingException {
+        this(os, csn, Locale.getDefault());
+    }
+
+    public Formatter(java.io.OutputStream os, String csn, Locale l) throws java.io.UnsupportedEncodingException {
+        this(writer(os, toCharset(csn)), l);
+    }
+
+    public Formatter(java.io.OutputStream os, java.nio.charset.Charset charset, Locale l) {
+        this(writer(os, java.util.Objects.requireNonNull(charset)), l);
+    }
+
+    private static Appendable writer(java.io.OutputStream os, java.nio.charset.Charset cs) {
+        return new java.io.BufferedWriter(new java.io.OutputStreamWriter(java.util.Objects.requireNonNull(os), cs));
+    }
+
+    private static java.nio.charset.Charset toCharset(String csn) throws java.io.UnsupportedEncodingException {
+        java.util.Objects.requireNonNull(csn, "charsetName");
+        try {
+            return java.nio.charset.Charset.forName(csn);
+        } catch (RuntimeException e) {
+            throw new java.io.UnsupportedEncodingException(csn);
+        }
     }
 
     public Locale locale() {
+        ensureOpen();
         return l;
     }
 
     public Appendable out() {
+        ensureOpen();
         return a;
     }
 
     public String toString() {
+        ensureOpen();
         return a.toString();
     }
 
     public void flush() {
+        ensureOpen();
         if (a instanceof Flushable) {
             try {
                 ((Flushable) a).flush();
@@ -53,6 +129,10 @@ public final class Formatter implements Closeable, Flushable {
     }
 
     public void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
         if (a instanceof Closeable) {
             try {
                 ((Closeable) a).close();
@@ -63,6 +143,7 @@ public final class Formatter implements Closeable, Flushable {
     }
 
     public IOException ioException() {
+        ensureOpen();
         return lastException;
     }
 
@@ -73,6 +154,7 @@ public final class Formatter implements Closeable, Flushable {
     }
 
     public Formatter format(Locale l, String format, Object... args) {
+        ensureOpen();
         try {
             a.append(doFormat(format, args));
         } catch (IOException e) {
@@ -142,7 +224,8 @@ public final class Formatter implements Closeable, Flushable {
                 i = j;
             }
             if (i >= n) {
-                throw new UnknownFormatConversionException(format.substring(start));
+                throw new UnknownFormatConversionException(
+                        String.valueOf(start + 1 < n ? format.charAt(start + 1) : '%'));
             }
             char conv = format.charAt(i++);
             boolean dateTime = false;
@@ -150,7 +233,8 @@ public final class Formatter implements Closeable, Flushable {
             if (conv == 't' || conv == 'T') {
                 dateTime = true;
                 if (i >= n) {
-                    throw new UnknownFormatConversionException(format.substring(start));
+                    throw new UnknownFormatConversionException(
+                        String.valueOf(start + 1 < n ? format.charAt(start + 1) : '%'));
                 }
                 dtConv = format.charAt(i++);
             }
@@ -172,7 +256,7 @@ public final class Formatter implements Closeable, Flushable {
                 use = argIndex++;
             }
             if (use < 0 || use >= args.length) {
-                throw new MissingFormatArgumentException("Format specifier '" + format.substring(start, i) + "'");
+                throw new MissingFormatArgumentException(format.substring(start, i));
             }
             lastArg = use;
             arg = args[use];
@@ -197,6 +281,15 @@ public final class Formatter implements Closeable, Flushable {
                     break;
                 case 's':
                 case 'S':
+                    if (arg instanceof Formattable) {
+                        int fl = (flags.indexOf('-') >= 0 ? FormattableFlags.LEFT_JUSTIFY : 0)
+                                | (conv == 'S' ? FormattableFlags.UPPERCASE : 0)
+                                | (flags.indexOf('#') >= 0 ? FormattableFlags.ALTERNATE : 0);
+                        Formatter f = new Formatter(new StringBuilder());
+                        ((Formattable) arg).formatTo(f, fl, width, precision);
+                        sb.append(f.toString());
+                        continue;
+                    }
                     s = precision(String.valueOf(arg), precision);
                     break;
                 case 'c':
@@ -205,10 +298,17 @@ public final class Formatter implements Closeable, Flushable {
                         s = "null";
                     } else if (arg instanceof Character) {
                         s = arg.toString();
-                    } else if (arg instanceof Number) {
-                        s = new String(Character.toChars(((Number) arg).intValue()));
+                    } else if (arg instanceof Byte || arg instanceof Short || arg instanceof Integer) {
+                        int cp = ((Number) arg).intValue();
+                        if (arg instanceof Byte) {
+                            cp &= 0xff;
+                        }
+                        if (!Character.isValidCodePoint(cp)) {
+                            throw new IllegalFormatCodePointException(cp);
+                        }
+                        s = new String(Character.toChars(cp));
                     } else {
-                        throw new IllegalFormatConversionException("c != " + arg.getClass().getName());
+                        throw new IllegalFormatConversionException('c', arg.getClass());
                     }
                     break;
                 case 'd':
@@ -321,7 +421,7 @@ public final class Formatter implements Closeable, Flushable {
             neg = b.signum() < 0;
             digits = b.abs().toString();
         } else {
-            throw new IllegalFormatConversionException("d != " + arg.getClass().getName());
+            throw new IllegalFormatConversionException('d', arg.getClass());
         }
         if (flags.indexOf(',') >= 0) {
             digits = group(digits);
@@ -346,7 +446,7 @@ public final class Formatter implements Closeable, Flushable {
         } else if (arg instanceof java.math.BigInteger) {
             s = ((java.math.BigInteger) arg).toString(radix);
         } else {
-            throw new IllegalFormatConversionException("x != " + arg.getClass().getName());
+            throw new IllegalFormatConversionException('x', arg.getClass());
         }
         if (flags.indexOf('#') >= 0) {
             s = (radix == 16 ? "0x" : "0") + s;
@@ -361,7 +461,7 @@ public final class Formatter implements Closeable, Flushable {
         } else if (arg instanceof java.math.BigDecimal) {
             v = ((java.math.BigDecimal) arg).doubleValue();
         } else {
-            throw new IllegalFormatConversionException(conv + " != " + arg.getClass().getName());
+            throw new IllegalFormatConversionException(conv, arg.getClass());
         }
         if (Double.isNaN(v)) {
             return "NaN";
@@ -406,7 +506,7 @@ public final class Formatter implements Closeable, Flushable {
             } else if (arg instanceof Date) {
                 millis = ((Date) arg).getTime();
             } else {
-                throw new IllegalFormatConversionException("t != " + (arg == null ? "null" : arg.getClass().getName()));
+                throw new IllegalFormatConversionException('t', arg == null ? Object.class : arg.getClass());
             }
             cal = Calendar.getInstance();
             cal.setTimeInMillis(millis);

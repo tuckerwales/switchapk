@@ -21,6 +21,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -38,6 +39,8 @@ import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * Networking on the host: HTTP and UDP over loopback against a server in this process, https and DNS failures, and
@@ -187,10 +190,14 @@ public class MainActivity extends Activity {
         InputStream in = new BufferedInputStream(c.getInputStream());
         String[] req = readLine(in).split(" ");
         int length = 0;
+        boolean gzip = false;
         String line;
         while (!(line = readLine(in)).isEmpty()) {
             if (line.toLowerCase().startsWith("content-length:")) {
                 length = Integer.parseInt(line.substring(15).trim());
+            }
+            if (line.toLowerCase().startsWith("accept-encoding:") && line.contains("gzip")) {
+                gzip = true;
             }
         }
         byte[] body = new byte[length];
@@ -198,7 +205,19 @@ public class MainActivity extends Activity {
             body[i] = (byte) in.read();
         }
         String resp;
-        if (req[1].equals("/hello")) {
+        if (req[1].equals("/gzip") && gzip) {
+            ByteArrayOutputStream z = new ByteArrayOutputStream();
+            GZIPOutputStream gz = new GZIPOutputStream(z);
+            gz.write("squeezed through gzip".getBytes("UTF-8"));
+            gz.close();
+            OutputStream out = c.getOutputStream();
+            out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: "
+                    + z.size() + "\r\n\r\n").getBytes("UTF-8"));
+            z.writeTo(out);
+            out.flush();
+            c.close();
+            return;
+        } else if (req[1].equals("/hello")) {
             resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n"
                     + "6\r\nhello \r\nf\r\nfrom switchapk!\r\n0\r\n\r\n";
         } else if (req[1].equals("/echo")) {
@@ -245,6 +264,27 @@ public class MainActivity extends Activity {
         step("http GET " + base + "/hello");
         HttpURLConnection c = (HttpURLConnection) new URL(base + "/hello").openConnection();
         log("http " + c.getResponseCode() + " " + c.getContentType() + " " + readAll(c.getInputStream()));
+
+        step("http gzip");
+        // Android asks for gzip itself and hands the app the decoded body without the encoding headers.
+        c = (HttpURLConnection) new URL(base + "/gzip").openConnection();
+        log("gzip " + c.getResponseCode() + " length=" + c.getContentLength() + " encoding=" + c.getContentEncoding()
+                + " " + readAll(c.getInputStream()));
+        // An app that sets Accept-Encoding itself gets the raw bytes.
+        c = (HttpURLConnection) new URL(base + "/gzip").openConnection();
+        c.setRequestProperty("Accept-Encoding", "gzip");
+        InputStream raw = c.getInputStream();
+        ByteArrayOutputStream rb = new ByteArrayOutputStream();
+        byte[] tmp = new byte[256];
+        int k;
+        while ((k = raw.read(tmp)) > 0) {
+            rb.write(tmp, 0, k);
+        }
+        raw.close();
+        byte[] zb = rb.toByteArray();
+        log("raw gzip encoding=" + c.getContentEncoding() + " magic=" + Integer.toHexString(zb[0] & 0xff)
+                + Integer.toHexString(zb[1] & 0xff) + " text="
+                + readAll(new GZIPInputStream(new ByteArrayInputStream(zb))));
 
         step("http POST");
         c = (HttpURLConnection) new URL(base + "/echo").openConnection();
@@ -328,6 +368,8 @@ public class MainActivity extends Activity {
             "default caps internet=true",
             "broadcast noConnectivity=false type=WIFI",
             "http 200 text/plain hello from switchapk!",
+            "gzip 200 length=-1 encoding=null squeezed through gzip",
+            "raw gzip encoding=gzip magic=1f8b text=squeezed through gzip",
             "post 201 {\"a\":1}",
             "404 404 err=nope",
             "https javax.net.ssl.SSLHandshakeException",

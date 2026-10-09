@@ -295,4 +295,46 @@ public class Thread implements Runnable {
             e.printStackTrace(System.err);
         }
     }
+
+    public Thread(ThreadGroup group, Runnable target, String name, long stackSize, boolean inheritThreadLocals) {
+        this(group, target, name, stackSize);
+    }
+
+    protected Object clone() throws CloneNotSupportedException {
+        throw new CloneNotSupportedException();
+    }
+
+    @Deprecated
+    public int countStackFrames() {
+        throw new UnsupportedOperationException();
+    }
+
+    /* Thread enumeration is not tracked; only the calling thread is reported. */
+    public static int enumerate(Thread[] tarray) {
+        if (tarray.length == 0) {
+            return 0;
+        }
+        tarray[0] = currentThread();
+        return 1;
+    }
+
+    @Deprecated
+    public void destroy() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Deprecated
+    public final void resume() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Deprecated
+    public final void suspend() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Deprecated
+    public final void stop(Throwable obj) {
+        throw new UnsupportedOperationException();
+    }
 }

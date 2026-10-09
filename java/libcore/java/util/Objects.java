@@ -97,4 +97,27 @@ public final class Objects {
         }
         return fromIndex;
     }
+
+    public static long checkIndex(long index, long length) {
+        if (index < 0 || index >= length) {
+            throw new IndexOutOfBoundsException("Index " + index + " out of bounds for length " + length);
+        }
+        return index;
+    }
+
+    public static long checkFromToIndex(long fromIndex, long toIndex, long length) {
+        if (fromIndex < 0 || fromIndex > toIndex || toIndex > length) {
+            throw new IndexOutOfBoundsException("Range [" + fromIndex + ", " + toIndex + ") out of bounds for length "
+                    + length);
+        }
+        return fromIndex;
+    }
+
+    public static long checkFromIndexSize(long fromIndex, long size, long length) {
+        if ((length | fromIndex | size) < 0 || size > length - fromIndex) {
+            throw new IndexOutOfBoundsException("Range [" + fromIndex + ", " + fromIndex + " + " + size
+                    + ") out of bounds for length " + length);
+        }
+        return fromIndex;
+    }
 }

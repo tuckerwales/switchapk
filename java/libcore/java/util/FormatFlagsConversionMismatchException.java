@@ -1,11 +1,26 @@
 package java.util;
 
 public class FormatFlagsConversionMismatchException extends IllegalFormatException {
-    public FormatFlagsConversionMismatchException() {
-        super();
+    private final String f;
+    private final char c;
+
+    public FormatFlagsConversionMismatchException(String f, char c) {
+        if (f == null) {
+            throw new NullPointerException();
+        }
+        this.f = f;
+        this.c = c;
     }
 
-    public FormatFlagsConversionMismatchException(String message) {
-        super(message);
+    public String getFlags() {
+        return f;
+    }
+
+    public char getConversion() {
+        return c;
+    }
+
+    public String getMessage() {
+        return "Conversion = " + c + ", Flags = " + f;
     }
 }

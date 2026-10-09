@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 18, see SESSION_LOG.md)
+## Current state (end of session 23, see SESSION_LOG.md)
 
 Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 - VM core, libcore, JNI, reflection (including RUNTIME annotations),
@@ -107,6 +107,10 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   tests/apps/store passes its two-run check (it is not in the NRO sample
   list).
 
+Compression: java.util.zip and java.util.jar over zlib natives
+(tests/dex/ZipTest matches OpenJDK), and transparent gzip in
+HttpURLConnection.
+
 Not yet: GL on the Switch (Mesa linked but not run on hardware), device
 audio output (audren/audout), running a native library on hardware (code
 memory is mapped; newlib struct translation remains), ALooper and the
@@ -124,7 +128,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 ### Done
 - [x] VM: interpreter, class linking, auto-stubbing, GC, threads/GIL, monitors, exceptions, reflection, proxies, lambdas
 - [x] JNI: JNIEnv/JavaVM, call trampolines (AArch64, x86-64)
-- [x] libcore: lang, util (+concurrent/stream/regex/zip), io, nio, text, math, security digests
+- [x] libcore: lang, util (+concurrent/stream/regex), io, nio, text, math, security digests
+- [x] libcore: java.util.zip and java.util.jar over zlib (tests/dex/ZipTest against OpenJDK; session 23)
 - [x] VM conformance test vs OpenJDK
 - [x] Renderer (src/gfx): paths, strokes, shaders, bitmaps, text, clip masks, PNG encode, image decode
 - [x] Resource parsing: AXML, ARSC, multi-package tables; framework-res.apk generator; android.R generator
@@ -368,7 +373,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     Switch; tests/apps/net flips the host state)
   - [ ] TLS: javax.net.ssl (SSLSocketFactory, SSLContext, trust
     managers, HttpsURLConnection) over mbedtls, with a CA bundle
-  - [ ] java.util.zip (GZIPInputStream) so HTTP can ask for gzip
+  - [x] java.util.zip and java.util.jar (zlib natives; tests/dex/ZipTest
+    against OpenJDK); HttpURLConnection asks for gzip and decodes it
+    like OkHttp (tests/apps/net)
   - [ ] connection pooling, CookieManager, proxies; NIO socket channels
   - [ ] sockets and nifm on hardware
 - [ ] WS12 VM performance
@@ -419,10 +426,24 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    ALooper and input on the Switch (virtual descriptors), AAudio, and
    newlib struct translation (stat, dirent, O_* flags, clock ids).
 
-6. WS11: sockets, HTTP and ConnectivityManager are in (host). Next is
-   TLS (mbedtls on both targets, `javax.net.ssl` and
-   HttpsURLConnection), then java.util.zip for gzip, then a device run
-   of tests/apps/net.
+6. WS11: sockets, HTTP, gzip and ConnectivityManager are in (host),
+   and so are java.util.zip and java.util.jar. Next is TLS (mbedtls on
+   both targets, `javax.net.ssl` and HttpsURLConnection), then a device
+   run of tests/apps/net.
+
+8. libcore API gaps. `tools/api_check.py` used to resolve `java.*`
+   classes from the running JDK, so libcore always looked complete.
+   Fixed in session 23: `-p java.lang`, `-p java.util` and so on now
+   list real gaps (about 1,700 members across java.lang, java.util,
+   java.util.concurrent, java.text, java.nio, java.io and java.net).
+   Many are API 34/35 additions (SequencedCollection, Math.clamp) or
+   interface methods the checker does not follow (List inherits from
+   Collection). Real ones that apps hit include `Map.of` with six or
+   more pairs and `Map.ofEntries`, `String.codePoints`, the `Math`
+   exact and floor/ceil variants, `Class.getDeclaredAnnotation`,
+   `getEnclosingMethod` and `toGenericString`, Character code point
+   helpers, and the checked/navigable `Collections` wrappers. Each one
+   auto-stubs silently today.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -799,3 +820,9 @@ and update ARCHITECTURE.md in the same commit.
   `PlatformInput` sensor sink. `BroadcastQueue.register` asks
   `BatteryManager.stickyBatteryIntent` for ACTION_BATTERY_CHANGED when a
   filter has a battery action. ARCHITECTURE 6.4, 6.8 and 7 updated.
+- 2026-10-09 (WS11): new native file `src/native/java_zip.c`
+  (`natives_java_zip_register`): static natives on `java.util.zip.CRC32`,
+  `Adler32`, `Inflater` and `Deflater`. Inflater/Deflater keep their
+  `z_stream` address in a private long and pass it as an argument, so C
+  reads no Java fields. `HttpURLConnectionImpl` adds `Accept-Encoding:
+  gzip` and decodes gzip responses. ARCHITECTURE 5.1 and 5.2 updated.

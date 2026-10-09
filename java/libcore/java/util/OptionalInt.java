@@ -81,4 +81,16 @@ public final class OptionalInt {
     public String toString() {
         return isPresent ? "OptionalInt[" + value + "]" : "OptionalInt.empty";
     }
+
+    public void ifPresentOrElse(java.util.function.IntConsumer action, Runnable emptyAction) {
+        if (isPresent()) {
+            action.accept(getAsInt());
+        } else {
+            emptyAction.run();
+        }
+    }
+
+    public java.util.stream.IntStream stream() {
+        return isPresent() ? java.util.stream.IntStream.of(getAsInt()) : java.util.stream.IntStream.of(new int[0]);
+    }
 }

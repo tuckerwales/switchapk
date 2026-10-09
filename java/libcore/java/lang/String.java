@@ -87,6 +87,17 @@ public final class String implements java.io.Serializable, Comparable<String>, C
         }
     }
 
+    public String(byte[] ascii, int hibyte, int offset, int count) {
+        if (offset < 0 || count < 0 || offset > ascii.length - count) {
+            throw new StringIndexOutOfBoundsException("offset " + offset + ", count " + count + ", length "
+                    + ascii.length);
+        }
+        value = new char[count];
+        for (int i = 0; i < count; i++) {
+            value[i] = (char) (((hibyte & 0xff) << 8) | (ascii[offset + i] & 0xff));
+        }
+    }
+
     public String(StringBuffer buffer) {
         this(buffer.toString());
     }
@@ -701,6 +712,170 @@ public final class String implements java.io.Serializable, Comparable<String>, C
     }
 
     public java.util.stream.Stream<String> lines() {
-        return java.util.Arrays.stream(split("\r?\n"));
+        return splitLines().stream();
+    }
+
+    /* Lines split at \n, \r and \r\n, without a trailing empty line (String.lines semantics). */
+    private java.util.ArrayList<String> splitLines() {
+        java.util.ArrayList<String> out = new java.util.ArrayList<String>();
+        int n = value.length;
+        int start = 0;
+        int i = 0;
+        while (i < n) {
+            char c = value[i];
+            if (c == '\n' || c == '\r') {
+                out.add(new String(value, start, i - start));
+                if (c == '\r' && i + 1 < n && value[i + 1] == '\n') {
+                    i++;
+                }
+                start = i + 1;
+            }
+            i++;
+        }
+        if (start < n) {
+            out.add(new String(value, start, n - start));
+        }
+        return out;
+    }
+
+    public java.util.stream.IntStream codePoints() {
+        int[] a = new int[codePointCount(0, value.length)];
+        for (int i = 0, k = 0; i < value.length; k++) {
+            int cp = Character.codePointAt(value, i);
+            a[k] = cp;
+            i += Character.charCount(cp);
+        }
+        return java.util.stream.IntStream.of(a);
+    }
+
+    public <R> R transform(java.util.function.Function<? super String, ? extends R> f) {
+        return f.apply(this);
+    }
+
+    public String indent(int n) {
+        if (isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String line : splitLines()) {
+            if (n > 0) {
+                for (int i = 0; i < n; i++) {
+                    sb.append(' ');
+                }
+                sb.append(line);
+            } else if (n < 0) {
+                int lead = 0;
+                while (lead < line.length() && lead < -n && Character.isWhitespace(line.charAt(lead))) {
+                    lead++;
+                }
+                sb.append(line, lead, line.length());
+            } else {
+                sb.append(line);
+            }
+            sb.append('\n');
+        }
+        return sb.toString();
+    }
+
+    public String stripIndent() {
+        int length = value.length;
+        if (length == 0) {
+            return "";
+        }
+        char lastChar = value[length - 1];
+        boolean optOut = lastChar == '\n' || lastChar == '\r';
+        java.util.ArrayList<String> lines = splitLines();
+        int outdent = 0;
+        if (!optOut) {
+            outdent = Integer.MAX_VALUE;
+            for (String line : lines) {
+                int lead = firstNonWhitespace(line);
+                if (lead != line.length()) {
+                    outdent = Integer.min(outdent, lead);
+                }
+            }
+            String lastLine = lines.get(lines.size() - 1);
+            if (lastLine.isBlank()) {
+                outdent = Integer.min(outdent, lastLine.length());
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int k = 0; k < lines.size(); k++) {
+            String line = lines.get(k);
+            int first = firstNonWhitespace(line);
+            int last = line.length();
+            while (last > 0 && Character.isWhitespace(line.charAt(last - 1))) {
+                last--;
+            }
+            if (k > 0) {
+                sb.append('\n');
+            }
+            if (first <= last && first < line.length()) {
+                sb.append(line, Math.min(outdent, first), last);
+            }
+        }
+        if (optOut) {
+            sb.append('\n');
+        }
+        return sb.toString();
+    }
+
+    private static int firstNonWhitespace(String line) {
+        int lead = 0;
+        while (lead < line.length() && Character.isWhitespace(line.charAt(lead))) {
+            lead++;
+        }
+        return lead;
+    }
+
+    public String translateEscapes() {
+        if (isEmpty()) {
+            return "";
+        }
+        char[] chars = value.clone();
+        int length = chars.length;
+        int from = 0;
+        int to = 0;
+        while (from < length) {
+            char ch = chars[from++];
+            if (ch == '\\') {
+                ch = from < length ? chars[from++] : '\0';
+                switch (ch) {
+                    case 'b': ch = '\b'; break;
+                    case 'f': ch = '\f'; break;
+                    case 'n': ch = '\n'; break;
+                    case 'r': ch = '\r'; break;
+                    case 's': ch = ' '; break;
+                    case 't': ch = '\t'; break;
+                    case '\'': case '\"': case '\\': break;
+                    case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
+                        int limit = Integer.min(from + (ch <= '3' ? 2 : 1), length);
+                        int code = ch - '0';
+                        while (from < limit) {
+                            ch = chars[from];
+                            if (ch < '0' || '7' < ch) {
+                                break;
+                            }
+                            from++;
+                            code = (code << 3) | (ch - '0');
+                        }
+                        ch = (char) code;
+                        break;
+                    }
+                    case '\n':
+                        continue;
+                    case '\r':
+                        if (from < length && chars[from] == '\n') {
+                            from++;
+                        }
+                        continue;
+                    default:
+                        throw new IllegalArgumentException(String.format("Invalid escape sequence: \\%c \\\\u%04X",
+                                ch, (int) ch));
+                }
+            }
+            chars[to++] = ch;
+        }
+        return new String(chars, 0, to);
     }
 }

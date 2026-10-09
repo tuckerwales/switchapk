@@ -26,7 +26,20 @@ GENERIC = re.compile(r"<[^<>]*>")
 def javap(cp, classes):
     if not classes:
         return ""
-    cmd = ["javap", "-protected", "-cp", cp] + classes
+    # Name class files directly: by class name, javap resolves java.* from the running JDK, not from cp.
+    args = []
+    for c in classes:
+        rel = c.replace(".", "/") + ".class"
+        if cp == ANDROID_JAR:
+            args.append("jar:file:%s!/%s" % (ANDROID_JAR, rel))
+            continue
+        for d in cp.split(os.pathsep):
+            if os.path.isfile(os.path.join(d, rel)):
+                args.append(os.path.join(d, rel))
+                break
+        else:
+            args.append(c)
+    cmd = ["javap", "-protected", "-cp", cp] + args
     out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return out.stdout
 
@@ -93,6 +106,7 @@ def main():
     while i < len(args):
         if args[i] == "-p":
             names += list_package(os.path.join(ROOT, "build/java/framework"), args[i + 1])
+            names += list_package(os.path.join(ROOT, "build/java/libcore"), args[i + 1])
             i += 2
         else:
             names.append(args[i])
@@ -114,6 +128,12 @@ def main():
             ours.update(t)
             our_headers.update(h)
         members = set(ours.get(cls, set()))
+        # Constants of implemented interfaces (android.jar stubs copy the package-private ZipConstants ones).
+        impl = re.search(r"implements\s+([\w.$,\s]+)", our_headers.get(cls, ""))
+        for itf in (impl.group(1).split(",") if impl else []):
+            for m in our_members(itf.strip(), seen):
+                if " static " in " " + m and "(" not in m:
+                    members.add(m)
         sup = superclass_chain(our_headers.get(cls, ""))
         if sup:
             simple = sup.split(".")[-1]

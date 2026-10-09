@@ -171,4 +171,9 @@ public final class StringBuilder extends AbstractStringBuilder implements java.i
     public String toString() {
         return new String(value, 0, count);
     }
+
+    public StringBuilder insert(int dstOffset, CharSequence s, int start, int end) {
+        super.insert(dstOffset, s, start, end);
+        return this;
+    }
 }

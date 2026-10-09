@@ -289,4 +289,18 @@ public final class Integer extends Number implements Comparable<Integer> {
     public static int min(int a, int b) {
         return Math.min(a, b);
     }
+
+    public static int parseInt(CharSequence s, int beginIndex, int endIndex, int radix)
+            throws NumberFormatException {
+        java.util.Objects.requireNonNull(s);
+        java.util.Objects.checkFromToIndex(beginIndex, endIndex, s.length());
+        return parseInt(s.subSequence(beginIndex, endIndex).toString(), radix);
+    }
+
+    public static int parseUnsignedInt(CharSequence s, int beginIndex, int endIndex, int radix)
+            throws NumberFormatException {
+        java.util.Objects.requireNonNull(s);
+        java.util.Objects.checkFromToIndex(beginIndex, endIndex, s.length());
+        return parseUnsignedInt(s.subSequence(beginIndex, endIndex).toString(), radix);
+    }
 }

@@ -106,4 +106,25 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         return (this.mostSigBits < val.mostSigBits ? -1 : (this.mostSigBits > val.mostSigBits ? 1
                 : (this.leastSigBits < val.leastSigBits ? -1 : (this.leastSigBits > val.leastSigBits ? 1 : 0))));
     }
+
+    public long timestamp() {
+        if (version() != 1) {
+            throw new UnsupportedOperationException("Not a time-based UUID");
+        }
+        return (mostSigBits & 0x0FFFL) << 48 | ((mostSigBits >> 16) & 0x0FFFFL) << 32 | mostSigBits >>> 32;
+    }
+
+    public int clockSequence() {
+        if (version() != 1) {
+            throw new UnsupportedOperationException("Not a time-based UUID");
+        }
+        return (int) ((leastSigBits & 0x3FFF000000000000L) >>> 48);
+    }
+
+    public long node() {
+        if (version() != 1) {
+            throw new UnsupportedOperationException("Not a time-based UUID");
+        }
+        return leastSigBits & 0x0000FFFFFFFFFFFFL;
+    }
 }

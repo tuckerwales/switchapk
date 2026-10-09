@@ -1,11 +1,26 @@
 package java.util;
 
 public class IllegalFormatConversionException extends IllegalFormatException {
-    public IllegalFormatConversionException() {
-        super();
+    private final char c;
+    private final Class<?> arg;
+
+    public IllegalFormatConversionException(char c, Class<?> arg) {
+        if (arg == null) {
+            throw new NullPointerException();
+        }
+        this.c = c;
+        this.arg = arg;
     }
 
-    public IllegalFormatConversionException(String message) {
-        super(message);
+    public char getConversion() {
+        return c;
+    }
+
+    public Class<?> getArgumentClass() {
+        return arg;
+    }
+
+    public String getMessage() {
+        return String.format("%c != %s", c, arg.getName());
     }
 }

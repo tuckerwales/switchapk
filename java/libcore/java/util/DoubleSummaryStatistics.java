@@ -46,7 +46,21 @@ public class DoubleSummaryStatistics implements DoubleConsumer {
     }
 
     public String toString() {
-        return getClass().getSimpleName() + "{count=" + count + ", sum=" + sum + ", min=" + min + ", average="
-                + getAverage() + ", max=" + max + "}";
+        return String.format("%s{count=%d, sum=%f, min=%f, average=%f, max=%f}", getClass().getSimpleName(),
+                count, getSum(), min, getAverage(), max);
+    }
+
+    public DoubleSummaryStatistics(long count, double min, double max, double sum) throws IllegalArgumentException {
+        if (count < 0L) {
+            throw new IllegalArgumentException("Negative count value");
+        } else if (count > 0L) {
+            if (min > max) {
+                throw new IllegalArgumentException("Minimum greater than maximum");
+            }
+            this.count = count;
+            this.sum = sum;
+            this.min = min;
+            this.max = max;
+        }
     }
 }

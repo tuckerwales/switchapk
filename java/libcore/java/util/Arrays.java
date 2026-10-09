@@ -1485,4 +1485,730 @@ public final class Arrays {
     public static <T> Spliterator<T> spliterator(T[] array) {
         return Spliterators.spliterator(asList(array), 0);
     }
+
+    public static boolean equals(boolean[] a, int aFromIndex, int aToIndex, boolean[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static int mismatch(boolean[] a, boolean[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(boolean[] a, int aFromIndex, int aToIndex, boolean[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (a[aFromIndex + i] != b[bFromIndex + i]) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static int compare(boolean[] a, boolean[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compare(boolean[] a, int aFromIndex, int aToIndex, boolean[] b, int bFromIndex, int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Boolean.compare(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static boolean equals(byte[] a, int aFromIndex, int aToIndex, byte[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static int mismatch(byte[] a, byte[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(byte[] a, int aFromIndex, int aToIndex, byte[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (a[aFromIndex + i] != b[bFromIndex + i]) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static int compare(byte[] a, byte[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compare(byte[] a, int aFromIndex, int aToIndex, byte[] b, int bFromIndex, int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Byte.compare(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static boolean equals(char[] a, int aFromIndex, int aToIndex, char[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static int mismatch(char[] a, char[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(char[] a, int aFromIndex, int aToIndex, char[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (a[aFromIndex + i] != b[bFromIndex + i]) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static int compare(char[] a, char[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compare(char[] a, int aFromIndex, int aToIndex, char[] b, int bFromIndex, int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Character.compare(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static boolean equals(short[] a, int aFromIndex, int aToIndex, short[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static int mismatch(short[] a, short[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(short[] a, int aFromIndex, int aToIndex, short[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (a[aFromIndex + i] != b[bFromIndex + i]) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static int compare(short[] a, short[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compare(short[] a, int aFromIndex, int aToIndex, short[] b, int bFromIndex, int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Short.compare(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static boolean equals(int[] a, int aFromIndex, int aToIndex, int[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static int mismatch(int[] a, int[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(int[] a, int aFromIndex, int aToIndex, int[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (a[aFromIndex + i] != b[bFromIndex + i]) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static int compare(int[] a, int[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compare(int[] a, int aFromIndex, int aToIndex, int[] b, int bFromIndex, int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Integer.compare(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static boolean equals(long[] a, int aFromIndex, int aToIndex, long[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static int mismatch(long[] a, long[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(long[] a, int aFromIndex, int aToIndex, long[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (a[aFromIndex + i] != b[bFromIndex + i]) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static int compare(long[] a, long[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compare(long[] a, int aFromIndex, int aToIndex, long[] b, int bFromIndex, int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Long.compare(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static boolean equals(float[] a, int aFromIndex, int aToIndex, float[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static int mismatch(float[] a, float[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(float[] a, int aFromIndex, int aToIndex, float[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (Float.floatToIntBits(a[aFromIndex + i]) != Float.floatToIntBits(b[bFromIndex + i])) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static int compare(float[] a, float[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compare(float[] a, int aFromIndex, int aToIndex, float[] b, int bFromIndex, int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Float.compare(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static boolean equals(double[] a, int aFromIndex, int aToIndex, double[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static int mismatch(double[] a, double[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(double[] a, int aFromIndex, int aToIndex, double[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (Double.doubleToLongBits(a[aFromIndex + i]) != Double.doubleToLongBits(b[bFromIndex + i])) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static int compare(double[] a, double[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compare(double[] a, int aFromIndex, int aToIndex, double[] b, int bFromIndex, int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Double.compare(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static int compareUnsigned(byte[] a, byte[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compareUnsigned(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compareUnsigned(byte[] a, int aFromIndex, int aToIndex, byte[] b, int bFromIndex,
+            int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Byte.compareUnsigned(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static int compareUnsigned(short[] a, short[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compareUnsigned(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compareUnsigned(short[] a, int aFromIndex, int aToIndex, short[] b, int bFromIndex,
+            int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Short.compareUnsigned(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static int compareUnsigned(int[] a, int[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compareUnsigned(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compareUnsigned(int[] a, int aFromIndex, int aToIndex, int[] b, int bFromIndex,
+            int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Integer.compareUnsigned(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static int compareUnsigned(long[] a, long[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compareUnsigned(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int compareUnsigned(long[] a, int aFromIndex, int aToIndex, long[] b, int bFromIndex,
+            int bToIndex) {
+        int i = mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex);
+        if (i >= 0 && i < Math.min(aToIndex - aFromIndex, bToIndex - bFromIndex)) {
+            return Long.compareUnsigned(a[aFromIndex + i], b[bFromIndex + i]);
+        }
+        return (aToIndex - aFromIndex) - (bToIndex - bFromIndex);
+    }
+
+    public static boolean equals(Object[] a, int aFromIndex, int aToIndex, Object[] b, int bFromIndex, int bToIndex) {
+        return mismatch(a, aFromIndex, aToIndex, b, bFromIndex, bToIndex) < 0;
+    }
+
+    public static <T> boolean equals(T[] a, T[] a2, Comparator<? super T> cmp) {
+        Objects.requireNonNull(cmp);
+        if (a == a2) {
+            return true;
+        }
+        if (a == null || a2 == null) {
+            return false;
+        }
+        return equals(a, 0, a.length, a2, 0, a2.length, cmp);
+    }
+
+    /* Unlike mismatch, equals with a comparator compares every pair, identical ones included (as the JDK). */
+    public static <T> boolean equals(T[] a, int aFromIndex, int aToIndex, T[] b, int bFromIndex, int bToIndex,
+            Comparator<? super T> cmp) {
+        Objects.requireNonNull(cmp);
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        if (aLength != bToIndex - bFromIndex) {
+            return false;
+        }
+        for (int i = 0; i < aLength; i++) {
+            if (cmp.compare(a[aFromIndex + i], b[bFromIndex + i]) != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static int mismatch(Object[] a, Object[] b) {
+        return mismatch(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static int mismatch(Object[] a, int aFromIndex, int aToIndex, Object[] b, int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            if (!Objects.equals(a[aFromIndex + i], b[bFromIndex + i])) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static <T> int mismatch(T[] a, T[] b, Comparator<? super T> cmp) {
+        Objects.requireNonNull(cmp);
+        return mismatch(a, 0, a.length, b, 0, b.length, cmp);
+    }
+
+    public static <T> int mismatch(T[] a, int aFromIndex, int aToIndex, T[] b, int bFromIndex, int bToIndex,
+            Comparator<? super T> cmp) {
+        Objects.requireNonNull(cmp);
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            T oa = a[aFromIndex + i];
+            T ob = b[bFromIndex + i];
+            if (oa != ob && cmp.compare(oa, ob) != 0) {
+                return i;
+            }
+        }
+        return aLength == bLength ? -1 : length;
+    }
+
+    public static <T extends Comparable<? super T>> int compare(T[] a, T[] b) {
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length);
+    }
+
+    public static <T extends Comparable<? super T>> int compare(T[] a, int aFromIndex, int aToIndex, T[] b,
+            int bFromIndex, int bToIndex) {
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            T oa = a[aFromIndex + i];
+            T ob = b[bFromIndex + i];
+            if (oa != ob) {
+                if (oa == null || ob == null) {
+                    return oa == null ? -1 : 1;
+                }
+                int v = oa.compareTo(ob);
+                if (v != 0) {
+                    return v;
+                }
+            }
+        }
+        return aLength - bLength;
+    }
+
+    public static <T> int compare(T[] a, T[] b, Comparator<? super T> cmp) {
+        Objects.requireNonNull(cmp);
+        if (a == b) {
+            return 0;
+        }
+        if (a == null || b == null) {
+            return a == null ? -1 : 1;
+        }
+        return compare(a, 0, a.length, b, 0, b.length, cmp);
+    }
+
+    public static <T> int compare(T[] a, int aFromIndex, int aToIndex, T[] b, int bFromIndex, int bToIndex,
+            Comparator<? super T> cmp) {
+        Objects.requireNonNull(cmp);
+        rangeCheck(a.length, aFromIndex, aToIndex);
+        rangeCheck(b.length, bFromIndex, bToIndex);
+        int aLength = aToIndex - aFromIndex;
+        int bLength = bToIndex - bFromIndex;
+        int length = Math.min(aLength, bLength);
+        for (int i = 0; i < length; i++) {
+            T oa = a[aFromIndex + i];
+            T ob = b[bFromIndex + i];
+            if (oa != ob) {
+                int v = cmp.compare(oa, ob);
+                if (v != 0) {
+                    return v;
+                }
+            }
+        }
+        return aLength - bLength;
+    }
+
+    public static int binarySearch(Object[] a, int fromIndex, int toIndex, Object key) {
+        rangeCheck(a.length, fromIndex, toIndex);
+        int low = fromIndex;
+        int high = toIndex - 1;
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            int cmp = ((Comparable) a[mid]).compareTo(key);
+            if (cmp < 0) {
+                low = mid + 1;
+            } else if (cmp > 0) {
+                high = mid - 1;
+            } else {
+                return mid;
+            }
+        }
+        return -(low + 1);
+    }
+
+    public static void setAll(long[] array, java.util.function.IntToLongFunction generator) {
+        for (int i = 0; i < array.length; i++) {
+            array[i] = generator.applyAsLong(i);
+        }
+    }
+
+    public static void setAll(double[] array, java.util.function.IntToDoubleFunction generator) {
+        for (int i = 0; i < array.length; i++) {
+            array[i] = generator.applyAsDouble(i);
+        }
+    }
+
+    /* The parallel variants run sequentially: there is no fork/join pool. */
+    public static <T> void parallelSetAll(T[] array, IntFunction<? extends T> generator) {
+        setAll(array, generator);
+    }
+
+    public static void parallelSetAll(int[] array, IntUnaryOperator generator) {
+        setAll(array, generator);
+    }
+
+    public static void parallelSetAll(long[] array, java.util.function.IntToLongFunction generator) {
+        setAll(array, generator);
+    }
+
+    public static void parallelSetAll(double[] array, java.util.function.IntToDoubleFunction generator) {
+        setAll(array, generator);
+    }
+
+    public static <T> void parallelPrefix(T[] array, java.util.function.BinaryOperator<T> op) {
+        parallelPrefix(array, 0, array.length, op);
+    }
+
+    public static <T> void parallelPrefix(T[] array, int fromIndex, int toIndex,
+            java.util.function.BinaryOperator<T> op) {
+        Objects.requireNonNull(op);
+        rangeCheck(array.length, fromIndex, toIndex);
+        for (int i = fromIndex + 1; i < toIndex; i++) {
+            array[i] = op.apply(array[i - 1], array[i]);
+        }
+    }
+
+    public static void parallelPrefix(int[] array, java.util.function.IntBinaryOperator op) {
+        parallelPrefix(array, 0, array.length, op);
+    }
+
+    public static void parallelPrefix(int[] array, int fromIndex, int toIndex, java.util.function.IntBinaryOperator op) {
+        Objects.requireNonNull(op);
+        rangeCheck(array.length, fromIndex, toIndex);
+        for (int i = fromIndex + 1; i < toIndex; i++) {
+            array[i] = op.applyAsInt(array[i - 1], array[i]);
+        }
+    }
+
+    public static void parallelPrefix(long[] array, java.util.function.LongBinaryOperator op) {
+        parallelPrefix(array, 0, array.length, op);
+    }
+
+    public static void parallelPrefix(long[] array, int fromIndex, int toIndex,
+            java.util.function.LongBinaryOperator op) {
+        Objects.requireNonNull(op);
+        rangeCheck(array.length, fromIndex, toIndex);
+        for (int i = fromIndex + 1; i < toIndex; i++) {
+            array[i] = op.applyAsLong(array[i - 1], array[i]);
+        }
+    }
+
+    public static void parallelPrefix(double[] array, java.util.function.DoubleBinaryOperator op) {
+        parallelPrefix(array, 0, array.length, op);
+    }
+
+    public static void parallelPrefix(double[] array, int fromIndex, int toIndex,
+            java.util.function.DoubleBinaryOperator op) {
+        Objects.requireNonNull(op);
+        rangeCheck(array.length, fromIndex, toIndex);
+        for (int i = fromIndex + 1; i < toIndex; i++) {
+            array[i] = op.applyAsDouble(array[i - 1], array[i]);
+        }
+    }
+
+    public static <T extends Comparable<? super T>> void parallelSort(T[] a) {
+        sort(a);
+    }
+
+    public static <T extends Comparable<? super T>> void parallelSort(T[] a, int fromIndex, int toIndex) {
+        sort(a, fromIndex, toIndex);
+    }
+
+    public static <T> void parallelSort(T[] a, int fromIndex, int toIndex, Comparator<? super T> cmp) {
+        sort(a, fromIndex, toIndex, cmp);
+    }
+
+    public static IntStream stream(int[] array, int startInclusive, int endExclusive) {
+        return IntStream.of(copyOfRange(array, startInclusive, endExclusive));
+    }
+
+    public static java.util.stream.LongStream stream(long[] array) {
+        return java.util.stream.LongStream.of(array);
+    }
+
+    public static java.util.stream.LongStream stream(long[] array, int startInclusive, int endExclusive) {
+        return java.util.stream.LongStream.of(copyOfRange(array, startInclusive, endExclusive));
+    }
+
+    public static java.util.stream.DoubleStream stream(double[] array) {
+        return java.util.stream.DoubleStream.of(array);
+    }
+
+    public static java.util.stream.DoubleStream stream(double[] array, int startInclusive, int endExclusive) {
+        return java.util.stream.DoubleStream.of(copyOfRange(array, startInclusive, endExclusive));
+    }
+
+    public static <T> Spliterator<T> spliterator(T[] array, int startInclusive, int endExclusive) {
+        return Spliterators.spliterator(array, startInclusive, endExclusive,
+                Spliterator.ORDERED | Spliterator.IMMUTABLE);
+    }
+
+    public static Spliterator.OfInt spliterator(int[] array) {
+        return Spliterators.spliterator(array, 0, array.length, Spliterator.ORDERED | Spliterator.IMMUTABLE);
+    }
+
+    public static Spliterator.OfInt spliterator(int[] array, int startInclusive, int endExclusive) {
+        return Spliterators.spliterator(array, startInclusive, endExclusive,
+                Spliterator.ORDERED | Spliterator.IMMUTABLE);
+    }
+
+    public static Spliterator.OfLong spliterator(long[] array) {
+        return Spliterators.spliterator(array, 0, array.length, Spliterator.ORDERED | Spliterator.IMMUTABLE);
+    }
+
+    public static Spliterator.OfLong spliterator(long[] array, int startInclusive, int endExclusive) {
+        return Spliterators.spliterator(array, startInclusive, endExclusive,
+                Spliterator.ORDERED | Spliterator.IMMUTABLE);
+    }
+
+    public static Spliterator.OfDouble spliterator(double[] array) {
+        return Spliterators.spliterator(array, 0, array.length, Spliterator.ORDERED | Spliterator.IMMUTABLE);
+    }
+
+    public static Spliterator.OfDouble spliterator(double[] array, int startInclusive, int endExclusive) {
+        return Spliterators.spliterator(array, startInclusive, endExclusive,
+                Spliterator.ORDERED | Spliterator.IMMUTABLE);
+    }
+
+    public static void parallelSort(byte[] a, int fromIndex, int toIndex) {
+        sort(a, fromIndex, toIndex);
+    }
+
+    public static void parallelSort(char[] a, int fromIndex, int toIndex) {
+        sort(a, fromIndex, toIndex);
+    }
+
+    public static void parallelSort(short[] a, int fromIndex, int toIndex) {
+        sort(a, fromIndex, toIndex);
+    }
+
+    public static void parallelSort(int[] a, int fromIndex, int toIndex) {
+        sort(a, fromIndex, toIndex);
+    }
+
+    public static void parallelSort(long[] a, int fromIndex, int toIndex) {
+        sort(a, fromIndex, toIndex);
+    }
+
+    public static void parallelSort(float[] a, int fromIndex, int toIndex) {
+        sort(a, fromIndex, toIndex);
+    }
+
+    public static void parallelSort(double[] a, int fromIndex, int toIndex) {
+        sort(a, fromIndex, toIndex);
+    }
 }

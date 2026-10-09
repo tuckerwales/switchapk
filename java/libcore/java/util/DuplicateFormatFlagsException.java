@@ -1,11 +1,20 @@
 package java.util;
 
 public class DuplicateFormatFlagsException extends IllegalFormatException {
-    public DuplicateFormatFlagsException() {
-        super();
+    private final String flags;
+
+    public DuplicateFormatFlagsException(String f) {
+        if (f == null) {
+            throw new NullPointerException();
+        }
+        this.flags = f;
     }
 
-    public DuplicateFormatFlagsException(String message) {
-        super(message);
+    public String getFlags() {
+        return flags;
+    }
+
+    public String getMessage() {
+        return String.format("Flags = '%s'", flags);
     }
 }

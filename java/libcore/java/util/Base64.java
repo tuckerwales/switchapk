@@ -19,6 +19,23 @@ public class Base64 {
         return new Encoder(false, true, 76);
     }
 
+    private static final byte[] CRLF = {'\r', '\n'};
+
+    public static Encoder getMimeEncoder(int lineLength, byte[] lineSeparator) {
+        Objects.requireNonNull(lineSeparator);
+        for (byte b : lineSeparator) {
+            int c = b & 0xff;
+            if (Decoder.val((char) c) >= 0 || c == '=') {
+                throw new IllegalArgumentException("Illegal base64 line separator character 0x" + Integer.toString(c, 16));
+            }
+        }
+        lineLength &= ~0b11;
+        if (lineLength <= 0) {
+            return getEncoder();
+        }
+        return new Encoder(false, true, lineLength, lineSeparator.clone());
+    }
+
     public static Decoder getDecoder() {
         return new Decoder(false, false);
     }
@@ -35,15 +52,67 @@ public class Base64 {
         private final boolean url;
         private final boolean pad;
         private final int lineMax;
+        private final byte[] separator;
 
         Encoder(boolean url, boolean pad, int lineMax) {
+            this(url, pad, lineMax, CRLF);
+        }
+
+        Encoder(boolean url, boolean pad, int lineMax, byte[] separator) {
             this.url = url;
             this.pad = pad;
             this.lineMax = lineMax;
+            this.separator = separator;
         }
 
         public Encoder withoutPadding() {
-            return new Encoder(url, false, lineMax);
+            return new Encoder(url, false, lineMax, separator);
+        }
+
+        public int encode(byte[] src, byte[] dst) {
+            byte[] enc = encode(src);
+            if (dst.length < enc.length) {
+                throw new IllegalArgumentException("Output byte array is too small for encoding all input bytes");
+            }
+            System.arraycopy(enc, 0, dst, 0, enc.length);
+            return enc.length;
+        }
+
+        public java.nio.ByteBuffer encode(java.nio.ByteBuffer buffer) {
+            byte[] src = new byte[buffer.remaining()];
+            buffer.get(src);
+            return java.nio.ByteBuffer.wrap(encode(src));
+        }
+
+        /* Buffers everything and encodes on close (the JDK streams in 3-byte groups; the output is the same). */
+        public java.io.OutputStream wrap(final java.io.OutputStream os) {
+            Objects.requireNonNull(os);
+            return new java.io.OutputStream() {
+                private final java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                private boolean closed;
+
+                public void write(int b) throws java.io.IOException {
+                    if (closed) {
+                        throw new java.io.IOException("Stream is closed");
+                    }
+                    buf.write(b);
+                }
+
+                public void write(byte[] b, int off, int len) throws java.io.IOException {
+                    if (closed) {
+                        throw new java.io.IOException("Stream is closed");
+                    }
+                    buf.write(b, off, len);
+                }
+
+                public void close() throws java.io.IOException {
+                    if (!closed) {
+                        closed = true;
+                        os.write(encode(buf.toByteArray()));
+                        os.close();
+                    }
+                }
+            };
         }
 
         public byte[] encode(byte[] src) {
@@ -55,7 +124,9 @@ public class Base64 {
                 int b1 = i + 1 < src.length ? src[i + 1] & 0xff : 0;
                 int b2 = i + 2 < src.length ? src[i + 2] & 0xff : 0;
                 if (lineMax > 0 && lineLen >= lineMax) {
-                    sb.append("\r\n");
+                    for (byte b : separator) {
+                        sb.append((char) (b & 0xff));
+                    }
                     lineLen = 0;
                 }
                 sb.append(table[b0 >> 2]);
@@ -95,7 +166,7 @@ public class Base64 {
             this.mime = mime;
         }
 
-        private static int val(char c) {
+        static int val(char c) {
             if (c >= 'A' && c <= 'Z') {
                 return c - 'A';
             }
@@ -120,6 +191,68 @@ public class Base64 {
                 chars[i] = (char) (src[i] & 0xff);
             }
             return decode(new String(chars));
+        }
+
+        public int decode(byte[] src, byte[] dst) {
+            byte[] dec = decode(src);
+            if (dst.length < dec.length) {
+                throw new IllegalArgumentException("Output byte array is too small for decoding all input bytes");
+            }
+            System.arraycopy(dec, 0, dst, 0, dec.length);
+            return dec.length;
+        }
+
+        public java.nio.ByteBuffer decode(java.nio.ByteBuffer buffer) {
+            int pos0 = buffer.position();
+            byte[] src = new byte[buffer.remaining()];
+            buffer.get(src);
+            try {
+                return java.nio.ByteBuffer.wrap(decode(src));
+            } catch (IllegalArgumentException e) {
+                buffer.position(pos0);
+                throw e;
+            }
+        }
+
+        /* Reads the whole source on first use and decodes it. */
+        public java.io.InputStream wrap(final java.io.InputStream is) {
+            Objects.requireNonNull(is);
+            return new java.io.InputStream() {
+                private java.io.ByteArrayInputStream decoded;
+
+                private java.io.ByteArrayInputStream decoded() throws java.io.IOException {
+                    if (decoded == null) {
+                        java.io.ByteArrayOutputStream all = new java.io.ByteArrayOutputStream();
+                        byte[] b = new byte[4096];
+                        int n;
+                        while ((n = is.read(b)) > 0) {
+                            all.write(b, 0, n);
+                        }
+                        try {
+                            decoded = new java.io.ByteArrayInputStream(decode(all.toByteArray()));
+                        } catch (IllegalArgumentException e) {
+                            throw new java.io.IOException(e.getMessage());
+                        }
+                    }
+                    return decoded;
+                }
+
+                public int read() throws java.io.IOException {
+                    return decoded().read();
+                }
+
+                public int read(byte[] b, int off, int len) throws java.io.IOException {
+                    return decoded().read(b, off, len);
+                }
+
+                public int available() throws java.io.IOException {
+                    return decoded().available();
+                }
+
+                public void close() throws java.io.IOException {
+                    is.close();
+                }
+            };
         }
 
         public byte[] decode(String src) {

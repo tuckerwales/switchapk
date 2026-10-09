@@ -81,4 +81,16 @@ public final class OptionalLong {
     public String toString() {
         return isPresent ? "OptionalLong[" + value + "]" : "OptionalLong.empty";
     }
+
+    public void ifPresentOrElse(java.util.function.LongConsumer action, Runnable emptyAction) {
+        if (isPresent()) {
+            action.accept(getAsLong());
+        } else {
+            emptyAction.run();
+        }
+    }
+
+    public java.util.stream.LongStream stream() {
+        return isPresent() ? java.util.stream.LongStream.of(getAsLong()) : java.util.stream.LongStream.of(new long[0]);
+    }
 }

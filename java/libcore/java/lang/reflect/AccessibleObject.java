@@ -38,4 +38,20 @@ public class AccessibleObject implements AnnotatedElement {
     public Annotation[] getDeclaredAnnotations() {
         return new Annotation[0];
     }
+
+    public boolean isAnnotationPresent(Class<? extends Annotation> annotationClass) {
+        return getAnnotation(annotationClass) != null;
+    }
+
+    public <T extends Annotation> T[] getAnnotationsByType(Class<T> annotationClass) {
+        return AnnotationParser.byType(getAnnotations(), annotationClass);
+    }
+
+    public <T extends Annotation> T getDeclaredAnnotation(Class<T> annotationClass) {
+        return AnnotatedElement.super.getDeclaredAnnotation(annotationClass);
+    }
+
+    public <T extends Annotation> T[] getDeclaredAnnotationsByType(Class<T> annotationClass) {
+        return AnnotationParser.byType(getDeclaredAnnotations(), annotationClass);
+    }
 }

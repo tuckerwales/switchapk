@@ -79,4 +79,28 @@ public class Modifier {
         int len = sb.length();
         return len > 0 ? sb.substring(0, len - 1) : "";
     }
+
+    public static int classModifiers() {
+        return PUBLIC | PROTECTED | PRIVATE | ABSTRACT | STATIC | FINAL | STRICT;
+    }
+
+    public static int interfaceModifiers() {
+        return PUBLIC | PROTECTED | PRIVATE | ABSTRACT | STATIC | STRICT;
+    }
+
+    public static int constructorModifiers() {
+        return PUBLIC | PROTECTED | PRIVATE;
+    }
+
+    public static int methodModifiers() {
+        return PUBLIC | PROTECTED | PRIVATE | ABSTRACT | STATIC | FINAL | SYNCHRONIZED | NATIVE | STRICT;
+    }
+
+    public static int fieldModifiers() {
+        return PUBLIC | PROTECTED | PRIVATE | STATIC | FINAL | TRANSIENT | VOLATILE;
+    }
+
+    public static int parameterModifiers() {
+        return FINAL;
+    }
 }

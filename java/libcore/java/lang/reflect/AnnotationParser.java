@@ -246,4 +246,41 @@ public final class AnnotationParser {
         if (v instanceof boolean[]) return ((boolean[]) v).clone();
         return v;
     }
+
+    /*
+     * The annotations of one type among `all`, looking through the container of a @Repeatable type when the
+     * type itself is absent (AnnotatedElement.getAnnotationsByType semantics). Framework-internal.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T extends Annotation> T[] byType(Annotation[] all, Class<T> type) {
+        if (type == null) {
+            throw new NullPointerException("annotationClass");
+        }
+        java.util.ArrayList<T> out = new java.util.ArrayList<T>();
+        for (Annotation a : all) {
+            if (type.isInstance(a)) {
+                out.add(type.cast(a));
+            }
+        }
+        if (out.isEmpty()) {
+            java.lang.annotation.Repeatable r = type.getAnnotation(java.lang.annotation.Repeatable.class);
+            if (r != null) {
+                for (Annotation a : all) {
+                    if (r.value().isInstance(a)) {
+                        try {
+                            Method value = a.annotationType().getMethod("value");
+                            Object[] items = (Object[]) value.invoke(a);
+                            for (Object o : items) {
+                                out.add(type.cast(o));
+                            }
+                        } catch (ReflectiveOperationException e) {
+                            // a container without value() holds nothing we can return
+                        }
+                    }
+                }
+            }
+        }
+        T[] result = (T[]) Array.newInstance(type, out.size());
+        return out.toArray(result);
+    }
 }

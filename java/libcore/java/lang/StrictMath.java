@@ -307,4 +307,252 @@ public final class StrictMath {
     public static float fma(float a, float b, float c) {
         return a * b + c;
     }
+
+    public static final double TAU = 2.0 * PI;
+
+    public static double nextDown(double d) {
+        if (d != d || d == Double.NEGATIVE_INFINITY) {
+            return d;
+        }
+        if (d == 0.0) {
+            return -Double.MIN_VALUE;
+        }
+        return Double.longBitsToDouble(Double.doubleToRawLongBits(d) + ((d > 0.0d) ? -1L : +1L));
+    }
+
+    public static float nextDown(float f) {
+        if (f != f || f == Float.NEGATIVE_INFINITY) {
+            return f;
+        }
+        if (f == 0.0f) {
+            return -Float.MIN_VALUE;
+        }
+        return Float.intBitsToFloat(Float.floatToRawIntBits(f) + ((f > 0.0f) ? -1 : +1));
+    }
+
+    public static float nextAfter(float start, double direction) {
+        if (start > direction) {
+            return -nextUp(-start);
+        } else if (start < direction) {
+            return nextUp(start);
+        } else if (start == direction) {
+            return (float) direction;
+        }
+        return start + (float) direction;
+    }
+
+    public static long incrementExact(long a) {
+        if (a == Long.MAX_VALUE) {
+            throw new ArithmeticException("long overflow");
+        }
+        return a + 1L;
+    }
+
+    public static long decrementExact(long a) {
+        if (a == Long.MIN_VALUE) {
+            throw new ArithmeticException("long overflow");
+        }
+        return a - 1L;
+    }
+
+    public static long negateExact(long a) {
+        if (a == Long.MIN_VALUE) {
+            throw new ArithmeticException("long overflow");
+        }
+        return -a;
+    }
+
+    public static long multiplyExact(long x, int y) {
+        return multiplyExact(x, (long) y);
+    }
+
+    public static long multiplyFull(int x, int y) {
+        return (long) x * (long) y;
+    }
+
+    public static long multiplyHigh(long x, long y) {
+        long x1 = x >> 32;
+        long x2 = x & 0xFFFFFFFFL;
+        long y1 = y >> 32;
+        long y2 = y & 0xFFFFFFFFL;
+        long z2 = x2 * y2;
+        long t = x1 * y2 + (z2 >>> 32);
+        long z1 = t & 0xFFFFFFFFL;
+        long z0 = t >> 32;
+        z1 += x2 * y1;
+        return x1 * y1 + z0 + (z1 >> 32);
+    }
+
+    public static long unsignedMultiplyHigh(long x, long y) {
+        long result = multiplyHigh(x, y);
+        result += (y & (x >> 63));
+        result += (x & (y >> 63));
+        return result;
+    }
+
+    public static int divideExact(int x, int y) {
+        int q = x / y;
+        if ((x & y & q) >= 0) {
+            return q;
+        }
+        throw new ArithmeticException("integer overflow");
+    }
+
+    public static long divideExact(long x, long y) {
+        long q = x / y;
+        if ((x & y & q) >= 0) {
+            return q;
+        }
+        throw new ArithmeticException("long overflow");
+    }
+
+    public static int floorDivExact(int x, int y) {
+        final int q = x / y;
+        if ((x & y & q) >= 0) {
+            if ((x ^ y) < 0 && (q * y != x)) {
+                return q - 1;
+            }
+            return q;
+        }
+        throw new ArithmeticException("integer overflow");
+    }
+
+    public static long floorDivExact(long x, long y) {
+        final long q = x / y;
+        if ((x & y & q) >= 0) {
+            if ((x ^ y) < 0 && (q * y != x)) {
+                return q - 1;
+            }
+            return q;
+        }
+        throw new ArithmeticException("long overflow");
+    }
+
+    public static int ceilDivExact(int x, int y) {
+        final int q = x / y;
+        if ((x & y & q) >= 0) {
+            if ((x ^ y) >= 0 && (q * y != x)) {
+                return q + 1;
+            }
+            return q;
+        }
+        throw new ArithmeticException("integer overflow");
+    }
+
+    public static long ceilDivExact(long x, long y) {
+        final long q = x / y;
+        if ((x & y & q) >= 0) {
+            if ((x ^ y) >= 0 && (q * y != x)) {
+                return q + 1;
+            }
+            return q;
+        }
+        throw new ArithmeticException("long overflow");
+    }
+
+    public static long floorDiv(long x, int y) {
+        return floorDiv(x, (long) y);
+    }
+
+    public static int floorMod(long x, int y) {
+        return (int) floorMod(x, (long) y);
+    }
+
+    public static int ceilDiv(int x, int y) {
+        final int q = x / y;
+        if ((x ^ y) >= 0 && (q * y != x)) {
+            return q + 1;
+        }
+        return q;
+    }
+
+    public static long ceilDiv(long x, int y) {
+        return ceilDiv(x, (long) y);
+    }
+
+    public static long ceilDiv(long x, long y) {
+        final long q = x / y;
+        if ((x ^ y) >= 0 && (q * y != x)) {
+            return q + 1;
+        }
+        return q;
+    }
+
+    public static int ceilMod(int x, int y) {
+        final int r = x % y;
+        if ((x ^ y) >= 0 && r != 0) {
+            return r - y;
+        }
+        return r;
+    }
+
+    public static int ceilMod(long x, int y) {
+        return (int) ceilMod(x, (long) y);
+    }
+
+    public static long ceilMod(long x, long y) {
+        final long r = x % y;
+        if ((x ^ y) >= 0 && r != 0) {
+            return r - y;
+        }
+        return r;
+    }
+
+    public static int absExact(int a) {
+        if (a == Integer.MIN_VALUE) {
+            throw new ArithmeticException("Overflow to represent absolute value of Integer.MIN_VALUE");
+        }
+        return abs(a);
+    }
+
+    public static long absExact(long a) {
+        if (a == Long.MIN_VALUE) {
+            throw new ArithmeticException("Overflow to represent absolute value of Long.MIN_VALUE");
+        }
+        return abs(a);
+    }
+
+    public static int clamp(long value, int min, int max) {
+        if (min > max) {
+            throw new IllegalArgumentException(min + " > " + max);
+        }
+        return (int) Math.min(max, Math.max(value, min));
+    }
+
+    public static long clamp(long value, long min, long max) {
+        if (min > max) {
+            throw new IllegalArgumentException(min + " > " + max);
+        }
+        return Math.min(max, Math.max(value, min));
+    }
+
+    public static double clamp(double value, double min, double max) {
+        if (!(min < max)) {
+            if (Double.isNaN(min)) {
+                throw new IllegalArgumentException("min is NaN");
+            }
+            if (Double.isNaN(max)) {
+                throw new IllegalArgumentException("max is NaN");
+            }
+            if (Double.compare(min, max) > 0) {
+                throw new IllegalArgumentException(min + " > " + max);
+            }
+        }
+        return Math.min(max, Math.max(value, min));
+    }
+
+    public static float clamp(float value, float min, float max) {
+        if (!(min < max)) {
+            if (Float.isNaN(min)) {
+                throw new IllegalArgumentException("min is NaN");
+            }
+            if (Float.isNaN(max)) {
+                throw new IllegalArgumentException("max is NaN");
+            }
+            if (Float.compare(min, max) > 0) {
+                throw new IllegalArgumentException(min + " > " + max);
+            }
+        }
+        return Math.min(max, Math.max(value, min));
+    }
 }

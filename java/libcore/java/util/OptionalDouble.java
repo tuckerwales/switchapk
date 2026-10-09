@@ -81,4 +81,16 @@ public final class OptionalDouble {
     public String toString() {
         return isPresent ? "OptionalDouble[" + value + "]" : "OptionalDouble.empty";
     }
+
+    public void ifPresentOrElse(java.util.function.DoubleConsumer action, Runnable emptyAction) {
+        if (isPresent()) {
+            action.accept(getAsDouble());
+        } else {
+            emptyAction.run();
+        }
+    }
+
+    public java.util.stream.DoubleStream stream() {
+        return isPresent() ? java.util.stream.DoubleStream.of(getAsDouble()) : java.util.stream.DoubleStream.of(new double[0]);
+    }
 }

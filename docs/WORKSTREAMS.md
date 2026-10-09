@@ -41,11 +41,12 @@ duplicating work.
 | WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | in progress (bindings, EGL, GLSurfaceView, window surfaces and tests/apps/gles done on host Mesa; FBO surfaces for switch-mesa; Switch GL on hardware, GLES1 verification, EGL15 syncs/images and SurfaceTexture left) | session 22, 2026-10-09 |
 | WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, bionic shim, JNI_OnLoad, System.load/loadLibrary and tests/apps/ndk done on x86-64 and AArch64 Linux; Switch code memory via svcMapProcessCodeMemory done, not run on hardware; NativeActivity, ANativeWindow and native EGL window surfaces done on the host, tests/apps/native; OpenSL ES buffer queue is in the shim and shares the WS7 mixer; ALooper, AInputQueue and AConfiguration done on the host (tests/apps/input); newlib struct translation, ALooper/input on the Switch (no pipe/poll in newlib) and AAudio left) | session 16, 2026-10-07 |
 | WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO boots on hardware; launcher labels and icons landed (tests/apps/labeled); audio, rumble, 1080p docked remain) | session 7, 2026-10-02 |
-| WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | in progress (sockets, DNS, UDP, HttpURLConnection over HTTP/1.1 and ConnectivityManager done on the host (tests/dex/NetTest, tests/apps/net); TLS, gzip, pooling/cookies and a device run left) | session 17, 2026-10-07 |
+| WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | in progress (sockets, DNS, UDP, HttpURLConnection over HTTP/1.1 with transparent gzip, and ConnectivityManager done on the host (tests/dex/NetTest, tests/apps/net); java.util.zip and java.util.jar done (tests/dex/ZipTest); TLS, pooling/cookies and a device run left) | session 23, 2026-10-09 (zip, gzip); session 17, 2026-10-07 |
 | WS12 | VM performance and memory | none | not started | |
 | WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip with every tests/apps APK; screenshot runner and VmTest on CI remain) | session 15, 2026-10-02 |
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
 | WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress (sensors with fused gravity/rotation/orientation, battery broadcasts, rumble waveforms, PowerManager, and location/telephony/camera answering as absent done on the host, tests/apps/sensors; the IMU axis signs, rumble and psm have not been run on a console) | session 18, 2026-10-08 |
+| WS16 | libcore API completeness: members and classes android.jar has in java.* that libcore lacks | none | in progress (session 23: java.lang, java.util and java.util.concurrent gaps first) | session 23, 2026-10-09 |
 
 Parallelism: after WS0 lands, WS1, WS4, WS6, WS7, WS9, WS10, WS11, WS12,
 WS13, WS15 can all run at once. WS2, WS3, WS5 start once the View API of
@@ -311,10 +312,11 @@ ConnectivityManager/NetworkInfo reporting WiFi state (nifm on Switch).
 Many apps only need "no network" to work gracefully: make offline
 behaviour clean (UnknownHostException) before full support.
 
-Status: sockets, DNS, UDP, HTTP/1.1 and ConnectivityManager are in (see
-ARCHITECTURE 5.1). Remaining: TLS (mbedtls; `javax.net.ssl` has only the
-exception classes, https throws SSLHandshakeException), java.util.zip so
-HTTP can use gzip, connection pooling, CookieManager, NIO socket
+Status: sockets, DNS, UDP, HTTP/1.1 with transparent gzip and
+ConnectivityManager are in (see ARCHITECTURE 5.1), and so are
+java.util.zip and java.util.jar (5.2). Remaining: TLS (mbedtls;
+`javax.net.ssl` has only the exception classes, https throws
+SSLHandshakeException), connection pooling, CookieManager, NIO socket
 channels, and running tests/apps/net on hardware.
 
 ## WS12: VM performance and memory
@@ -377,3 +379,29 @@ through lbl).
 Acceptance: an app sees the accelerometer, gyroscope and the fused
 sensors at the rates it asks for, tilting and turning the console move
 them the right way, and battery and rumble work on hardware.
+
+## WS16: libcore API completeness
+
+Owns: `java/libcore/java/**` members that are missing (not the
+subsystems other packages own: java.net is WS11, java.util.zip/jar are
+WS11 too).
+
+`tools/api_check.py -p <package>` lists what android.jar declares and
+libcore lacks. A missing libcore method is not auto-stubbed: the app
+gets NoSuchMethodError. Covariant overrides count (an app compiled
+against android.jar calls `IntStream.parallel()` with an IntStream
+return type). Skip what libcore cannot express yet (java.time,
+java.security certificates, SequencedCollection from API 35) unless an
+app needs it.
+
+Scope, roughly by how often apps hit it: String, StringBuilder,
+Character, Integer/Long, Math/StrictMath, Class (annotations, enclosing
+members, generic strings), Arrays, Collections, streams, atomics,
+ConcurrentHashMap, locks, CompletableFuture; missing classes such as
+ThreadLocalRandom, Scanner, ResourceBundle, ObjectInput/OutputStream,
+the piped streams, StreamTokenizer, AbstractOwnableSynchronizer,
+StampedLock, ForkJoin tasks.
+
+Acceptance: each batch has a `tests/dex` program that matches OpenJDK,
+and `api_check.py` shows no gaps in the packages it covers except the
+documented exclusions.

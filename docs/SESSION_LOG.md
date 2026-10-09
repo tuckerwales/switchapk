@@ -711,7 +711,19 @@ what is left in flight.
   host Mesa (libEGL is absent here). `make -f Makefile.switch` builds
   the NRO.
 
-### Session 19 (2026-10-09, branch claude/new-session-0z3wws)
+
+## Session 19, 2026-10-09: sensors sample on a console
+
+- First console run of tests/apps/sensors: one rumble, then "sensing..."
+  forever. Not a hang: the text only changed once all 14 checks passed,
+  and yaw, tilt, battery low/okay, power connected and charging only
+  happen under the host script. The app now shows live accelerometer,
+  gyroscope, gravity and orientation readings, how many checks passed
+  and which are pending, so a console run shows whether the IMU works
+  (lying screen up should read accel about 0 0 9.8; if z is negative,
+  flip ACCEL_SIGN in platform_switch.c). The host check still passes.
+
+### Session 20 (2026-10-09, branch claude/new-session-0z3wws)
 
 - WS8 on hardware: tests/apps/gles showed "OpenGL ES unavailable / No
   configs match configSpec" in both views on a Switch. devkitPro's

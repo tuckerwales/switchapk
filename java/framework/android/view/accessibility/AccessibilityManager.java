@@ -1,5 +1,6 @@
 package android.view.accessibility;
 
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.pm.ServiceInfo;
 import android.os.Handler;
@@ -40,6 +41,10 @@ public final class AccessibilityManager {
     public void interrupt() {}
     @Deprecated
     public List<ServiceInfo> getAccessibilityServiceList() { return Collections.emptyList(); }
+    public List<AccessibilityServiceInfo> getInstalledAccessibilityServiceList() { return Collections.emptyList(); }
+    public List<AccessibilityServiceInfo> getEnabledAccessibilityServiceList(int feedbackTypeFlags) {
+        return Collections.emptyList();
+    }
     public boolean addAccessibilityStateChangeListener(AccessibilityStateChangeListener listener) {
         return mListeners.add(listener);
     }

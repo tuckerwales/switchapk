@@ -789,3 +789,17 @@ what is left in flight.
 - `make`, VmTest, NetTest, ZipTest and tests/apps/net pass, and
   `make -f Makefile.switch` builds the NRO without warnings (zlib was
   already linked there). Nothing new was run on hardware.
+
+### Session 24 (2026-10-09, branch claude/new-session-9cbq38)
+
+- Jetpack Compose crash on a console: AndroidComposeView's constructor
+  looks up `AutofillManager` and failed with NoClassDefFoundError. Added
+  `android.view.autofill` (AutofillManager always disabled and returned by
+  `getSystemService("autofill")` / `getSystemService(AutofillManager.class)`,
+  AutofillId, AutofillValue), `View.getAutofillId`/`setAutofillId`/
+  `autofill`/`getAutofillValue`, `Context.AUTOFILL_MANAGER_SERVICE`, and
+  `android.accessibilityservice.AccessibilityServiceInfo` with
+  `AccessibilityManager.getEnabledAccessibilityServiceList` and
+  `getInstalledAccessibilityServiceList` (both empty). Checked on the host
+  with a view that does Compose's lookups from onAttachedToWindow; the
+  Compose app itself has not been rerun.

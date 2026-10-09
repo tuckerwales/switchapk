@@ -60,6 +60,7 @@ public abstract class Context {
     public static final String ALARM_SERVICE = "alarm";
     public static final String NOTIFICATION_SERVICE = "notification";
     public static final String ACCESSIBILITY_SERVICE = "accessibility";
+    public static final String AUTOFILL_MANAGER_SERVICE = "autofill";
     public static final String CAPTIONING_SERVICE = "captioning";
     public static final String KEYGUARD_SERVICE = "keyguard";
     public static final String LOCATION_SERVICE = "location";

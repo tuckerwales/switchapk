@@ -368,6 +368,7 @@ public class ContextImpl extends Context {
         if (ACCESSIBILITY_SERVICE.equals(name)) {
             return android.view.accessibility.AccessibilityManager.getInstance(this);
         }
+        if (AUTOFILL_MANAGER_SERVICE.equals(name)) return android.view.autofill.AutofillManager.getInstance();
         if (SEARCH_SERVICE.equals(name)) {
             if (mSearchManager == null) mSearchManager = new SearchManager(getOuterContext(), null);
             return mSearchManager;
@@ -404,6 +405,7 @@ public class ContextImpl extends Context {
         if (serviceClass == InputMethodManager.class) return INPUT_METHOD_SERVICE;
         if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;
         if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;
+        if (serviceClass == android.view.autofill.AutofillManager.class) return AUTOFILL_MANAGER_SERVICE;
         if (serviceClass == SearchManager.class) return SEARCH_SERVICE;
         if (serviceClass == AudioManager.class) return AUDIO_SERVICE;
         if (serviceClass == android.net.ConnectivityManager.class) return CONNECTIVITY_SERVICE;

@@ -1339,5 +1339,12 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
 - Launcher identity (`apk_read_identity`) is checked on the host with
   `switchapk-host --apk-info` (`tests/apps/labeled/check_info.sh`), without
   booting the VM.
-- Real-world APKs: keep a local (not committed) corpus of open-source APKs
-  (F-Droid) and track results in `docs/COMPATIBILITY.md` (to be created).
+- Real-world APKs: `tests/corpus/corpus.json` pins open-source F-Droid
+  APKs (fetched into `build/corpus`, never committed). `tools/corpus.py`
+  scans each APK's bytecode references against framework.dex and
+  android.jar (missing classes, java.* members that throw, android.*
+  members that auto-stub), checks native imports against the shim
+  (`switchapk-host --shim-symbols` prints its names; GL and EGL come from
+  the driver), boots each APK headless with a smoke script and collects
+  `STUB:` lines, exception chains and stubbed native calls, then writes
+  the generated section of `docs/COMPATIBILITY.md`.

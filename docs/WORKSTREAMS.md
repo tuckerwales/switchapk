@@ -46,6 +46,7 @@ duplicating work.
 | WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip with every tests/apps APK; screenshot runner and VmTest on CI remain) | session 15, 2026-10-02 |
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
 | WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress (sensors with fused gravity/rotation/orientation, battery broadcasts, rumble waveforms, PowerManager, and location/telephony/camera answering as absent done on the host, tests/apps/sensors; the IMU axis signs, rumble and psm have not been run on a console) | session 18, 2026-10-08 |
+| WS16 | libcore API completeness: members and classes android.jar has in java.* that libcore lacks | none | in progress (session 19: java.lang, java.util and java.util.concurrent gaps first) | session 19, 2026-10-09 |
 
 Parallelism: after WS0 lands, WS1, WS4, WS6, WS7, WS9, WS10, WS11, WS12,
 WS13, WS15 can all run at once. WS2, WS3, WS5 start once the View API of
@@ -378,3 +379,29 @@ through lbl).
 Acceptance: an app sees the accelerometer, gyroscope and the fused
 sensors at the rates it asks for, tilting and turning the console move
 them the right way, and battery and rumble work on hardware.
+
+## WS16: libcore API completeness
+
+Owns: `java/libcore/java/**` members that are missing (not the
+subsystems other packages own: java.net is WS11, java.util.zip/jar are
+WS11 too).
+
+`tools/api_check.py -p <package>` lists what android.jar declares and
+libcore lacks. A missing libcore method is not auto-stubbed: the app
+gets NoSuchMethodError. Covariant overrides count (an app compiled
+against android.jar calls `IntStream.parallel()` with an IntStream
+return type). Skip what libcore cannot express yet (java.time,
+java.security certificates, SequencedCollection from API 35) unless an
+app needs it.
+
+Scope, roughly by how often apps hit it: String, StringBuilder,
+Character, Integer/Long, Math/StrictMath, Class (annotations, enclosing
+members, generic strings), Arrays, Collections, streams, atomics,
+ConcurrentHashMap, locks, CompletableFuture; missing classes such as
+ThreadLocalRandom, Scanner, ResourceBundle, ObjectInput/OutputStream,
+the piped streams, StreamTokenizer, AbstractOwnableSynchronizer,
+StampedLock, ForkJoin tasks.
+
+Acceptance: each batch has a `tests/dex` program that matches OpenJDK,
+and `api_check.py` shows no gaps in the packages it covers except the
+documented exclusions.

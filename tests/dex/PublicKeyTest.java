@@ -50,6 +50,7 @@ public class PublicKeyTest {
 
     public static void main(String[] args) throws Exception {
         rsa();
+        ec();
         p("done");
     }
 
@@ -192,6 +193,131 @@ public class PublicKeyTest {
         tryIt("tiny", () -> {
             KeyPairGenerator.getInstance("RSA").initialize(100);
             return "init";
+        });
+    }
+
+    static ECParameterSpec curve(String name) throws Exception {
+        AlgorithmParameters ap = AlgorithmParameters.getInstance("EC");
+        ap.init(new ECGenParameterSpec(name));
+        return ap.getParameterSpec(ECParameterSpec.class);
+    }
+
+    /** The point with this x on the curve (either y: ECDH only uses x of the result). */
+    static ECPoint lift(ECParameterSpec ps, BigInteger x) {
+        BigInteger p = ((ECFieldFp) ps.getCurve().getField()).getP();
+        BigInteger rhs = x.pow(3).add(ps.getCurve().getA().multiply(x)).add(ps.getCurve().getB()).mod(p);
+        return new ECPoint(x, rhs.modPow(p.add(BigInteger.ONE).shiftRight(2), p));
+    }
+
+    static byte[] ecdh(PrivateKey a, PublicKey b) throws Exception {
+        KeyAgreement ka = KeyAgreement.getInstance("ECDH");
+        ka.init(a);
+        ka.doPhase(b, true);
+        return ka.generateSecret();
+    }
+
+    static void ec() throws Exception {
+        p("== ec");
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        Random r = new Random(5);
+        byte[] msg = ascii("sample");
+        for (String name : new String[] {"secp256r1", "secp384r1", "secp521r1"}) {
+            ECParameterSpec ps = curve(name);
+            AlgorithmParameters ap = AlgorithmParameters.getInstance("EC");
+            ap.init(ps);
+            p(name + " bits=" + ps.getCurve().getField().getFieldSize() + " h=" + ps.getCofactor() + " oid=" + hex(ap.getEncoded())
+                    + " order=" + ps.getOrder().toString(16));
+            BigInteger d1 = new BigInteger(ps.getOrder().bitLength() - 1, r), d2 = new BigInteger(ps.getOrder().bitLength() - 1, r);
+            PrivateKey k1 = kf.generatePrivate(new ECPrivateKeySpec(d1, ps));
+            PrivateKey k2 = kf.generatePrivate(new ECPrivateKeySpec(d2, ps));
+            PublicKey g = kf.generatePublic(new ECPublicKeySpec(ps.getGenerator(), ps));
+            byte[] x1 = ecdh(k1, g), x2 = ecdh(k2, g);
+            p("  d*G x " + hex(x1));
+            PublicKey q1 = kf.generatePublic(new ECPublicKeySpec(lift(ps, new BigInteger(1, x1)), ps));
+            PublicKey q2 = kf.generatePublic(new ECPublicKeySpec(lift(ps, new BigInteger(1, x2)), ps));
+            byte[] s12 = ecdh(k1, q2), s21 = ecdh(k2, q1);
+            p("  ecdh " + hex(s12) + " symmetric=" + Arrays.equals(s12, s21));
+            p("  pub " + q1.getFormat() + " " + hex(q1.getEncoded()));
+            p("  priv " + k1.getFormat() + " " + hex(k1.getEncoded()));
+            PublicKey q1b = kf.generatePublic(new X509EncodedKeySpec(q1.getEncoded()));
+            PrivateKey k1b = kf.generatePrivate(new PKCS8EncodedKeySpec(k1.getEncoded()));
+            ECPublicKeySpec qs = kf.getKeySpec(q1b, ECPublicKeySpec.class);
+            ECPrivateKeySpec ks = kf.getKeySpec(k1b, ECPrivateKeySpec.class);
+            p("  reparse " + qs.getW().equals(((ECPublicKey) q1).getW()) + " " + ks.getS().equals(d1)
+                    + " " + qs.getParams().getOrder().equals(ps.getOrder()));
+            // ECDSA: sign with k1, verify with the lifted point (or its negation, which fails).
+            for (String alg : new String[] {"SHA1withECDSA", "SHA256withECDSA", "SHA384withECDSA", "SHA512withECDSA"}) {
+                Signature s = Signature.getInstance(alg);
+                s.initSign(k1);
+                s.update(msg);
+                byte[] sig = s.sign();
+                Signature v = Signature.getInstance(alg);
+                v.initVerify(q1);
+                v.update(msg);
+                boolean ok = v.verify(sig);
+                ECPoint w = ((ECPublicKey) q1).getW();
+                BigInteger p = ((ECFieldFp) ps.getCurve().getField()).getP();
+                PublicKey neg = kf.generatePublic(new ECPublicKeySpec(new ECPoint(w.getAffineX(), p.subtract(w.getAffineY())), ps));
+                v.initVerify(neg);
+                v.update(msg);
+                boolean negOk = v.verify(sig);
+                p("  " + alg + " one-of-two=" + (ok ^ negOk));
+            }
+        }
+        // RFC 6979 A.2.5: P-256 key and the SHA-256 signature of "sample".
+        ECParameterSpec p256 = curve("secp256r1");
+        PublicKey rfc = kf.generatePublic(new ECPublicKeySpec(new ECPoint(
+                new BigInteger("60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6", 16),
+                new BigInteger("7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299", 16)), p256));
+        byte[] rs = unhex("3046022100EFD48B2AACB6A8FD1140DD9CD45E81D69D2C877B56AAF991C34D0EA84EAF3716022100F7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8");
+        Signature v = Signature.getInstance("SHA256withECDSA");
+        v.initVerify(rfc);
+        v.update(msg);
+        p("rfc6979 " + v.verify(rs));
+        PrivateKey rfcPriv = kf.generatePrivate(new ECPrivateKeySpec(
+                new BigInteger("C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721", 16), p256));
+        Signature s = Signature.getInstance("SHA256withECDSA");
+        s.initSign(rfcPriv);
+        s.update(msg);
+        byte[] mine = s.sign();
+        v.initVerify(rfc);
+        v.update(msg);
+        p("rfc6979 own " + v.verify(mine));
+        Signature none = Signature.getInstance("NONEwithECDSA");
+        none.initSign(rfcPriv);
+        none.update(MessageDigest.getInstance("SHA-256").digest(msg));
+        byte[] ns = none.sign();
+        v.initVerify(rfc);
+        v.update(msg);
+        p("none verifies as sha256 " + v.verify(ns));
+        // Generated keys.
+        for (String name : new String[] {"secp256r1", "secp384r1", "secp521r1"}) {
+            KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
+            g.initialize(new ECGenParameterSpec(name));
+            KeyPair a = g.generateKeyPair(), b = g.generateKeyPair();
+            Signature gs = Signature.getInstance("SHA256withECDSA");
+            gs.initSign(a.getPrivate());
+            gs.update(msg);
+            byte[] sig = gs.sign();
+            gs.initVerify(a.getPublic());
+            gs.update(msg);
+            p("generated " + name + " verify=" + gs.verify(sig) + " ecdh=" + Arrays.equals(ecdh(a.getPrivate(), b.getPublic()), ecdh(b.getPrivate(), a.getPublic()))
+                    + " fieldsize=" + ((ECPublicKey) a.getPublic()).getParams().getCurve().getField().getFieldSize());
+        }
+        KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
+        g.initialize(384);
+        p("by size " + ((ECPublicKey) g.generateKeyPair().getPublic()).getParams().getOrder().bitLength());
+        tryIt("ecdh mixed curves", () -> ecdh(kf.generatePrivate(new ECPrivateKeySpec(BigInteger.TEN, curve("secp256r1"))),
+                kf.generatePublic(new ECPublicKeySpec(curve("secp384r1").getGenerator(), curve("secp384r1")))));
+        tryIt("unknown curve", () -> {
+            KeyPairGenerator.getInstance("EC").initialize(new ECGenParameterSpec("nonesuch"));
+            return "init";
+        });
+        tryIt("garbage sig", () -> {
+            Signature x = Signature.getInstance("SHA256withECDSA");
+            x.initVerify(rfc);
+            x.update(msg);
+            return x.verify(new byte[] {1, 2, 3});
         });
     }
 }

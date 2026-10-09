@@ -96,6 +96,34 @@ public final class BuiltinProvider extends Provider {
             }
         });
 
+        // EC (P-256, P-384, P-521)
+        add(new Svc(this, "KeyFactory", "EC", EcKeys.Factory.class, list("ECDSA", "ECDH"), null, null) {
+            Object create() {
+                return new EcKeys.Factory();
+            }
+        });
+        add(new Svc(this, "KeyPairGenerator", "EC", EcKeys.Generator.class, list("ECDSA", "ECDH"), null, null) {
+            Object create() {
+                return new EcKeys.Generator();
+            }
+        });
+        add(new Svc(this, "AlgorithmParameters", "EC", EcKeys.Parameters.class, list("ECDSA", "1.2.840.10045.2.1"), null, null) {
+            Object create() {
+                return new EcKeys.Parameters();
+            }
+        });
+        ecdsa("NONEwithECDSA", null, null);
+        ecdsa("SHA1withECDSA", "SHA-1", list("ECDSA"));
+        ecdsa("SHA224withECDSA", "SHA-224", null);
+        ecdsa("SHA256withECDSA", "SHA-256", null);
+        ecdsa("SHA384withECDSA", "SHA-384", null);
+        ecdsa("SHA512withECDSA", "SHA-512", null);
+        add(new Svc(this, "KeyAgreement", "ECDH", Ecdsa.Ecdh.class, null, null, null) {
+            Object create() {
+                return new Ecdsa.Ecdh();
+            }
+        });
+
         add(new Svc(this, "SecureRandom", "NativePRNG", NativePrng.class, list("SHA1PRNG", "DEFAULT"), null, null) {
             Object create() {
                 return new NativePrng();
@@ -149,6 +177,14 @@ public final class BuiltinProvider extends Provider {
         add(new Svc(this, "Signature", name, RsaSignature.class, null, null, null) {
             Object create() {
                 return new RsaSignature(digest);
+            }
+        });
+    }
+
+    private void ecdsa(String name, final String digest, List<String> aliases) {
+        add(new Svc(this, "Signature", name, Ecdsa.class, aliases, null, null) {
+            Object create() {
+                return new Ecdsa(digest);
             }
         });
     }

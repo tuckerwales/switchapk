@@ -1166,47 +1166,321 @@ public final class Pattern implements java.io.Serializable {
             }
         };
 
+        /* Java's rules: In/blk= is a block, Is/sc= a script, binary property or category, gc= a
+         * category, java* a Character.isX method, a bare name a POSIX class (ASCII) or category. */
         static CharPredicate property(String name) {
+            int eq = name.indexOf('=');
+            if (eq > 0) {
+                String key = name.substring(0, eq).toLowerCase();
+                String value = name.substring(eq + 1);
+                switch (key) {
+                    case "blk": case "block":
+                        return block(value);
+                    case "sc": case "script":
+                        return script(value);
+                    case "gc": case "general_category":
+                        return category(value);
+                    default:
+                        return null;
+                }
+            }
+            if (name.startsWith("In")) {
+                return block(name.substring(2));
+            }
             if (name.startsWith("Is")) {
-                name = name.substring(2);
+                String rest = name.substring(2);
+                CharPredicate p = binary(rest);
+                if (p == null) {
+                    p = category(rest);
+                }
+                return p != null ? p : script(rest);
             }
             if (name.startsWith("java")) {
-                name = name.substring(4);
+                return javaMethod(name.substring(4));
             }
+            CharPredicate p = posix(name);
+            if (p == null) {
+                p = category(name);
+            }
+            // Lenient beyond Java: a bare script name such as Han.
+            return p != null ? p : script(name);
+        }
+
+        static CharPredicate block(String name) {
+            final Character.UnicodeBlock b;
+            try {
+                b = Character.UnicodeBlock.forName(name);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+            return new CharPredicate() {
+                boolean is(int ch) {
+                    return Character.UnicodeBlock.of(ch) == b;
+                }
+            };
+        }
+
+        static CharPredicate category(String name) {
+            int mask = 0;
             switch (name) {
-                case "Lower": case "Ll": case "LowerCase":
+                case "Cn": mask = 1 << Character.UNASSIGNED; break;
+                case "Lu": mask = 1 << Character.UPPERCASE_LETTER; break;
+                case "Ll": mask = 1 << Character.LOWERCASE_LETTER; break;
+                case "Lt": mask = 1 << Character.TITLECASE_LETTER; break;
+                case "Lm": mask = 1 << Character.MODIFIER_LETTER; break;
+                case "Lo": mask = 1 << Character.OTHER_LETTER; break;
+                case "Mn": mask = 1 << Character.NON_SPACING_MARK; break;
+                case "Me": mask = 1 << Character.ENCLOSING_MARK; break;
+                case "Mc": mask = 1 << Character.COMBINING_SPACING_MARK; break;
+                case "Nd": mask = 1 << Character.DECIMAL_DIGIT_NUMBER; break;
+                case "Nl": mask = 1 << Character.LETTER_NUMBER; break;
+                case "No": mask = 1 << Character.OTHER_NUMBER; break;
+                case "Zs": mask = 1 << Character.SPACE_SEPARATOR; break;
+                case "Zl": mask = 1 << Character.LINE_SEPARATOR; break;
+                case "Zp": mask = 1 << Character.PARAGRAPH_SEPARATOR; break;
+                case "Cc": mask = 1 << Character.CONTROL; break;
+                case "Cf": mask = 1 << Character.FORMAT; break;
+                case "Co": mask = 1 << Character.PRIVATE_USE; break;
+                case "Cs": mask = 1 << Character.SURROGATE; break;
+                case "Pd": mask = 1 << Character.DASH_PUNCTUATION; break;
+                case "Ps": mask = 1 << Character.START_PUNCTUATION; break;
+                case "Pe": mask = 1 << Character.END_PUNCTUATION; break;
+                case "Pc": mask = 1 << Character.CONNECTOR_PUNCTUATION; break;
+                case "Po": mask = 1 << Character.OTHER_PUNCTUATION; break;
+                case "Sm": mask = 1 << Character.MATH_SYMBOL; break;
+                case "Sc": mask = 1 << Character.CURRENCY_SYMBOL; break;
+                case "Sk": mask = 1 << Character.MODIFIER_SYMBOL; break;
+                case "So": mask = 1 << Character.OTHER_SYMBOL; break;
+                case "Pi": mask = 1 << Character.INITIAL_QUOTE_PUNCTUATION; break;
+                case "Pf": mask = 1 << Character.FINAL_QUOTE_PUNCTUATION; break;
+                case "L":
+                    mask = (1 << Character.UPPERCASE_LETTER) | (1 << Character.LOWERCASE_LETTER)
+                            | (1 << Character.TITLECASE_LETTER) | (1 << Character.MODIFIER_LETTER)
+                            | (1 << Character.OTHER_LETTER);
+                    break;
+                case "LC":
+                    mask = (1 << Character.UPPERCASE_LETTER) | (1 << Character.LOWERCASE_LETTER)
+                            | (1 << Character.TITLECASE_LETTER);
+                    break;
+                case "M":
+                    mask = (1 << Character.NON_SPACING_MARK) | (1 << Character.ENCLOSING_MARK)
+                            | (1 << Character.COMBINING_SPACING_MARK);
+                    break;
+                case "N":
+                    mask = (1 << Character.DECIMAL_DIGIT_NUMBER) | (1 << Character.LETTER_NUMBER)
+                            | (1 << Character.OTHER_NUMBER);
+                    break;
+                case "Z":
+                    mask = (1 << Character.SPACE_SEPARATOR) | (1 << Character.LINE_SEPARATOR)
+                            | (1 << Character.PARAGRAPH_SEPARATOR);
+                    break;
+                case "C":
+                    mask = (1 << Character.CONTROL) | (1 << Character.FORMAT) | (1 << Character.PRIVATE_USE)
+                            | (1 << Character.SURROGATE) | (1 << Character.UNASSIGNED);
+                    break;
+                case "P":
+                    mask = (1 << Character.DASH_PUNCTUATION) | (1 << Character.START_PUNCTUATION)
+                            | (1 << Character.END_PUNCTUATION) | (1 << Character.CONNECTOR_PUNCTUATION)
+                            | (1 << Character.OTHER_PUNCTUATION) | (1 << Character.INITIAL_QUOTE_PUNCTUATION)
+                            | (1 << Character.FINAL_QUOTE_PUNCTUATION);
+                    break;
+                case "S":
+                    mask = (1 << Character.MATH_SYMBOL) | (1 << Character.CURRENCY_SYMBOL)
+                            | (1 << Character.MODIFIER_SYMBOL) | (1 << Character.OTHER_SYMBOL);
+                    break;
+                default:
+                    return null;
+            }
+            final int m = mask;
+            return new CharPredicate() {
+                boolean is(int ch) {
+                    return (m & (1 << Character.getType(ch))) != 0;
+                }
+            };
+        }
+
+        static CharPredicate binary(String name) {
+            switch (name.toLowerCase().replace("_", "").replace(" ", "")) {
+                case "alphabetic":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isAlphabetic(ch);
+                        }
+                    };
+                case "ideographic":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isIdeographic(ch);
+                        }
+                    };
+                case "letter":
+                    return category("L");
+                case "lowercase":
+                    return javaMethod("LowerCase");
+                case "uppercase":
+                    return javaMethod("UpperCase");
+                case "titlecase":
+                    return category("Lt");
+                case "punctuation":
+                    return category("P");
+                case "control":
+                    return category("Cc");
+                case "whitespace":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return (ch >= 0x9 && ch <= 0xd) || ch == 0x85 || Character.isSpaceChar(ch);
+                        }
+                    };
+                case "digit":
+                    return category("Nd");
+                case "hexdigit":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.digit(ch, 16) >= 0;
+                        }
+                    };
+                case "joincontrol":
+                    return range(0x200c, 0x200d, false);
+                case "noncharactercodepoint":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return (ch & 0xfffe) == 0xfffe || (ch >= 0xfdd0 && ch <= 0xfdef);
+                        }
+                    };
+                case "assigned":
+                    return category("Cn").negate();
+                default:
+                    return null;
+            }
+        }
+
+        static CharPredicate javaMethod(String name) {
+            switch (name) {
+                case "LowerCase":
                     return new CharPredicate() {
                         boolean is(int ch) {
                             return Character.isLowerCase(ch);
                         }
                     };
-                case "Upper": case "Lu": case "UpperCase":
+                case "UpperCase":
                     return new CharPredicate() {
                         boolean is(int ch) {
                             return Character.isUpperCase(ch);
                         }
                     };
-                case "ASCII":
-                    return range(0, 0x7f, false);
-                case "Alpha": case "L": case "Letter": case "Alphabetic":
+                case "TitleCase":
+                    return category("Lt");
+                case "Alphabetic":
+                    return binary("Alphabetic");
+                case "Ideographic":
+                    return binary("Ideographic");
+                case "Letter":
                     return new CharPredicate() {
                         boolean is(int ch) {
                             return Character.isLetter(ch);
                         }
                     };
-                case "Digit": case "Nd": case "N":
+                case "Digit":
                     return new CharPredicate() {
                         boolean is(int ch) {
                             return Character.isDigit(ch);
                         }
                     };
-                case "Alnum":
+                case "LetterOrDigit":
                     return new CharPredicate() {
                         boolean is(int ch) {
                             return Character.isLetterOrDigit(ch);
                         }
                     };
-                case "Punct": case "P":
+                case "Whitespace":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isWhitespace(ch);
+                        }
+                    };
+                case "SpaceChar":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isSpaceChar(ch);
+                        }
+                    };
+                case "ISOControl":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isISOControl(ch);
+                        }
+                    };
+                case "Defined":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isDefined(ch);
+                        }
+                    };
+                case "Mirrored":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isMirrored(ch);
+                        }
+                    };
+                case "IdentifierIgnorable":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isIdentifierIgnorable(ch);
+                        }
+                    };
+                case "JavaIdentifierStart":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isJavaIdentifierStart(ch);
+                        }
+                    };
+                case "JavaIdentifierPart":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isJavaIdentifierPart(ch);
+                        }
+                    };
+                case "UnicodeIdentifierStart":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isUnicodeIdentifierStart(ch);
+                        }
+                    };
+                case "UnicodeIdentifierPart":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return Character.isUnicodeIdentifierPart(ch);
+                        }
+                    };
+                default:
+                    return null;
+            }
+        }
+
+        /* POSIX classes are US-ASCII only, as in Java without UNICODE_CHARACTER_CLASS. */
+        static CharPredicate posix(String name) {
+            switch (name) {
+                case "Lower":
+                    return range('a', 'z', false);
+                case "Upper":
+                    return range('A', 'Z', false);
+                case "ASCII":
+                    return range(0, 0x7f, false);
+                case "Alpha":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+                        }
+                    };
+                case "Digit":
+                    return range('0', '9', false);
+                case "Alnum":
+                    return new CharPredicate() {
+                        boolean is(int ch) {
+                            return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9');
+                        }
+                    };
+                case "Punct":
                     return new CharPredicate() {
                         boolean is(int ch) {
                             return (ch >= 0x21 && ch <= 0x2f) || (ch >= 0x3a && ch <= 0x40) || (ch >= 0x5b && ch <= 0x60)
@@ -1223,7 +1497,7 @@ public final class Pattern implements java.io.Serializable {
                             return ch == ' ' || ch == '\t';
                         }
                     };
-                case "Cntrl": case "Cc":
+                case "Cntrl":
                     return new CharPredicate() {
                         boolean is(int ch) {
                             return ch < 0x20 || ch == 0x7f;
@@ -1232,44 +1506,84 @@ public final class Pattern implements java.io.Serializable {
                 case "XDigit":
                     return new CharPredicate() {
                         boolean is(int ch) {
-                            return Character.digit(ch, 16) >= 0;
+                            return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
                         }
                     };
-                case "Space": case "Whitespace": case "White_Space":
-                    return new CharPredicate() {
-                        boolean is(int ch) {
-                            return Character.isWhitespace(ch);
-                        }
-                    };
-                case "M": case "Mn":
-                    return range(0x300, 0x36f, false);
-                case "S": case "Sm": case "Sc": case "So":
-                    return new CharPredicate() {
-                        boolean is(int ch) {
-                            return "$+<=>^`|~".indexOf(ch) >= 0 || (ch >= 0x2000 && ch < 0x3000);
-                        }
-                    };
-                case "Han":
-                    return range(0x4e00, 0x9fff, false);
-                case "Hiragana":
-                    return range(0x3040, 0x309f, false);
-                case "Katakana":
-                    return range(0x30a0, 0x30ff, false);
-                case "InBasicLatin": case "BasicLatin":
-                    return range(0, 0x7f, false);
-                case "InGreek": case "Greek":
-                    return range(0x370, 0x3ff, false);
-                case "InCyrillic": case "Cyrillic":
-                    return range(0x400, 0x4ff, false);
-                case "Latin":
-                    return new CharPredicate() {
-                        boolean is(int ch) {
-                            return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= 0xc0 && ch <= 0x24f && ch != 0xd7 && ch != 0xf7);
-                        }
-                    };
+                case "Space":
+                    return SPACE;
                 default:
                     return null;
             }
+        }
+
+        /* No UnicodeScript tables: a script is the letters, marks and letter numbers of the blocks
+         * named after it (Latin: BASIC_LATIN, LATIN_EXTENDED_A, ...), Common everything else. */
+        static CharPredicate script(String name) {
+            final String key = name.toUpperCase().replace(' ', '_');
+            if (key.equals("COMMON") || key.equals("ZYYY")) {
+                return new CharPredicate() {
+                    boolean is(int ch) {
+                        return !inScript(ch);
+                    }
+                };
+            }
+            final String blockKey;
+            switch (key) {
+                case "HAN": case "HANI": blockKey = "CJK"; break;
+                case "LATN": blockKey = "LATIN"; break;
+                case "GREK": blockKey = "GREEK"; break;
+                case "CYRL": blockKey = "CYRILLIC"; break;
+                case "HIRA": blockKey = "HIRAGANA"; break;
+                case "KANA": blockKey = "KATAKANA"; break;
+                case "HANG": case "HANGUL": blockKey = "HANGUL"; break;
+                case "ARAB": blockKey = "ARABIC"; break;
+                case "HEBR": blockKey = "HEBREW"; break;
+                case "THAI": blockKey = "THAI"; break;
+                default: blockKey = key;
+            }
+            boolean known;
+            try {
+                Character.UnicodeBlock.forName(blockKey);
+                known = true;
+            } catch (IllegalArgumentException e) {
+                known = false;
+            }
+            for (int cp = 0; cp < 0x20000 && !known; cp += 0x80) {
+                Character.UnicodeBlock b = Character.UnicodeBlock.of(cp);
+                known = b != null && b.toString().contains(blockKey);
+            }
+            if (!known) {
+                return null;
+            }
+            return new CharPredicate() {
+                boolean is(int ch) {
+                    if (!inScript(ch)) {
+                        return false;
+                    }
+                    Character.UnicodeBlock b = Character.UnicodeBlock.of(ch);
+                    if (b == null) {
+                        return false;
+                    }
+                    String n = b.toString();
+                    if (blockKey.equals("CJK")) {
+                        return n.startsWith("CJK_UNIFIED") || n.startsWith("CJK_COMPATIBILITY_IDEOGRAPHS")
+                                || n.equals("KANGXI_RADICALS") || n.equals("CJK_RADICALS_SUPPLEMENT")
+                                || ch == 0x3005 || ch == 0x3007 || (ch >= 0x3021 && ch <= 0x3029);
+                    }
+                    if (blockKey.equals("LATIN") && n.equals("HALFWIDTH_AND_FULLWIDTH_FORMS")) {
+                        return (ch >= 0xff21 && ch <= 0xff3a) || (ch >= 0xff41 && ch <= 0xff5a);
+                    }
+                    return n.contains(blockKey);
+                }
+            };
+        }
+
+        private static boolean inScript(int ch) {
+            int t = Character.getType(ch);
+            return t == Character.UPPERCASE_LETTER || t == Character.LOWERCASE_LETTER || t == Character.TITLECASE_LETTER
+                    || t == Character.MODIFIER_LETTER || t == Character.OTHER_LETTER || t == Character.LETTER_NUMBER
+                    || t == Character.NON_SPACING_MARK || t == Character.COMBINING_SPACING_MARK
+                    || t == Character.ENCLOSING_MARK || (ch >= 0x3005 && ch <= 0x3007) || (ch >= 0x3021 && ch <= 0x3029);
         }
     }
 

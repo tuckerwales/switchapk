@@ -754,3 +754,14 @@ what is left in flight.
   on the Switch's BSD stack closing a socket does not wake a thread
   already polling it (the net-server thread blocked in accept when the
   test closed its ServerSocket).
+
+### Session 22 (2026-10-09, branch claude/new-session-0z3wws)
+
+- WS8, second console run: the GLES2 cube rendered (it is static by design,
+  RENDERMODE_WHEN_DIRTY with a fixed rotation), the GLES1 view showed
+  "No config chosen": its default chooser wants RGB888 with alpha 0 and
+  switch-mesa only has RGBA8888. FBO mode now adds alpha-free config
+  variants backed by RGB8 renderbuffers. Checked on the host by hiding
+  Mesa's own alpha-free configs and using the default chooser for the
+  cube: "No config chosen" without the variants, the cube renders with
+  them.

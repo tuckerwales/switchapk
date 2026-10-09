@@ -38,6 +38,8 @@ SaEgl sa_egl;
 #define EGL_BAD_ALLOC 0x3003
 #define EGL_BAD_NATIVE_WINDOW 0x300B
 #define EGL_BAD_SURFACE 0x300D
+#define EGL_BUFFER_SIZE 0x3020
+#define EGL_ALPHA_SIZE 0x3021
 #define EGL_DEPTH_SIZE 0x3025
 #define EGL_STENCIL_SIZE 0x3026
 #define EGL_CONFIG_ID 0x3028
@@ -68,6 +70,7 @@ SaEgl sa_egl;
 #define GL_COLOR_ATTACHMENT0 0x8CE0
 #define GL_DEPTH_ATTACHMENT 0x8D00
 #define GL_STENCIL_ATTACHMENT 0x8D20
+#define GL_RGB8_OES 0x8051
 #define GL_RGBA8_OES 0x8058
 #define GL_DEPTH_COMPONENT16 0x81A5
 #define GL_DEPTH_COMPONENT24_OES 0x81A6
@@ -92,7 +95,7 @@ typedef struct SaSurf {
     /* FBO surfaces: the framebuffer and its renderbuffers, names in fbo_ctx (0 until first made current) */
     struct SaSurf *next; /* g_surfs */
     SaEGLContext fbo_ctx;
-    uint32_t fbo, color_rb, ds_rb, ds_format;
+    uint32_t fbo, color_rb, ds_rb, color_format, ds_format;
     int fbo_w, fbo_h; /* renderbuffer size */
 } SaSurf;
 
@@ -116,6 +119,19 @@ static int g_loaded; /* 0 not tried, 1 ok, -1 failed */
  * SWITCHAPK_EGL_FBO=1 forces this mode, so the host can test it.
  */
 static bool g_fbo;
+
+/*
+ * Android devices always offer RGB888 configs without alpha, and GLSurfaceView's default chooser wants exactly
+ * that; switch-mesa only has RGBA8888. With FBO surfaces we own the colour buffer, so every config with alpha also
+ * appears as an alpha-free variant: the driver config pointer with the low bit set (an RGB8 renderbuffer backs it).
+ */
+#define SA_CFG_NOALPHA ((uintptr_t)1)
+#define SA_CFG_ID_NOALPHA 0x10000 /* added to the EGL_CONFIG_ID of the variant */
+
+static SaEGLConfig cfg_real(SaEGLConfig c) { return (SaEGLConfig)((uintptr_t)c & ~SA_CFG_NOALPHA); }
+
+static bool cfg_noalpha(SaEGLConfig c) { return ((uintptr_t)c & SA_CFG_NOALPHA) != 0; }
+
 static SaSurf *g_surfs; /* every SaSurf, so a destroyed context can disown their FBOs */
 static pthread_mutex_t g_surfs_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -261,7 +277,7 @@ static void fbo_storage(SaSurf *s, const FboFns *f) {
     int32_t prev = 0;
     sa_gl.glGetIntegerv(GL_RENDERBUFFER_BINDING, &prev);
     f->bind_rb(GL_RENDERBUFFER, s->color_rb);
-    f->storage(GL_RENDERBUFFER, GL_RGBA8_OES, s->w, s->h);
+    f->storage(GL_RENDERBUFFER, s->color_format, s->w, s->h);
     if (s->ds_rb) {
         f->bind_rb(GL_RENDERBUFFER, s->ds_rb);
         f->storage(GL_RENDERBUFFER, s->ds_format, s->w, s->h);
@@ -271,11 +287,12 @@ static void fbo_storage(SaSurf *s, const FboFns *f) {
     s->fbo_h = s->h;
 }
 
-/* Creates the surface's FBO in ctx (current) with the config's depth and stencil, and leaves it bound. */
+/* Creates the surface's FBO in ctx (current) with the config's colour, depth and stencil, and leaves it bound. */
 static void fbo_create(SaSurf *s, SaEGLContext ctx, const FboFns *f) {
     int32_t depth = 0, stencil = 0;
-    sa_egl.eglGetConfigAttrib(s->dpy, s->cfg, EGL_DEPTH_SIZE, &depth);
-    sa_egl.eglGetConfigAttrib(s->dpy, s->cfg, EGL_STENCIL_SIZE, &stencil);
+    sa_egl.eglGetConfigAttrib(s->dpy, cfg_real(s->cfg), EGL_DEPTH_SIZE, &depth);
+    sa_egl.eglGetConfigAttrib(s->dpy, cfg_real(s->cfg), EGL_STENCIL_SIZE, &stencil);
+    s->color_format = cfg_noalpha(s->cfg) ? GL_RGB8_OES : GL_RGBA8_OES;
     s->ds_format = depth && stencil ? GL_DEPTH24_STENCIL8_OES
                    : depth > 16     ? GL_DEPTH_COMPONENT24_OES
                    : depth          ? GL_DEPTH_COMPONENT16
@@ -381,11 +398,74 @@ static int32_t app_surface_type(int32_t v) {
     return (v & EGL_PBUFFER_BIT) ? v | EGL_WINDOW_BIT : v;
 }
 
+/* eglGetConfigAttrib as the app sees it (alpha-free variants, our surface types, Android-only attributes). */
+static bool config_attrib(SaEGLDisplay dpy, SaEGLConfig cfg, int32_t attr, int32_t *v) {
+    if (attr == EGL_RECORDABLE_ANDROID || attr == EGL_FRAMEBUFFER_TARGET_ANDROID) {
+        *v = 1;
+        return true;
+    }
+    if (!sa_egl.eglGetConfigAttrib) return false;
+    if (cfg_noalpha(cfg) && attr == EGL_ALPHA_SIZE) {
+        *v = 0;
+        return true;
+    }
+    if (cfg_noalpha(cfg) && attr == EGL_BUFFER_SIZE) {
+        int32_t buf = 0, alpha = 0;
+        if (!sa_egl.eglGetConfigAttrib(dpy, cfg_real(cfg), EGL_BUFFER_SIZE, &buf) ||
+            !sa_egl.eglGetConfigAttrib(dpy, cfg_real(cfg), EGL_ALPHA_SIZE, &alpha))
+            return false;
+        *v = buf - alpha;
+        return true;
+    }
+    if (!sa_egl.eglGetConfigAttrib(dpy, cfg_real(cfg), attr, v)) return false;
+    if (attr == EGL_SURFACE_TYPE) *v = app_surface_type(*v);
+    if (attr == EGL_CONFIG_ID && cfg_noalpha(cfg)) *v += SA_CFG_ID_NOALPHA;
+    return true;
+}
+
+/* Whether a (rewritten) attribute list can match an alpha-free variant. */
+static bool wants_noalpha_variants(const int32_t *attribs) {
+    if (!g_fbo) return false;
+    for (int i = 0; attribs[i] != EGL_NONE && i < 256; i += 2) {
+        int32_t k = attribs[i], v = attribs[i + 1];
+        if (k == EGL_ALPHA_SIZE && v > 0) return false;
+        if (k == EGL_BUFFER_SIZE && v > 24) return false;
+        if (k == EGL_CONFIG_ID) return false;
+    }
+    return true;
+}
+
+/* eglChooseConfig over rewritten attributes, adding the alpha-free variants after the driver's configs. */
+static bool choose_configs(SaEGLDisplay dpy, const int32_t *attribs, SaEGLConfig *out, int32_t size, int32_t *num) {
+    if (!sa_egl.eglChooseConfig) return false;
+    if (!wants_noalpha_variants(attribs)) return sa_egl.eglChooseConfig(dpy, attribs, out, size, num);
+    int32_t n = 0;
+    if (!sa_egl.eglChooseConfig(dpy, attribs, NULL, 0, &n)) return false;
+    SaEGLConfig *all = sa_calloc((size_t)n * 2 + 1, sizeof *all);
+    if (n > 0 && !sa_egl.eglChooseConfig(dpy, attribs, all, n, &n)) {
+        free(all);
+        return false;
+    }
+    int32_t total = n;
+    for (int32_t i = 0; i < n; i++) {
+        int32_t alpha = 0;
+        if (sa_egl.eglGetConfigAttrib(dpy, all[i], EGL_ALPHA_SIZE, &alpha) && alpha > 0)
+            all[total++] = (SaEGLConfig)((uintptr_t)all[i] | SA_CFG_NOALPHA);
+    }
+    if (out) {
+        if (total > size) total = size > 0 ? size : 0;
+        memcpy(out, all, sizeof *all * (size_t)total);
+    }
+    if (num) *num = total;
+    free(all);
+    return true;
+}
+
 /* eglQuerySurface for an FBO surface (no driver surface), width and height aside. */
 static bool fbo_query_surface(SaSurf *s, int32_t attr, int32_t *v) {
     switch (attr) {
     case EGL_CONFIG_ID:
-        return sa_egl.eglGetConfigAttrib(s->dpy, s->cfg, EGL_CONFIG_ID, v);
+        return config_attrib(s->dpy, s->cfg, EGL_CONFIG_ID, v);
     case EGL_RENDER_BUFFER:
         *v = EGL_BACK_BUFFER;
         return true;
@@ -664,7 +744,7 @@ NATIVE(EGLNative_nChooseConfig) {
     if (configs && size > configs->length) size = configs->length;
     SaEGLConfig *tmp = configs && size > 0 ? sa_calloc((size_t)size, sizeof(SaEGLConfig)) : NULL;
     int32_t n = 0;
-    bool ok = sa_egl.eglChooseConfig(dpy, attribs, tmp, tmp ? size : 0, &n);
+    bool ok = choose_configs(dpy, attribs, tmp, tmp ? size : 0, &n);
     if (ok && tmp)
         for (int i = 0; i < n && i < size; i++) ARRAY_DATA(configs, int64_t)[i] = H(tmp[i]);
     if (num && num->length > 0) ARRAY_DATA(num, int32_t)[0] = ok ? n : 0;
@@ -684,7 +764,7 @@ NATIVE(EGLNative_nGetConfigs) {
     if (configs && size > configs->length) size = configs->length;
     SaEGLConfig *tmp = configs && size > 0 ? sa_calloc((size_t)size, sizeof(SaEGLConfig)) : NULL;
     int32_t n = 0;
-    bool ok = sa_egl.eglChooseConfig(dpy, attribs, tmp, tmp ? size : 0, &n);
+    bool ok = choose_configs(dpy, attribs, tmp, tmp ? size : 0, &n);
     if (ok && tmp)
         for (int i = 0; i < n && i < size; i++) ARRAY_DATA(configs, int64_t)[i] = H(tmp[i]);
     if (num && num->length > 0) ARRAY_DATA(num, int32_t)[0] = ok ? n : 0;
@@ -694,16 +774,8 @@ NATIVE(EGLNative_nGetConfigs) {
 
 NATIVE(EGLNative_nGetConfigAttrib) {
     UNUSED_ARGS();
-    int32_t attr = A_INT(4);
     int32_t v = 0;
-    bool ok;
-    if (attr == EGL_RECORDABLE_ANDROID || attr == EGL_FRAMEBUFFER_TARGET_ANDROID) {
-        v = 1;
-        ok = true;
-    } else {
-        ok = sa_egl.eglGetConfigAttrib(P(A_LONG(0)), P(A_LONG(2)), attr, &v);
-        if (ok && attr == EGL_SURFACE_TYPE) v = app_surface_type(v);
-    }
+    bool ok = config_attrib(P(A_LONG(0)), P(A_LONG(2)), A_INT(4), &v);
     ArrayObject *out = A_ARR(5);
     if (ok && out && out->length > 0) ARRAY_DATA(out, int32_t)[0] = v;
     R_BOOL(ok);
@@ -714,7 +786,7 @@ NATIVE(EGLNative_nCreateContext) {
     if (sa_egl.eglBindAPI) sa_egl.eglBindAPI(EGL_OPENGL_ES_API);
     int32_t none = EGL_NONE;
     int32_t *attribs = A_ARR(6) ? int_array(A_ARR(6)) : &none;
-    SaEGLContext c = sa_egl.eglCreateContext(P(A_LONG(0)), P(A_LONG(2)), P(A_LONG(4)), attribs);
+    SaEGLContext c = sa_egl.eglCreateContext(P(A_LONG(0)), cfg_real(P(A_LONG(2))), P(A_LONG(4)), attribs);
     R_LONG(H(c));
 }
 
@@ -1157,19 +1229,13 @@ static int32_t *native_config_attribs(const int32_t *src) {
 static uint32_t wrap_eglChooseConfig(void *dpy, const int32_t *attribs, void **configs, int32_t size, int32_t *num) {
     int32_t *rewritten = native_config_attribs(attribs);
     uint32_t ok = 0;
-    if (sa_egl.eglChooseConfig) ok = sa_egl.eglChooseConfig(dpy, rewritten, (SaEGLConfig *)configs, size, num);
+    ok = choose_configs(dpy, rewritten, (SaEGLConfig *)configs, size, num);
     free(rewritten);
     return ok;
 }
 
 static uint32_t wrap_eglGetConfigAttrib(void *dpy, void *config, int32_t attr, int32_t *value) {
-    if (attr == EGL_RECORDABLE_ANDROID || attr == EGL_FRAMEBUFFER_TARGET_ANDROID) {
-        if (value) *value = 1;
-        return 1;
-    }
-    uint32_t ok = sa_egl.eglGetConfigAttrib ? sa_egl.eglGetConfigAttrib(dpy, config, attr, value) : 0;
-    if (ok && attr == EGL_SURFACE_TYPE && value) *value = app_surface_type(*value);
-    return ok;
+    return value && config_attrib(dpy, config, attr, value);
 }
 
 static void *wrap_eglCreateWindowSurface(void *dpy, void *config, void *win, const int32_t *attribs) {
@@ -1208,7 +1274,7 @@ static uint32_t wrap_eglQuerySurface(void *dpy, void *surface, int32_t attr, int
 
 static void *wrap_eglCreateContext(void *dpy, void *config, void *share, const int32_t *attribs) {
     if (sa_egl.eglBindAPI) sa_egl.eglBindAPI(EGL_OPENGL_ES_API);
-    return sa_egl.eglCreateContext ? sa_egl.eglCreateContext(dpy, config, share, attribs) : NULL;
+    return sa_egl.eglCreateContext ? sa_egl.eglCreateContext(dpy, cfg_real(config), share, attribs) : NULL;
 }
 
 static uint32_t wrap_eglDestroyContext(void *dpy, void *ctx) {

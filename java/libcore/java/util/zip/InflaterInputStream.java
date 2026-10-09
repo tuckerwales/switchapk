@@ -10,9 +10,10 @@ public class InflaterInputStream extends FilterInputStream {
     protected byte[] buf;
     protected int len;
 
+    protected boolean closed;
+
     /* Framework-internal: subclasses that created their own Inflater end it on close. */
     boolean usesDefaultInflater;
-    boolean closed;
     private boolean reachEOF;
     private byte[] singleByteBuf = new byte[1];
     private byte[] skipBuf;

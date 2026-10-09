@@ -12,6 +12,10 @@ public class CRC32 implements Checksum {
         crc = update(crc, b);
     }
 
+    public void update(byte[] b) {
+        update(b, 0, b.length);
+    }
+
     public void update(byte[] b, int off, int len) {
         if (b == null) {
             throw new NullPointerException();

@@ -12,6 +12,10 @@ public class Adler32 implements Checksum {
         adler = update(adler, b);
     }
 
+    public void update(byte[] b) {
+        update(b, 0, b.length);
+    }
+
     public void update(byte[] b, int off, int len) {
         if (b == null) {
             throw new NullPointerException();

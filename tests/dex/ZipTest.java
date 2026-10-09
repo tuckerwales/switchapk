@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.attribute.FileTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.*;
 import java.util.zip.*;
 
 /**
@@ -64,6 +65,7 @@ public class ZipTest {
         zipStreams();
         zipFile();
         entries();
+        jars();
         p("done");
     }
 
@@ -596,5 +598,91 @@ public class ZipTest {
         p(FileTime.fromMillis(1234567).toString() + " " + FileTime.from(5, TimeUnit.DAYS) + " "
                 + FileTime.fromMillis(1000).equals(FileTime.from(1, TimeUnit.SECONDS)) + " "
                 + FileTime.fromMillis(1).compareTo(FileTime.fromMillis(2)));
+    }
+
+    static void jars() throws Exception {
+        p("-- jars");
+        Manifest m = new Manifest();
+        Attributes main = m.getMainAttributes();
+        main.put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        main.putValue("Created-By", "switchapk");
+        StringBuilder longValue = new StringBuilder();
+        for (int i = 0; i < 30; i++) {
+            longValue.append("seg").append(i).append(' ');
+        }
+        main.putValue("Long-Value", longValue.toString().trim());
+        main.putValue("Unicode", "h\u00e9llo w\u00f6rld \u4e2d\u6587");
+        Attributes sec = new Attributes();
+        sec.putValue("Sealed", "true");
+        m.getEntries().put("com/example/", sec);
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        m.write(bo);
+        String text = new String(bo.toByteArray(), StandardCharsets.UTF_8);
+        p(text.replace("\r\n", "|"));
+        Manifest back = new Manifest(new ByteArrayInputStream(bo.toByteArray()));
+        p("equal " + back.equals(m) + " long " + back.getMainAttributes().getValue("long-value").length()
+                + " unicode " + back.getMainAttributes().getValue("UNICODE").equals(main.getValue("Unicode"))
+                + " sealed " + back.getAttributes("com/example/").getValue(Attributes.Name.SEALED));
+        Manifest lf = new Manifest(new ByteArrayInputStream(
+                "Manifest-Version: 1.0\nMain-Class: a.B\n\nName: x\nK: v\n  more\n\n".getBytes(StandardCharsets.UTF_8)));
+        p("lf main " + lf.getMainAttributes().getValue(Attributes.Name.MAIN_CLASS) + " x [" + lf.getAttributes("x").getValue("K") + "] " + lf.getAttributes("x").size());
+        try {
+            new Manifest(new ByteArrayInputStream("Manifest-Version 1.0\n\n".getBytes(StandardCharsets.UTF_8)));
+        } catch (IOException e) {
+            p("bad manifest " + name(e));
+        }
+        try {
+            new Attributes.Name("bad name");
+        } catch (IllegalArgumentException e) {
+            p("bad name " + e.getMessage());
+        }
+        p("name eq " + new Attributes.Name("main-class").equals(Attributes.Name.MAIN_CLASS) + " "
+                + (new Attributes.Name("MAIN-CLASS").hashCode() == Attributes.Name.MAIN_CLASS.hashCode()));
+        Manifest noVersion = new Manifest();
+        noVersion.getMainAttributes().putValue("Foo", "bar");
+        bo.reset();
+        noVersion.write(bo);
+        p("no version bytes " + bo.size());
+
+        bo.reset();
+        JarOutputStream jos = new JarOutputStream(bo, m);
+        jos.putNextEntry(new JarEntry("com/example/A.class"));
+        jos.write(new byte[] {(byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe});
+        jos.putNextEntry(new ZipEntry("res/data.txt"));
+        jos.write("data".getBytes(StandardCharsets.US_ASCII));
+        jos.close();
+        byte[] jar = bo.toByteArray();
+
+        JarInputStream jis = new JarInputStream(new ByteArrayInputStream(jar));
+        p("jis manifest " + jis.getManifest().getMainAttributes().getValue("Created-By") + " read " + jis.read());
+        JarEntry je;
+        while ((je = jis.getNextJarEntry()) != null) {
+            p("jis " + je.getName() + " attrs " + je.getAttributes() + " bytes " + readAll(jis).length);
+        }
+        jis.close();
+
+        ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(jar));
+        ZipEntry ze = zis.getNextEntry();
+        p("first " + ze.getName() + " extra " + Arrays.toString(ze.getExtra()));
+        zis.close();
+
+        File f = new File(System.getProperty("java.io.tmpdir"), "jartest-" + System.nanoTime() + ".jar");
+        try (FileOutputStream fo = new FileOutputStream(f)) {
+            fo.write(jar);
+        }
+        JarFile jf = new JarFile(f);
+        p("jarfile " + jf.getManifest().getMainAttributes().getValue(Attributes.Name.MANIFEST_VERSION) + " multi "
+                + jf.isMultiRelease() + " size " + jf.size());
+        Enumeration<JarEntry> en = jf.entries();
+        while (en.hasMoreElements()) {
+            JarEntry e = en.nextElement();
+            p("jf " + e.getName() + " " + e.getRealName() + " attrs " + e.getAttributes());
+        }
+        JarEntry a = jf.getJarEntry("com/example/");
+        p("dir " + a);
+        p("data " + new String(readAll(jf.getInputStream(jf.getEntry("res/data.txt"))), StandardCharsets.US_ASCII));
+        p("stream " + jf.stream().count());
+        jf.close();
+        f.delete();
     }
 }

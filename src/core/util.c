@@ -21,6 +21,13 @@ static pthread_mutex_t g_log_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void sa_log_set_file(FILE *f) { g_log_file = f; }
 
+/* Writes out buffered INFO lines, so the log file is complete even if the app then hangs. */
+void sa_log_flush(void) {
+    pthread_mutex_lock(&g_log_lock);
+    if (g_log_file) fflush(g_log_file);
+    pthread_mutex_unlock(&g_log_lock);
+}
+
 /* The last lines logged at INFO or above, for on-device error screens. */
 #define RECENT_LINES 48
 static char g_recent[RECENT_LINES][200];

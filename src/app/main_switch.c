@@ -357,8 +357,9 @@ static int run_apk(const char *apk) {
         return 1;
     }
     pthread_attr_destroy(&attr);
-    while (!ra.done) {
+    for (int frame = 0; !ra.done; frame++) {
         platform_switch_pump();
+        if (frame % 64 == 0) sa_log_flush(); /* about twice a second */
         svcSleepThread(8000000ll);
     }
     pthread_join(th, NULL);

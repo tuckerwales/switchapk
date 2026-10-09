@@ -741,3 +741,16 @@ what is left in flight.
   Makefile.switch` builds the NRO without warnings. Not yet run on a
   console: the GLES1 view (llvmpipe has no ES1) and the Switch driver's
   FBO completeness for each depth/stencil config are unverified there.
+
+### Session 21 (2026-10-09, branch ccr-faaaa2d6-doai7c)
+
+- tests/apps/net stalled on "networking..." on a console. It should
+  end red within about 20 s (nothing there flips the network, so the
+  network switch lines are missing). Without a log it is not yet clear
+  where it stops, so: the app now shows and logs ("I/NET: step ...")
+  the step in progress; the Switch main loop flushes log.txt about
+  twice a second, so the file is complete after a hang (only warnings
+  were flushed before); and socket waits poll in 250 ms slices, since
+  on the Switch's BSD stack closing a socket does not wake a thread
+  already polling it (the net-server thread blocked in accept when the
+  test closed its ServerSocket).

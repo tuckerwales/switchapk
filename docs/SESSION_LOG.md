@@ -914,3 +914,16 @@ what is left in flight.
   MediaScannerConnection, and the device layout for app external dirs.
   Simple Calculator, Simple Solitaire and Blockinger now draw: 11 of the 13
   open apps (Mindustry black, Puzzles exits). Samples and prefs pass.
+### Session 24 (2026-10-09, branch claude/new-session-9cbq38)
+
+- Jetpack Compose crash on a console: AndroidComposeView's constructor
+  looks up `AutofillManager` and failed with NoClassDefFoundError. Added
+  `android.view.autofill` (AutofillManager always disabled and returned by
+  `getSystemService("autofill")` / `getSystemService(AutofillManager.class)`,
+  AutofillId, AutofillValue), `View.getAutofillId`/`setAutofillId`/
+  `autofill`/`getAutofillValue`, `Context.AUTOFILL_MANAGER_SERVICE`, and
+  `android.accessibilityservice.AccessibilityServiceInfo` with
+  `AccessibilityManager.getEnabledAccessibilityServiceList` and
+  `getInstalledAccessibilityServiceList` (both empty). Checked on the host
+  with a view that does Compose's lookups from onAttachedToWindow; the
+  Compose app itself has not been rerun.

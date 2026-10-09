@@ -803,3 +803,29 @@ what is left in flight.
   `getInstalledAccessibilityServiceList` (both empty). Checked on the host
   with a view that does Compose's lookups from onAttachedToWindow; the
   Compose app itself has not been rerun.
+- Checked against the Seren apps' release APKs (github.com/tuckerwales/
+  seren, Actions artifacts: auth, edit, files, ssh, all Jetpack Compose).
+  A scanner over their dex method and field references listed what the
+  framework lacked; then each app was run on the host until it drew.
+  Fixed on the way: CursorAnchorInfo and EditorBoundsInfo plus the
+  InputMethodManager update calls (Compose's root view builds one); the
+  keyboard bridge reaches any text editor through onCreateInputConnection,
+  so Compose text fields take swkbd text; FileLock and the
+  AbstractInterruptibleChannel/SeekableByteChannel hierarchy (DataStore
+  locks and closes its file); MappedByteBuffer; BreakIterator's full API
+  with grapheme rules; StorageManager and StorageVolume.
+- WS17 claimed and started: the JCA (provider framework, built-in
+  provider with digests, HMAC, AES in four modes, PBKDF2) and a software
+  AndroidKeyStore. SecureRandom was java.util.Random seeded from the
+  clock; it now reads OS entropy (`platform_random_bytes`, also used by
+  the Switch SQLite VFS, which had a fixed-seed LCG). tests/dex/CryptoTest
+  matches OpenJDK; tests/apps/keystore passes over two runs.
+- Result on the host: all four Seren apps start and draw. Seren Auth adds
+  an account through "Enter setup key" (typing into Compose fields),
+  stores the secret encrypted with its AndroidKeyStore key, shows the
+  same TOTP codes as Python's reference, and reads the account back in a
+  new process. Not yet: Seren SSH needs RSA/EC/DH (next WS17 step);
+  nothing new was run on hardware, and `make -f Makefile.switch` was not
+  built this session (no devkitPro here), so the libnx `randomGet` call is
+  unverified.
+

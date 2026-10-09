@@ -47,7 +47,7 @@ duplicating work.
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
 | WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress (sensors with fused gravity/rotation/orientation, battery broadcasts, rumble waveforms, PowerManager, and location/telephony/camera answering as absent done on the host, tests/apps/sensors; the IMU axis signs, rumble and psm have not been run on a console) | session 18, 2026-10-08 |
 | WS16 | libcore API completeness: members and classes android.jar has in java.* that libcore lacks | none | in progress (session 23: java.lang, java.util and java.util.concurrent gaps first) | session 23, 2026-10-09 |
-| WS17 | Crypto: JCA provider framework (java.security, javax.crypto), built-in provider, AndroidKeyStore | none | in progress (session 24: provider framework, digests, HMAC, AES, PBKDF2, software AndroidKeyStore first) | session 24, 2026-10-09 |
+| WS17 | Crypto: JCA provider framework (java.security, javax.crypto), built-in provider, AndroidKeyStore | none | in progress (provider framework, digests, HMAC, AES ECB/CBC/CTR/GCM, PBKDF2, OS-entropy SecureRandom and a software AndroidKeyStore done (tests/dex/CryptoTest, tests/apps/keystore); RSA/EC/DH and keystore key pairs left) | session 24, 2026-10-09 |
 
 Parallelism: after WS0 lands, WS1, WS4, WS6, WS7, WS9, WS10, WS11, WS12,
 WS13, WS15 can all run at once. WS2, WS3, WS5 start once the View API of

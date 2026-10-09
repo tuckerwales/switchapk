@@ -52,6 +52,7 @@ void natives_java_misc_register(void);
 void natives_java_net_register(void);
 void natives_java_zip_register(void);
 void natives_java_security_register(void);
+void natives_java_math_register(void);
 void natives_android_register(void);
 
 /* Path translation between Android paths and the platform file system. */

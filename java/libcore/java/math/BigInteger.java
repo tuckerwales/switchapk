@@ -76,16 +76,17 @@ public class BigInteger extends Number implements Comparable<BigInteger> {
     }
 
     public BigInteger(int numBits, Random rnd) {
-        int words = (numBits + 31) / 32;
-        int[] m = new int[words];
-        for (int i = 0; i < words; i++) {
-            m[i] = rnd.nextInt();
+        // Same bytes as the JDK: nextBytes, big-endian, excess top bits cleared.
+        if (numBits < 0) {
+            throw new IllegalArgumentException("numBits must be non-negative");
         }
-        int excess = words * 32 - numBits;
-        if (words > 0 && excess > 0) {
-            m[words - 1] &= (int) (MASK >>> excess);
+        byte[] b = new byte[(int) (((long) numBits + 7) / 8)];
+        if (b.length > 0) {
+            rnd.nextBytes(b);
+            int excess = 8 * b.length - numBits;
+            b[0] &= (byte) ((1 << (8 - excess)) - 1);
         }
-        BigInteger r = new BigInteger(1, m);
+        BigInteger r = new BigInteger(1, bytesToMag(b));
         this.signum = r.signum;
         this.mag = r.mag;
     }
@@ -200,27 +201,7 @@ public class BigInteger extends Number implements Comparable<BigInteger> {
     }
 
     private static int[] mulMag(int[] a, int[] b) {
-        int[] r = new int[a.length + b.length];
-        for (int i = 0; i < a.length; i++) {
-            long carry = 0;
-            long ai = a[i] & MASK;
-            if (ai == 0) {
-                continue;
-            }
-            for (int j = 0; j < b.length; j++) {
-                long t = ai * (b[j] & MASK) + (r[i + j] & MASK) + carry;
-                r[i + j] = (int) t;
-                carry = t >>> 32;
-            }
-            int k = i + b.length;
-            while (carry != 0) {
-                long t = (r[k] & MASK) + carry;
-                r[k] = (int) t;
-                carry = t >>> 32;
-                k++;
-            }
-        }
-        return r;
+        return nMul(a, b);
     }
 
     private static int bitLen(int[] m) {
@@ -260,40 +241,18 @@ public class BigInteger extends Number implements Comparable<BigInteger> {
         if (b.length == 0) {
             throw new ArithmeticException("BigInteger divide by zero");
         }
-        if (cmpMag(a, b) < 0) {
-            return new int[][] {new int[0], a};
-        }
-        if (b.length == 1) {
-            long d = b[0] & MASK;
-            int[] q = new int[a.length];
-            long rem = 0;
-            for (int i = a.length - 1; i >= 0; i--) {
-                long cur = (rem << 32) | (a[i] & MASK);
-                q[i] = (int) (cur / d);
-                rem = cur % d;
-            }
-            return new int[][] {q, new int[] {(int) rem}};
-        }
-        // binary long division
-        int nbits = bitLen(a);
-        int[] q = new int[a.length];
-        int[] r = new int[0];
-        for (int i = nbits - 1; i >= 0; i--) {
-            r = shiftLeftMag(r, 1);
-            if (((a[i >>> 5] >>> (i & 31)) & 1) != 0) {
-                if (r.length == 0) {
-                    r = new int[1];
-                }
-                r[0] |= 1;
-            }
-            r = new BigInteger(1, r).mag;
-            if (cmpMag(r, b) >= 0) {
-                r = new BigInteger(1, subMag(r, b)).mag;
-                q[i >>> 5] |= 1 << (i & 31);
-            }
-        }
-        return new int[][] {q, r};
+        int[] rem = new int[b.length];
+        int[] q = nDivRem(a, b, rem);
+        return new int[][] {q, rem};
     }
+
+    // Magnitude arithmetic in C (src/native/java_math.c): schoolbook multiply, Knuth division,
+    // Montgomery modPow. Inputs may have leading zero words; results are normalized by the constructor.
+    private static native int[] nMul(int[] a, int[] b);
+
+    private static native int[] nDivRem(int[] a, int[] b, int[] rem);
+
+    private static native int[] nModPow(int[] base, int[] exp, int[] mod);
 
     public BigInteger add(BigInteger val) {
         if (val.signum == 0) {
@@ -371,16 +330,7 @@ public class BigInteger extends Number implements Comparable<BigInteger> {
         if (exponent.signum < 0) {
             return modInverse(m).modPow(exponent.negate(), m);
         }
-        BigInteger result = ONE.mod(m);
-        BigInteger base = mod(m);
-        int n = exponent.bitLength();
-        for (int i = 0; i < n; i++) {
-            if (exponent.testBit(i)) {
-                result = result.multiply(base).mod(m);
-            }
-            base = base.multiply(base).mod(m);
-        }
-        return result;
+        return new BigInteger(1, nModPow(mod(m).mag, exponent.mag, m.mag));
     }
 
     public BigInteger modInverse(BigInteger m) {
@@ -607,8 +557,23 @@ public class BigInteger extends Number implements Comparable<BigInteger> {
         int s = d.getLowestSetBit();
         d = d.shiftRight(s);
         BigInteger nm1 = n.subtract(ONE);
-        for (int p : small) {
-            BigInteger x = valueOf(p).modPow(d, n);
+        // Fixed small bases, then random bases so adversarial composites fail too
+        // (error below 4^-rounds; certainty asks for 2^-certainty).
+        int rounds = Math.min(Math.max((certainty + 1) / 2, 0), 32);
+        BigInteger[] bases = new BigInteger[small.length + rounds];
+        for (int i = 0; i < small.length; i++) {
+            bases[i] = valueOf(small[i]);
+        }
+        Random rnd = new Random();
+        for (int i = 0; i < rounds; i++) {
+            BigInteger a;
+            do {
+                a = new BigInteger(n.bitLength(), rnd);
+            } while (a.compareTo(ONE) <= 0 || a.compareTo(nm1) >= 0);
+            bases[small.length + i] = a;
+        }
+        for (BigInteger base : bases) {
+            BigInteger x = base.modPow(d, n);
             if (x.equals(ONE) || x.equals(nm1)) {
                 continue;
             }

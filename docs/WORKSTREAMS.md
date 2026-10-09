@@ -47,6 +47,7 @@ duplicating work.
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
 | WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress (sensors with fused gravity/rotation/orientation, battery broadcasts, rumble waveforms, PowerManager, and location/telephony/camera answering as absent done on the host, tests/apps/sensors; the IMU axis signs, rumble and psm have not been run on a console) | session 18, 2026-10-08 |
 | WS16 | libcore API completeness: members and classes android.jar has in java.* that libcore lacks | none | in progress (session 23: java.lang, java.util and java.util.concurrent gaps first) | session 23, 2026-10-09 |
+| WS17 | Crypto: JCA provider framework (java.security, javax.crypto), built-in provider, AndroidKeyStore | none | in progress (session 24: provider framework, digests, HMAC, AES, PBKDF2, software AndroidKeyStore first) | session 24, 2026-10-09 |
 
 Parallelism: after WS0 lands, WS1, WS4, WS6, WS7, WS9, WS10, WS11, WS12,
 WS13, WS15 can all run at once. WS2, WS3, WS5 start once the View API of
@@ -405,3 +406,26 @@ StampedLock, ForkJoin tasks.
 Acceptance: each batch has a `tests/dex` program that matches OpenJDK,
 and `api_check.py` shows no gaps in the packages it covers except the
 documented exclusions.
+
+## WS17: Crypto (JCA)
+
+Owns: `java/libcore/java/security/**` (except what WS16 lists as plain
+API gaps), `java/libcore/javax/crypto/**`, `javax/security/auth`,
+`android/security/keystore/**`.
+
+Scope: the provider architecture (Provider and Provider.Service,
+Security, the *Spi classes, engine classes that look up services by
+algorithm and provider), so third-party providers such as BouncyCastle
+plug in through Security.addProvider; a built-in provider with SHA-1/2
+and MD5 digests, HMAC, AES (ECB, CBC, CTR, GCM; NoPadding and
+PKCS5Padding), PBKDF2 and SecureRandom; the key and spec classes; and an
+"AndroidKeyStore" provider for secret keys made with
+KeyGenParameterSpec, kept in the app's data directory (software only:
+the Switch has no keystore the app can reach). Later: RSA/EC signatures
+and key agreement for TLS (WS11) and apps that do not bring their own
+provider.
+
+Acceptance: a tests/dex program whose output matches OpenJDK for the
+algorithms above (published test vectors), and the Seren apps
+(github.com/tuckerwales/seren) can add, store and show TOTP accounts.
+

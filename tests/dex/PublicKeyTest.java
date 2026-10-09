@@ -5,6 +5,7 @@ import java.security.interfaces.*;
 import java.security.spec.*;
 import java.util.*;
 import javax.crypto.*;
+import javax.crypto.interfaces.*;
 import javax.crypto.spec.*;
 
 /**
@@ -51,6 +52,7 @@ public class PublicKeyTest {
     public static void main(String[] args) throws Exception {
         rsa();
         ec();
+        dh();
         p("done");
     }
 
@@ -319,5 +321,58 @@ public class PublicKeyTest {
             x.update(msg);
             return x.verify(new byte[] {1, 2, 3});
         });
+    }
+
+    static final BigInteger MODP2048 = new BigInteger("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DD"
+            + "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
+            + "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F"
+            + "83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B"
+            + "E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA0510"
+            + "15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16);
+
+    static byte[] agree(PrivateKey a, PublicKey b) throws Exception {
+        KeyAgreement ka = KeyAgreement.getInstance("DH");
+        ka.init(a);
+        ka.doPhase(b, true);
+        return ka.generateSecret();
+    }
+
+    static void dh() throws Exception {
+        p("== dh");
+        BigInteger g = BigInteger.TWO;
+        Random r = new Random(9);
+        BigInteger x1 = new BigInteger(400, r), x2 = new BigInteger(400, r);
+        KeyFactory kf = KeyFactory.getInstance("DH");
+        PrivateKey a = kf.generatePrivate(new DHPrivateKeySpec(x1, MODP2048, g));
+        PrivateKey b = kf.generatePrivate(new DHPrivateKeySpec(x2, MODP2048, g));
+        PublicKey pa = kf.generatePublic(new DHPublicKeySpec(g.modPow(x1, MODP2048), MODP2048, g));
+        PublicKey pb = kf.generatePublic(new DHPublicKeySpec(g.modPow(x2, MODP2048), MODP2048, g));
+        byte[] s1 = agree(a, pb), s2 = agree(b, pa);
+        p("secret " + s1.length + " " + hex(s1) + " symmetric=" + Arrays.equals(s1, s2));
+        p("pub " + pa.getFormat() + " " + hex(pa.getEncoded()));
+        p("priv " + a.getFormat() + " " + hex(a.getEncoded()));
+        PublicKey pa2 = kf.generatePublic(new X509EncodedKeySpec(pa.getEncoded()));
+        PrivateKey a2 = kf.generatePrivate(new PKCS8EncodedKeySpec(a.getEncoded()));
+        DHPublicKeySpec ps = kf.getKeySpec(pa2, DHPublicKeySpec.class);
+        p("reparse " + ps.getY().equals(((DHPublicKey) pa).getY()) + " " + ((DHPrivateKey) a2).getX().equals(x1)
+                + " p=" + ps.getP().equals(MODP2048));
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH");
+        kpg.initialize(new DHParameterSpec(MODP2048, g));
+        KeyPair k1 = kpg.generateKeyPair(), k2 = kpg.generateKeyPair();
+        p("generated " + Arrays.equals(agree(k1.getPrivate(), k2.getPublic()), agree(k2.getPrivate(), k1.getPublic()))
+                + " p=" + ((DHPublicKey) k1.getPublic()).getParams().getP().equals(MODP2048));
+        kpg.initialize(new DHParameterSpec(MODP2048, g, 300));
+        p("l=300 bits=" + ((DHPrivateKey) kpg.generateKeyPair().getPrivate()).getX().bitLength());
+        kpg = KeyPairGenerator.getInstance("DH");
+        kpg.initialize(2048);
+        KeyPair d1 = kpg.generateKeyPair();
+        KeyPairGenerator kpg2 = KeyPairGenerator.getInstance("DH");
+        kpg2.initialize(((DHPublicKey) d1.getPublic()).getParams());
+        KeyPair d2 = kpg2.generateKeyPair();
+        p("default 2048 " + ((DHPublicKey) d1.getPublic()).getParams().getP().bitLength() + " "
+                + Arrays.equals(agree(d1.getPrivate(), d2.getPublic()), agree(d2.getPrivate(), d1.getPublic())));
+        tryIt("y = 1", () -> agree(a, kf.generatePublic(new DHPublicKeySpec(BigInteger.ONE, MODP2048, g))));
+        tryIt("y = p - 1", () -> agree(a, kf.generatePublic(new DHPublicKeySpec(MODP2048.subtract(BigInteger.ONE), MODP2048, g))));
+        tryIt("other group", () -> agree(a, kf.generatePublic(new DHPublicKeySpec(BigInteger.TEN, MODP2048.add(BigInteger.TWO), g))));
     }
 }

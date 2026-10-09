@@ -124,6 +124,23 @@ public final class BuiltinProvider extends Provider {
             }
         });
 
+        // Diffie-Hellman
+        add(new Svc(this, "KeyFactory", "DH", DhKeys.Factory.class, list("DiffieHellman"), null, null) {
+            Object create() {
+                return new DhKeys.Factory();
+            }
+        });
+        add(new Svc(this, "KeyPairGenerator", "DH", DhKeys.Generator.class, list("DiffieHellman"), null, null) {
+            Object create() {
+                return new DhKeys.Generator();
+            }
+        });
+        add(new Svc(this, "KeyAgreement", "DH", DhKeys.Agreement.class, list("DiffieHellman"), null, null) {
+            Object create() {
+                return new DhKeys.Agreement();
+            }
+        });
+
         add(new Svc(this, "SecureRandom", "NativePRNG", NativePrng.class, list("SHA1PRNG", "DEFAULT"), null, null) {
             Object create() {
                 return new NativePrng();

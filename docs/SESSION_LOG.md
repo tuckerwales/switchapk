@@ -825,7 +825,7 @@ what is left in flight.
   stores the secret encrypted with its AndroidKeyStore key, shows the
   same TOTP codes as Python's reference, and reads the account back in a
   new process. Not yet: Seren SSH needs RSA/EC/DH (next WS17 step);
-  nothing new was run on hardware, and `make -f Makefile.switch` was not
-  built this session (no devkitPro here), so the libnx `randomGet` call is
-  unverified.
+  nothing new was run on hardware. The Switch build (libnx `randomGet`,
+  the VFS change) was compiled only by the Package NRO workflow, which
+  passed.
 

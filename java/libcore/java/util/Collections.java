@@ -851,4 +851,78 @@ public class Collections {
     public static <T> Queue<T> asLifoQueue(Deque<T> deque) {
         return deque;
     }
+
+    public static int lastIndexOfSubList(List<?> source, List<?> target) {
+        int sourceSize = source.size();
+        int targetSize = target.size();
+        outer:
+        for (int i = sourceSize - targetSize; i >= 0; i--) {
+            for (int j = 0; j < targetSize; j++) {
+                if (!Objects.equals(target.get(j), source.get(i + j))) {
+                    continue outer;
+                }
+            }
+            return i;
+        }
+        return -1;
+    }
+
+    /* Like the other sorted and navigable wrappers here, these pass the collection through. */
+    public static <E> NavigableSet<E> emptyNavigableSet() {
+        return new TreeSet<E>();
+    }
+
+    public static <K, V> SortedMap<K, V> emptySortedMap() {
+        return new TreeMap<K, V>();
+    }
+
+    public static <K, V> NavigableMap<K, V> emptyNavigableMap() {
+        return new TreeMap<K, V>();
+    }
+
+    public static <T> NavigableSet<T> unmodifiableNavigableSet(NavigableSet<T> s) {
+        return s;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <K, V> NavigableMap<K, V> unmodifiableNavigableMap(NavigableMap<K, ? extends V> m) {
+        return (NavigableMap<K, V>) m;
+    }
+
+    public static <T> NavigableSet<T> synchronizedNavigableSet(NavigableSet<T> s) {
+        return s;
+    }
+
+    public static <K, V> NavigableMap<K, V> synchronizedNavigableMap(NavigableMap<K, V> m) {
+        return m;
+    }
+
+    public static <E> Queue<E> checkedQueue(Queue<E> queue, Class<E> type) {
+        return queue;
+    }
+
+    public static <E> Set<E> checkedSet(Set<E> s, Class<E> type) {
+        return s;
+    }
+
+    public static <E> SortedSet<E> checkedSortedSet(SortedSet<E> s, Class<E> type) {
+        return s;
+    }
+
+    public static <E> NavigableSet<E> checkedNavigableSet(NavigableSet<E> s, Class<E> type) {
+        return s;
+    }
+
+    public static <K, V> Map<K, V> checkedMap(Map<K, V> m, Class<K> keyType, Class<V> valueType) {
+        return m;
+    }
+
+    public static <K, V> SortedMap<K, V> checkedSortedMap(SortedMap<K, V> m, Class<K> keyType, Class<V> valueType) {
+        return m;
+    }
+
+    public static <K, V> NavigableMap<K, V> checkedNavigableMap(NavigableMap<K, V> m, Class<K> keyType,
+            Class<V> valueType) {
+        return m;
+    }
 }

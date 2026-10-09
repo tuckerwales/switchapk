@@ -46,7 +46,21 @@ public class IntSummaryStatistics implements IntConsumer {
     }
 
     public String toString() {
-        return getClass().getSimpleName() + "{count=" + count + ", sum=" + sum + ", min=" + min + ", average="
-                + getAverage() + ", max=" + max + "}";
+        return String.format("%s{count=%d, sum=%d, min=%d, average=%f, max=%d}", getClass().getSimpleName(),
+                count, sum, min, getAverage(), max);
+    }
+
+    public IntSummaryStatistics(long count, int min, int max, long sum) throws IllegalArgumentException {
+        if (count < 0L) {
+            throw new IllegalArgumentException("Negative count value");
+        } else if (count > 0L) {
+            if (min > max) {
+                throw new IllegalArgumentException("Minimum greater than maximum");
+            }
+            this.count = count;
+            this.sum = sum;
+            this.min = min;
+            this.max = max;
+        }
     }
 }

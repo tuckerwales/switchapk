@@ -258,4 +258,37 @@ public class BitSet implements Cloneable, java.io.Serializable {
         }
         return b.append('}').toString();
     }
+
+    public int previousClearBit(int fromIndex) {
+        if (fromIndex < -1) {
+            throw new IndexOutOfBoundsException("fromIndex < -1: " + fromIndex);
+        }
+        for (int i = fromIndex; i >= 0; i--) {
+            if (!get(i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public java.util.stream.IntStream stream() {
+        int[] bits = new int[cardinality()];
+        int k = 0;
+        for (int i = nextSetBit(0); i >= 0; i = nextSetBit(i + 1)) {
+            bits[k++] = i;
+        }
+        return java.util.stream.IntStream.of(bits);
+    }
+
+    public static BitSet valueOf(java.nio.ByteBuffer bb) {
+        byte[] b = new byte[bb.remaining()];
+        bb.slice().get(b);
+        return valueOf(b);
+    }
+
+    public static BitSet valueOf(java.nio.LongBuffer lb) {
+        long[] w = new long[lb.remaining()];
+        lb.slice().get(w);
+        return valueOf(w);
+    }
 }

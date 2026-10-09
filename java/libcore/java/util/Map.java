@@ -40,6 +40,14 @@ public interface Map<K, V> {
 
         int hashCode();
 
+        @SuppressWarnings("unchecked")
+        static <K, V> Map.Entry<K, V> copyOf(Map.Entry<? extends K, ? extends V> e) {
+            if (e instanceof AbstractMap.SimpleImmutableEntry) {
+                return (Map.Entry<K, V>) e;
+            }
+            return Map.entry(e.getKey(), e.getValue());
+        }
+
         static <K extends Comparable<? super K>, V> Comparator<Map.Entry<K, V>> comparingByKey() {
             return new Comparator<Map.Entry<K, V>>() {
                 public int compare(Map.Entry<K, V> a, Map.Entry<K, V> b) {
@@ -204,20 +212,64 @@ public interface Map<K, V> {
         return ofPairs(k1, v1, k2, v2, k3, v3, k4, v4, k5, v5);
     }
 
+    static <K, V> Map<K, V> of(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6) {
+        return ofPairs(k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6);
+    }
+
+    static <K, V> Map<K, V> of(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7) {
+        return ofPairs(k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6, k7, v7);
+    }
+
+    static <K, V> Map<K, V> of(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7, K k8, V v8) {
+        return ofPairs(k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6, k7, v7, k8, v8);
+    }
+
+    static <K, V> Map<K, V> of(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7, K k8, V v8, K k9, V v9) {
+        return ofPairs(k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6, k7, v7, k8, v8, k9, v9);
+    }
+
+    static <K, V> Map<K, V> of(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7, K k8, V v8, K k9, V v9, K k10, V v10) {
+        return ofPairs(k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6, k7, v7, k8, v8, k9, v9, k10, v10);
+    }
+
+    @SafeVarargs
+    @SuppressWarnings("varargs")
+    static <K, V> Map<K, V> ofEntries(Map.Entry<? extends K, ? extends V>... entries) {
+        Object[] kv = new Object[entries.length * 2];
+        for (int i = 0; i < entries.length; i++) {
+            kv[2 * i] = entries[i].getKey();
+            kv[2 * i + 1] = entries[i].getValue();
+        }
+        return ofPairs(kv);
+    }
+
+    /* Framework-internal: Map.of semantics, rejecting null keys or values and duplicate keys. */
     @SuppressWarnings("unchecked")
     static <K, V> Map<K, V> ofPairs(Object... kv) {
         LinkedHashMap<K, V> m = new LinkedHashMap<K, V>();
         for (int i = 0; i < kv.length; i += 2) {
-            m.put((K) kv[i], (V) kv[i + 1]);
+            if (kv[i] == null || kv[i + 1] == null) {
+                throw new NullPointerException();
+            }
+            if (m.put((K) kv[i], (V) kv[i + 1]) != null) {
+                throw new IllegalArgumentException("duplicate key: " + kv[i]);
+            }
         }
         return Collections.unmodifiableMap(m);
     }
 
     static <K, V> Map.Entry<K, V> entry(K k, V v) {
-        return new AbstractMap.SimpleImmutableEntry<K, V>(k, v);
+        return new AbstractMap.SimpleImmutableEntry<K, V>(java.util.Objects.requireNonNull(k),
+                java.util.Objects.requireNonNull(v));
     }
 
     static <K, V> Map<K, V> copyOf(Map<? extends K, ? extends V> map) {
-        return Collections.unmodifiableMap(new LinkedHashMap<K, V>(map));
+        Object[] kv = new Object[map.size() * 2];
+        int i = 0;
+        for (Map.Entry<? extends K, ? extends V> e : map.entrySet()) {
+            kv[i++] = e.getKey();
+            kv[i++] = e.getValue();
+        }
+        return ofPairs(kv);
     }
 }

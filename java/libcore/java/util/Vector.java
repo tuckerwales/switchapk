@@ -254,4 +254,10 @@ public class Vector<E> extends AbstractList<E> implements List<E>, RandomAccess,
         }
         return !c.isEmpty();
     }
+
+    public synchronized void trimToSize() {
+        if (elementCount < elementData.length) {
+            elementData = Arrays.copyOf(elementData, elementCount);
+        }
+    }
 }

@@ -26,6 +26,14 @@ public class PriorityQueue<E> extends AbstractQueue<E> implements java.io.Serial
         this.comparator = comparator;
     }
 
+    public PriorityQueue(PriorityQueue<? extends E> c) {
+        this((Collection<? extends E>) c);
+    }
+
+    public PriorityQueue(SortedSet<? extends E> c) {
+        this((Collection<? extends E>) c);
+    }
+
     public PriorityQueue(Collection<? extends E> c) {
         this(Math.max(1, c.size()), PriorityQueue.<E>comparatorOf(c));
         addAll(c);
@@ -35,6 +43,9 @@ public class PriorityQueue<E> extends AbstractQueue<E> implements java.io.Serial
     private static <E> Comparator<? super E> comparatorOf(Collection<? extends E> c) {
         if (c instanceof PriorityQueue) {
             return (Comparator<? super E>) ((PriorityQueue<?>) c).comparator();
+        }
+        if (c instanceof SortedSet) {
+            return (Comparator<? super E>) ((SortedSet<?>) c).comparator();
         }
         return null;
     }

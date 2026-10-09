@@ -67,14 +67,22 @@ public class Random implements java.io.Serializable {
         if (origin >= bound) {
             throw new IllegalArgumentException("bound must be greater than origin");
         }
+        // RandomSupport.boundedNextInt, as Android's OpenJDK 17 based Random (differs from nextInt(n) + origin
+        // when the range is a power of two)
+        int r = nextInt();
         int n = bound - origin;
-        if (n > 0) {
-            return nextInt(n) + origin;
+        int m = n - 1;
+        if ((n & m) == 0) {
+            r = (r & m) + origin;
+        } else if (n > 0) {
+            for (int u = r >>> 1; u + m - (r = u % n) < 0; u = nextInt() >>> 1) {
+            }
+            r += origin;
+        } else {
+            while (r < origin || r >= bound) {
+                r = nextInt();
+            }
         }
-        int r;
-        do {
-            r = nextInt();
-        } while (r < origin || r >= bound);
         return r;
     }
 
@@ -119,19 +127,130 @@ public class Random implements java.io.Serializable {
         return v1 * multiplier;
     }
 
-    public java.util.stream.IntStream ints(long streamSize) {
-        int[] a = new int[(int) streamSize];
-        for (int i = 0; i < a.length; i++) {
-            a[i] = nextInt();
+    /* Bounded values, as RandomSupport.boundedNextLong/Double in the JDK (framework-internal). */
+    long internalNextLong(long origin, long bound) {
+        long r = nextLong();
+        if (origin < bound) {
+            long n = bound - origin;
+            long m = n - 1;
+            if ((n & m) == 0L) {
+                r = (r & m) + origin;
+            } else if (n > 0L) {
+                for (long u = r >>> 1; u + m - (r = u % n) < 0L; u = nextLong() >>> 1) {
+                }
+                r += origin;
+            } else {
+                while (r < origin || r >= bound) {
+                    r = nextLong();
+                }
+            }
         }
-        return java.util.stream.IntStream.of(a);
+        return r;
+    }
+
+    double internalNextDouble(double origin, double bound) {
+        double r = nextDouble();
+        if (origin < bound) {
+            r = r * (bound - origin) + origin;
+            if (r >= bound) {
+                r = Double.longBitsToDouble(Double.doubleToLongBits(bound) - 1);
+            }
+        }
+        return r;
+    }
+
+    private static void checkSize(long streamSize) {
+        if (streamSize < 0L) {
+            throw new IllegalArgumentException("size must be non-negative");
+        }
+    }
+
+    private static void checkRange(double origin, double bound) {
+        if (!(origin < bound)) {
+            throw new IllegalArgumentException("bound must be greater than origin");
+        }
+    }
+
+    public java.util.stream.IntStream ints(long streamSize) {
+        checkSize(streamSize);
+        return ints().limit(streamSize);
+    }
+
+    public java.util.stream.IntStream ints() {
+        return java.util.stream.IntStream.generate(new java.util.function.IntSupplier() {
+            public int getAsInt() {
+                return nextInt();
+            }
+        });
     }
 
     public java.util.stream.IntStream ints(long streamSize, int origin, int bound) {
-        int[] a = new int[(int) streamSize];
-        for (int i = 0; i < a.length; i++) {
-            a[i] = nextInt(origin, bound);
+        checkSize(streamSize);
+        return ints(origin, bound).limit(streamSize);
+    }
+
+    public java.util.stream.IntStream ints(final int origin, final int bound) {
+        checkRange(origin, bound);
+        return java.util.stream.IntStream.generate(new java.util.function.IntSupplier() {
+            public int getAsInt() {
+                return nextInt(origin, bound);
+            }
+        });
+    }
+
+    public java.util.stream.LongStream longs(long streamSize) {
+        checkSize(streamSize);
+        return longs().limit(streamSize);
+    }
+
+    public java.util.stream.LongStream longs() {
+        return java.util.stream.LongStream.generate(new java.util.function.LongSupplier() {
+            public long getAsLong() {
+                return nextLong();
+            }
+        });
+    }
+
+    public java.util.stream.LongStream longs(long streamSize, long origin, long bound) {
+        checkSize(streamSize);
+        return longs(origin, bound).limit(streamSize);
+    }
+
+    public java.util.stream.LongStream longs(final long origin, final long bound) {
+        if (origin >= bound) {
+            throw new IllegalArgumentException("bound must be greater than origin");
         }
-        return java.util.stream.IntStream.of(a);
+        return java.util.stream.LongStream.generate(new java.util.function.LongSupplier() {
+            public long getAsLong() {
+                return internalNextLong(origin, bound);
+            }
+        });
+    }
+
+    public java.util.stream.DoubleStream doubles(long streamSize) {
+        checkSize(streamSize);
+        return doubles().limit(streamSize);
+    }
+
+    public java.util.stream.DoubleStream doubles() {
+        return java.util.stream.DoubleStream.generate(new java.util.function.DoubleSupplier() {
+            public double getAsDouble() {
+                return nextDouble();
+            }
+        });
+    }
+
+    public java.util.stream.DoubleStream doubles(long streamSize, double origin, double bound) {
+        checkSize(streamSize);
+        return doubles(origin, bound).limit(streamSize);
+    }
+
+    public java.util.stream.DoubleStream doubles(final double origin, final double bound) {
+        checkRange(origin, bound);
+        return java.util.stream.DoubleStream.generate(new java.util.function.DoubleSupplier() {
+            public double getAsDouble() {
+                return internalNextDouble(origin, bound);
+            }
+        });
     }
 }

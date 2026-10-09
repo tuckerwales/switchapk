@@ -1,9 +1,9 @@
 package java.util;
 
-public class MissingFormatArgumentException extends IllegalFormatException {
+public class MissingFormatWidthException extends IllegalFormatException {
     private final String s;
 
-    public MissingFormatArgumentException(String s) {
+    public MissingFormatWidthException(String s) {
         if (s == null) {
             throw new NullPointerException();
         }
@@ -15,6 +15,6 @@ public class MissingFormatArgumentException extends IllegalFormatException {
     }
 
     public String getMessage() {
-        return "Format specifier '" + s + "'";
+        return s;
     }
 }

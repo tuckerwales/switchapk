@@ -110,4 +110,8 @@ public class Hashtable<K, V> extends Dictionary<K, V> implements Map<K, V>, Clon
     public synchronized int hashCode() {
         return map.hashCode();
     }
+
+    /* The table is a HashMap underneath, which resizes itself. */
+    protected void rehash() {
+    }
 }

@@ -711,3 +711,27 @@ what is left in flight.
   host Mesa (libEGL is absent here). `make -f Makefile.switch` builds
   the NRO.
 
+
+### Session 19 (2026-10-09, branch ccr-65fb19d7-imn4ii)
+
+- WS11 compression. libcore had no java.util.zip at all (PLAN wrongly
+  ticked it). Added the whole package with API 35 signatures: CRC32,
+  Adler32 and CRC32C; Inflater and Deflater over zlib natives
+  (`src/native/java_zip.c`, stream state in native memory until
+  `end()`); the inflater/deflater/checked streams; GZIP streams;
+  ZipInputStream and ZipOutputStream; and a pure Java ZipFile over
+  RandomAccessFile (zip64 reading). Then java.util.jar (Manifest,
+  Attributes, JarFile, JarInputStream, JarOutputStream; no signature
+  checks), FileTime and InputStream.skipNBytes. tests/dex/ZipTest
+  matches OpenJDK, including zlib and gzip streams made by Python.
+- HttpURLConnection asks for gzip and decodes it transparently like
+  OkHttp, dropping Content-Encoding and Content-Length; an explicit
+  Accept-Encoding gets raw bytes. tests/apps/net checks both.
+- `tools/api_check.py` passed class names to javap, which resolved
+  `java.*` from the JDK on both sides, so libcore never showed gaps. It
+  now passes class file paths, scans libcore with `-p`, and follows
+  interface constants. Real libcore gaps are listed in PLAN next steps
+  (item 8).
+- `make`, VmTest, NetTest, ZipTest and tests/apps/net pass, and
+  `make -f Makefile.switch` builds the NRO without warnings (zlib was
+  already linked there). Nothing new was run on hardware.

@@ -224,7 +224,7 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
 Our own implementation of the `java.*` subset Android apps use: lang,
 lang.reflect (+ Proxy), lang.invoke (lambdas), util (+ concurrent, atomic,
 locks, function, stream, regex, zip), io, nio (buffers, charset, basic
-file APIs), text, math, net (sockets, DNS and HTTP/1.1; 5.1), security (digests).
+file APIs), text, math, net (sockets, DNS and HTTP/1.1; 5.1), zip and jar (5.2), security (digests).
 Natives in `src/native`. File paths from Java are translated by
 `platform_map_path()` (src/native/java_io.c):
 
@@ -260,8 +260,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   NIO socket channels and selectors are not implemented.
 - `URL.openConnection()` for http returns `HttpURLConnectionImpl`, an
   HTTP/1.1 client with one socket per request (sends `Connection:
-  close`; no pool, cache, cookies, proxy or gzip, because libcore has
-  no java.util.zip yet). Bodies: Content-Length, chunked and
+  close`; no pool, cache, cookies or proxy). Like OkHttp it sends
+  `Accept-Encoding: gzip` when the app set neither Accept-Encoding nor
+  Range, and then decodes a gzip body itself and drops
+  Content-Encoding and Content-Length from the response headers (so
+  `getContentLength()` is -1); an app that sets Accept-Encoding gets the
+  raw bytes. Bodies: Content-Length, chunked and
   read-until-close; request bodies buffered (Content-Length) or streamed
   with `setFixedLengthStreamingMode` / `setChunkedStreamingMode`. 1xx
   responses are skipped. Redirects are followed within the same scheme
@@ -287,6 +291,42 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   the state is polled every 3 s on the main looper; a change sends
   onLost / onAvailable and replaces the sticky CONNECTIVITY_ACTION.
   `Network` binding calls are no-ops (there is only one network).
+
+### 5.2 Compression (java.util.zip, java.util.jar)
+
+- Natives in `src/native/java_zip.c` over the zlib both targets already
+  link (`-lz`). `CRC32` and `Adler32` call `crc32`/`adler32`; `CRC32C`
+  is a table in Java. `Inflater` and `Deflater` own a malloc'd
+  `z_stream` whose address the Java object keeps in a private long
+  (`address`, 0 after `end()`); it is passed to the static natives as an
+  argument, so C reads no Java fields. Input stays in the app's array:
+  each `inflateBytes`/`deflateBytes` call points zlib at the input and
+  output arrays for that call only and returns one packed long (bits
+  0-30 bytes written, 31-61 bytes read, 62 stream end, 63 dictionary
+  needed). Java keeps the input position and byte counts. Deflater level
+  or strategy changes go through `deflateParams` on the next call (bit 62
+  then means the parameters took effect). zlib errors become
+  `DataFormatException` (inflate) with zlib's message. The work runs
+  with the GIL held (CPU bound, bounded by the caller's buffer).
+- No finalizers: an Inflater or Deflater that is never ended leaks its
+  zlib state (about 7 KB inflating, 256 KB deflating). The library's own
+  streams end the ones they create on close, as on Android.
+- Streams, `GZIP*` (concatenated members, header CRC), `ZipInputStream`
+  (data descriptors, zip64 sizes, extended timestamps) and
+  `ZipOutputStream` are ports of the OpenJDK logic. `ZipOutputStream`
+  writes no zip64 (it throws past 65535 entries or 4 GB). `ZipFile` is
+  Java over `RandomAccessFile`: it reads the central directory (zip64
+  end record too) once, and each entry stream seeks under the file's
+  lock, so streams can be read in any order; deflated entries get their
+  own Inflater. `close()` closes the open entry streams.
+- `java.util.jar`: Manifest reading and writing (72-byte folding,
+  sections), JarFile, JarInputStream, JarOutputStream (0xCAFE marker on
+  the first entry). Signatures are not verified. Missing because libcore
+  lacks the types: `ZipEntry.get/setTimeLocal` (java.time), `FileTime`
+  Instant methods, `JarEntry.getCertificates`/`getCodeSigners`
+  (auto-stubbed to null, the unsigned answer).
+- `tests/dex/ZipTest.java` checks all of it against OpenJDK, including
+  streams made by Python's zlib and gzip.
 
 ## 6. Android framework (java/framework)
 

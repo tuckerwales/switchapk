@@ -712,7 +712,61 @@ what is left in flight.
   the NRO.
 
 
-### Session 19 (2026-10-09, branch ccr-65fb19d7-imn4ii)
+## Session 19, 2026-10-09: sensors sample on a console
+
+- First console run of tests/apps/sensors: one rumble, then "sensing..."
+  forever. Not a hang: the text only changed once all 14 checks passed,
+  and yaw, tilt, battery low/okay, power connected and charging only
+  happen under the host script. The app now shows live accelerometer,
+  gyroscope, gravity and orientation readings, how many checks passed
+  and which are pending, so a console run shows whether the IMU works
+  (lying screen up should read accel about 0 0 9.8; if z is negative,
+  flip ACCEL_SIGN in platform_switch.c). The host check still passes.
+
+### Session 20 (2026-10-09, branch claude/new-session-0z3wws)
+
+- WS8 on hardware: tests/apps/gles showed "OpenGL ES unavailable / No
+  configs match configSpec" in both views on a Switch. devkitPro's
+  switch-mesa EGL driver (src/egl/drivers/switch, all branches) gives
+  every config EGL_SURFACE_TYPE = EGL_WINDOW_BIT only and returns NULL
+  from CreatePbufferSurface, so our pbuffer configs matched nothing.
+- FBO surfaces (android_gl.c): when a display has no pbuffer configs,
+  surfaces are framebuffer objects in a surfaceless context (the driver
+  has EGL_KHR_surfaceless_context), and binding framebuffer 0 binds the
+  current surface's FBO, for the Java bindings and native code alike.
+  `SWITCHAPK_EGL_FBO=1` forces the mode on the host. The Java side is
+  unchanged.
+- `make`, VmTest, and the gles and native samples pass with host Mesa in
+  both modes (installed libegl1/libgles2/libgl1-mesa-dri here). `make -f
+  Makefile.switch` builds the NRO without warnings. Not yet run on a
+  console: the GLES1 view (llvmpipe has no ES1) and the Switch driver's
+  FBO completeness for each depth/stencil config are unverified there.
+
+### Session 21 (2026-10-09, branch ccr-faaaa2d6-doai7c)
+
+- tests/apps/net stalled on "networking..." on a console. It should
+  end red within about 20 s (nothing there flips the network, so the
+  network switch lines are missing). Without a log it is not yet clear
+  where it stops, so: the app now shows and logs ("I/NET: step ...")
+  the step in progress; the Switch main loop flushes log.txt about
+  twice a second, so the file is complete after a hang (only warnings
+  were flushed before); and socket waits poll in 250 ms slices, since
+  on the Switch's BSD stack closing a socket does not wake a thread
+  already polling it (the net-server thread blocked in accept when the
+  test closed its ServerSocket).
+
+### Session 22 (2026-10-09, branch claude/new-session-0z3wws)
+
+- WS8, second console run: the GLES2 cube rendered (it is static by design,
+  RENDERMODE_WHEN_DIRTY with a fixed rotation), the GLES1 view showed
+  "No config chosen": its default chooser wants RGB888 with alpha 0 and
+  switch-mesa only has RGBA8888. FBO mode now adds alpha-free config
+  variants backed by RGB8 renderbuffers. Checked on the host by hiding
+  Mesa's own alpha-free configs and using the default chooser for the
+  cube: "No config chosen" without the variants, the cube renders with
+  them.
+
+### Session 23 (2026-10-09, branch ccr-65fb19d7-imn4ii)
 
 - WS11 compression. libcore had no java.util.zip at all (PLAN wrongly
   ticked it). Added the whole package with API 35 signatures: CRC32,

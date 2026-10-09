@@ -33,6 +33,7 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.Gravity;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -41,7 +42,8 @@ import java.util.Set;
 /**
  * System services on the host: the motion sensors and their fusion, the battery broadcasts, rumble and power. The
  * script drives the headless sensors and battery (sensor/battery commands); the app logs what it observes and turns
- * the swatch green once every expected event arrived.
+ * the swatch green once every expected event arrived. On a console nothing drives the script-only checks (the exact
+ * turn and tilt, the battery dropping and charging), so the screen shows live readings and what is still pending.
  */
 public class MainActivity extends Activity {
     private static final String TAG = "SENSORS";
@@ -56,12 +58,15 @@ public class MainActivity extends Activity {
     private SensorManager mSm;
     private FrameLayout mRoot;
     private TextView mText;
+    private TextView mStatus;
+    private boolean mAllOk;
 
     private final float[] mAccel = new float[3];
     private final float[] mGravity = new float[3];
     private final float[] mGrv = new float[4];
     private final float[] mOrientation = new float[3];
     private final float[] mLinear = new float[3];
+    private final float[] mGyro = new float[3];
     private long mStart;
     private boolean mSawSpin;
     private long mSpinStopped;
@@ -84,10 +89,40 @@ public class MainActivity extends Activity {
         for (String e : EXPECTED) {
             if (!mDone.contains(e)) return;
         }
+        mAllOk = true;
         log("all ok");
         mText.setText("all ok");
         mRoot.setBackgroundColor(0xFF43A047);
+        showStatus();
     }
+
+    /** Live readings and the pending checks, so a run without the script does not look hung. */
+    private void showStatus() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("accel ").append(f1(mAccel[0])).append(' ').append(f1(mAccel[1])).append(' ').append(f1(mAccel[2]));
+        sb.append("   gyro ").append(f1(mGyro[0])).append(' ').append(f1(mGyro[1])).append(' ').append(f1(mGyro[2]));
+        sb.append("\ngravity ").append(f1(mGravity[0])).append(' ').append(f1(mGravity[1])).append(' ')
+                .append(f1(mGravity[2]));
+        sb.append("   azimuth ").append(Math.round(mOrientation[0])).append(" pitch ")
+                .append(Math.round(mOrientation[1])).append(" roll ").append(Math.round(mOrientation[2]));
+        StringBuilder pending = new StringBuilder();
+        for (String e : EXPECTED) {
+            if (!mDone.contains(e)) pending.append(' ').append(e);
+        }
+        sb.append("\ndone ").append(mDone.size()).append('/').append(EXPECTED.length);
+        if (pending.length() > 0) {
+            sb.append(", waiting for").append(pending);
+            sb.append("\n(yaw, tilt and the battery checks are driven by the host test script)");
+        }
+        mStatus.setText(sb.toString());
+    }
+
+    private final Runnable mTick = new Runnable() {
+        public void run() {
+            showStatus();
+            if (!mAllOk) mMain.postDelayed(this, 250);
+        }
+    };
 
     private final SensorEventListener mListener = new SensorEventListener() {
         @Override
@@ -110,6 +145,7 @@ public class MainActivity extends Activity {
                     System.arraycopy(e.values, 0, mOrientation, 0, 3);
                     break;
                 case Sensor.TYPE_GYROSCOPE:
+                    System.arraycopy(e.values, 0, mGyro, 0, 3);
                     if (e.values[2] > 1) {
                         mSawSpin = true;
                     } else if (mSawSpin && mSpinStopped == 0) {
@@ -170,7 +206,16 @@ public class MainActivity extends Activity {
         mText.setTextColor(Color.WHITE);
         mText.setTextSize(24);
         mText.setText("sensing...");
-        mRoot.addView(mText, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        mStatus = new TextView(this);
+        mStatus.setTextColor(Color.WHITE);
+        mStatus.setTextSize(14);
+        mStatus.setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setGravity(Gravity.CENTER_HORIZONTAL);
+        column.addView(mText, new LinearLayout.LayoutParams(-2, -2));
+        column.addView(mStatus, new LinearLayout.LayoutParams(-2, -2));
+        mRoot.addView(column, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
         setContentView(mRoot);
         mStart = System.nanoTime();
 
@@ -201,6 +246,7 @@ public class MainActivity extends Activity {
         vibrate();
         power();
         absent();
+        mMain.post(mTick);
     }
 
     /** Location (off), telephony and cameras (none) answer without crashing. */

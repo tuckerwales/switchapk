@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 19, see SESSION_LOG.md)
+## Current state (end of session 23, see SESSION_LOG.md)
 
 Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 - VM core, libcore, JNI, reflection (including RUNTIME annotations),
@@ -129,7 +129,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - [x] VM: interpreter, class linking, auto-stubbing, GC, threads/GIL, monitors, exceptions, reflection, proxies, lambdas
 - [x] JNI: JNIEnv/JavaVM, call trampolines (AArch64, x86-64)
 - [x] libcore: lang, util (+concurrent/stream/regex), io, nio, text, math, security digests
-- [x] libcore: java.util.zip and java.util.jar over zlib (tests/dex/ZipTest against OpenJDK; session 19)
+- [x] libcore: java.util.zip and java.util.jar over zlib (tests/dex/ZipTest against OpenJDK; session 23)
 - [x] VM conformance test vs OpenJDK
 - [x] Renderer (src/gfx): paths, strokes, shaders, bitmaps, text, clip masks, PNG encode, image decode
 - [x] Resource parsing: AXML, ARSC, multi-package tables; framework-res.apk generator; android.R generator
@@ -297,6 +297,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] GLES1 rendering verified (Ubuntu's Mesa has no ES1 contexts; the
     sample checks the failure panel there)
   - [x] Switch build links switch-mesa (with -lstdc++) and builds without it
+  - [x] Switch: window and pbuffer surfaces as framebuffer objects in a
+    surfaceless context (switch-mesa has no pbuffers, which showed
+    "No configs match configSpec" on hardware); host tests the path with
+    SWITCHAPK_EGL_FBO=1; alpha-free variants of RGBA8888 configs, since
+    switch-mesa has no RGB888 ones (the GLES1 view's "No config chosen")
   - [ ] Switch: verify GL on hardware; direct NWindow presentation for
     fullscreen GL
   - [ ] EGL15 syncs/images, SurfaceTexture.updateTexImage, ETC1Util
@@ -428,7 +433,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 8. libcore API gaps. `tools/api_check.py` used to resolve `java.*`
    classes from the running JDK, so libcore always looked complete.
-   Fixed in session 19: `-p java.lang`, `-p java.util` and so on now
+   Fixed in session 23: `-p java.lang`, `-p java.util` and so on now
    list real gaps (about 1,700 members across java.lang, java.util,
    java.util.concurrent, java.text, java.nio, java.io and java.net).
    Many are API 34/35 additions (SequencedCollection, Math.clamp) or
@@ -495,6 +500,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-09 (WS8, touches WS9): `sa_egl_native_proc` also returns
+  wrappers for `glBindFramebuffer` and `glBindFramebufferOES`, so the
+  NDK shim hands native code the redirect FBO surfaces need. No new
+  native fields. ARCHITECTURE 6.6 updated.
 
 - 2026-10-02 (WS13, touches WS10): `make -f Makefile.switch dist`
   packages every directory under `tests/apps` that has an

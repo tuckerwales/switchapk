@@ -18,6 +18,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.Gravity;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -44,7 +45,8 @@ import java.util.zip.GZIPOutputStream;
 /**
  * Networking on the host: HTTP and UDP over loopback against a server in this process, https and DNS failures, and
  * ConnectivityManager. The app then switches the host's reported network (none, then ethernet) by writing
- * /data/local/tmp/network and waits for the callbacks and the CONNECTIVITY_ACTION broadcast.
+ * /data/local/tmp/network and waits for the callbacks and the CONNECTIVITY_ACTION broadcast. The step in progress is
+ * shown under the title (and logged), so a run that stalls on a console shows where.
  */
 public class MainActivity extends Activity {
     private static final String TAG = "NET";
@@ -55,12 +57,23 @@ public class MainActivity extends Activity {
     private ConnectivityManager mCm;
     private FrameLayout mRoot;
     private TextView mText;
+    private TextView mStatus;
 
     private void log(String s) {
         Log.i(TAG, s);
         synchronized (mSeen) {
             mSeen.add(s);
         }
+    }
+
+    /** Shows and logs the step about to run. */
+    private void step(final String s) {
+        Log.i(TAG, "step " + s);
+        mMain.post(new Runnable() {
+            public void run() {
+                mStatus.setText(s);
+            }
+        });
     }
 
     private boolean seen(String s) {
@@ -90,7 +103,16 @@ public class MainActivity extends Activity {
         mText.setTextColor(Color.WHITE);
         mText.setTextSize(24);
         mText.setText("networking...");
-        mRoot.addView(mText, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        mStatus = new TextView(this);
+        mStatus.setTextColor(Color.WHITE);
+        mStatus.setTextSize(14);
+        mStatus.setText("starting");
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setGravity(Gravity.CENTER_HORIZONTAL);
+        column.addView(mText, new LinearLayout.LayoutParams(-2, -2));
+        column.addView(mStatus, new LinearLayout.LayoutParams(-2, -2));
+        mRoot.addView(column, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
         setContentView(mRoot);
 
         mCm = getSystemService(ConnectivityManager.class);
@@ -144,6 +166,7 @@ public class MainActivity extends Activity {
                     sockets();
                 } catch (Throwable t) {
                     Log.e(TAG, "sockets failed", t);
+                    step("sockets failed: " + t);
                 }
                 switchNetworks();
             }
@@ -221,6 +244,7 @@ public class MainActivity extends Activity {
     }
 
     private void sockets() throws Exception {
+        step("loopback server");
         final ServerSocket ss = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
         Thread server = new Thread("net-server") {
             public void run() {
@@ -237,9 +261,11 @@ public class MainActivity extends Activity {
         server.start();
         String base = "http://127.0.0.1:" + ss.getLocalPort();
 
+        step("http GET " + base + "/hello");
         HttpURLConnection c = (HttpURLConnection) new URL(base + "/hello").openConnection();
         log("http " + c.getResponseCode() + " " + c.getContentType() + " " + readAll(c.getInputStream()));
 
+        step("http gzip");
         // Android asks for gzip itself and hands the app the decoded body without the encoding headers.
         c = (HttpURLConnection) new URL(base + "/gzip").openConnection();
         log("gzip " + c.getResponseCode() + " length=" + c.getContentLength() + " encoding=" + c.getContentEncoding()
@@ -260,12 +286,14 @@ public class MainActivity extends Activity {
                 + Integer.toHexString(zb[1] & 0xff) + " text="
                 + readAll(new GZIPInputStream(new ByteArrayInputStream(zb))));
 
+        step("http POST");
         c = (HttpURLConnection) new URL(base + "/echo").openConnection();
         c.setDoOutput(true);
         c.setRequestProperty("Content-Type", "application/json");
         c.getOutputStream().write("{\"a\":1}".getBytes("UTF-8"));
         log("post " + c.getResponseCode() + " " + readAll(c.getInputStream()));
 
+        step("http 404");
         c = (HttpURLConnection) new URL(base + "/missing").openConnection();
         try {
             c.getInputStream();
@@ -273,17 +301,20 @@ public class MainActivity extends Activity {
             log("404 " + c.getResponseCode() + " err=" + readAll(c.getErrorStream()));
         }
 
+        step("https");
         try {
             new URL("https://example.com/").openConnection().getInputStream();
         } catch (IOException e) {
             log("https " + e.getClass().getName());
         }
+        step("dns lookup of no-such-host.invalid");
         try {
             InetAddress.getByName("no-such-host.invalid");
         } catch (UnknownHostException e) {
             log("dns UnknownHostException");
         }
 
+        step("udp");
         DatagramSocket a = new DatagramSocket(0, InetAddress.getLoopbackAddress());
         DatagramSocket b = new DatagramSocket(0, InetAddress.getLoopbackAddress());
         byte[] msg = "ping".getBytes("UTF-8");
@@ -292,6 +323,7 @@ public class MainActivity extends Activity {
         b.setSoTimeout(2000);
         b.receive(p);
         log("udp " + new String(p.getData(), 0, p.getLength(), "UTF-8"));
+        step("closing sockets");
         a.close();
         b.close();
         ss.close();
@@ -300,6 +332,7 @@ public class MainActivity extends Activity {
     // ---- connectivity changes -------------------------------------------------------------------------------------
 
     private boolean waitFor(String line, long ms) {
+        step("waiting up to " + ms / 1000 + " s for: " + line);
         long end = System.currentTimeMillis() + ms;
         while (System.currentTimeMillis() < end) {
             if (seen(line)) {
@@ -363,6 +396,7 @@ public class MainActivity extends Activity {
                 Log.i(TAG, ok ? "all ok" : "missing " + missing);
                 mRoot.setBackgroundColor(ok ? 0xFF43A047 : 0xFFE53935);
                 mText.setText(ok ? "network ok" : "network: " + missing + " missing");
+                mStatus.setText(ok ? "" : "see the W/NET missing lines in the log");
             }
         });
     }

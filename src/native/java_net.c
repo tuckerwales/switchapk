@@ -110,14 +110,31 @@ static int from_sockaddr(const struct sockaddr_storage *ss, ArrayObject *out, Ar
     return port;
 }
 
-/* Waits for `events` on fd with the GIL released. Returns 1 when ready, 0 on timeout, -1 with errno set. */
+/*
+ * Waits for `events` on fd with the GIL released. Returns 1 when ready, 0 on timeout, -1 with errno set.
+ * Polls in short slices: on the Switch (a BSD stack) closing or shutting down a socket from another thread does not
+ * wake a poll already waiting on it, but the next poll of the closed descriptor fails at once.
+ */
+#define WAIT_SLICE_MS 250
 static int wait_fd(VMThread *t, int fd, short events, int timeout_ms) {
     struct pollfd p = {.fd = fd, .events = events};
     int r;
+    const int64_t end = timeout_ms > 0 ? (int64_t)sa_time_ns() + (int64_t)timeout_ms * 1000000 : 0;
     VM_BLOCKING_BEGIN(t);
-    do {
-        r = poll(&p, 1, timeout_ms > 0 ? timeout_ms : -1);
-    } while (r < 0 && errno == EINTR);
+    for (;;) {
+        int slice = WAIT_SLICE_MS;
+        if (end) {
+            int64_t left = (end - (int64_t)sa_time_ns() + 999999) / 1000000;
+            if (left <= 0) {
+                r = 0;
+                break;
+            }
+            if (left < slice) slice = (int)left;
+        }
+        p.revents = 0;
+        r = poll(&p, 1, slice);
+        if (r != 0 && !(r < 0 && errno == EINTR)) break;
+    }
     VM_BLOCKING_END(t);
     if (r > 0 && (p.revents & POLLNVAL)) {
         errno = EBADF;

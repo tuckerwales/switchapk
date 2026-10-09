@@ -69,6 +69,33 @@ public final class BuiltinProvider extends Provider {
             }
         });
 
+        // RSA
+        add(new Svc(this, "KeyFactory", "RSA", RsaKeys.Factory.class, null, null, null) {
+            Object create() {
+                return new RsaKeys.Factory();
+            }
+        });
+        add(new Svc(this, "KeyPairGenerator", "RSA", RsaKeys.Generator.class, null, null, null) {
+            Object create() {
+                return new RsaKeys.Generator();
+            }
+        });
+        rsaSignature("MD5withRSA", "MD5");
+        rsaSignature("SHA1withRSA", "SHA-1");
+        rsaSignature("SHA224withRSA", "SHA-224");
+        rsaSignature("SHA256withRSA", "SHA-256");
+        rsaSignature("SHA384withRSA", "SHA-384");
+        rsaSignature("SHA512withRSA", "SHA-512");
+        rsaSignature("NONEwithRSA", null);
+        add(new Svc(this, "Cipher", "RSA", RsaCipher.class, list("RSA/ECB/PKCS1Padding"), "ECB|NONE",
+                "NOPADDING|PKCS1PADDING|OAEPPADDING|OAEPWITHSHA-1ANDMGF1PADDING|OAEPWITHSHA1ANDMGF1PADDING"
+                        + "|OAEPWITHSHA-224ANDMGF1PADDING|OAEPWITHSHA-256ANDMGF1PADDING|OAEPWITHSHA-384ANDMGF1PADDING"
+                        + "|OAEPWITHSHA-512ANDMGF1PADDING") {
+            Object create() {
+                return new RsaCipher();
+            }
+        });
+
         add(new Svc(this, "SecureRandom", "NativePRNG", NativePrng.class, list("SHA1PRNG", "DEFAULT"), null, null) {
             Object create() {
                 return new NativePrng();
@@ -114,6 +141,14 @@ public final class BuiltinProvider extends Provider {
         add(new Svc(this, "KeyGenerator", name, SecretKeyGen.class, null, null, null) {
             Object create() {
                 return new SecretKeyGen(name, bits, false);
+            }
+        });
+    }
+
+    private void rsaSignature(String name, final String digest) {
+        add(new Svc(this, "Signature", name, RsaSignature.class, null, null, null) {
+            Object create() {
+                return new RsaSignature(digest);
             }
         });
     }

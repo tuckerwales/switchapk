@@ -295,7 +295,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] Switch: window and pbuffer surfaces as framebuffer objects in a
     surfaceless context (switch-mesa has no pbuffers, which showed
     "No configs match configSpec" on hardware); host tests the path with
-    SWITCHAPK_EGL_FBO=1
+    SWITCHAPK_EGL_FBO=1; alpha-free variants of RGBA8888 configs, since
+    switch-mesa has no RGB888 ones (the GLES1 view's "No config chosen")
   - [ ] Switch: verify GL on hardware; direct NWindow presentation for
     fullscreen GL
   - [ ] EGL15 syncs/images, SurfaceTexture.updateTexImage, ETC1Util

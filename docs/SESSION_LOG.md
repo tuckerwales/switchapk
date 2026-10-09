@@ -741,3 +741,11 @@ what is left in flight.
   Makefile.switch` builds the NRO without warnings. Not yet run on a
   console: the GLES1 view (llvmpipe has no ES1) and the Switch driver's
   FBO completeness for each depth/stencil config are unverified there.
+- Second console run: the GLES2 cube rendered (it is static by design,
+  RENDERMODE_WHEN_DIRTY with a fixed rotation), the GLES1 view showed
+  "No config chosen": its default chooser wants RGB888 with alpha 0 and
+  switch-mesa only has RGBA8888. FBO mode now adds alpha-free config
+  variants backed by RGB8 renderbuffers. Checked on the host by hiding
+  Mesa's own alpha-free configs and using the default chooser for the
+  cube: "No config chosen" without the variants, the cube renders with
+  them.

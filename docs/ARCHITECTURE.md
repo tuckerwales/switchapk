@@ -956,7 +956,13 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   Readback reads the FBO. Resizing reallocates the renderbuffers; FBOs
   of surfaces destroyed while their context is not current are deleted
   when it next is, and forgotten when it is destroyed. eglSwapInterval
-  succeeds without effect.
+  succeeds without effect. switch-mesa has only RGBA8888 configs while
+  Android always offers RGB888 ones (GLSurfaceView's default chooser
+  wants alpha exactly 0), so in this mode each config with alpha also
+  appears, after the driver's, as an alpha-free variant: the driver
+  pointer with its low bit set, reporting EGL_ALPHA_SIZE 0, a smaller
+  EGL_BUFFER_SIZE and EGL_CONFIG_ID + 0x10000, backed by an RGB8
+  renderbuffer. Config handles are untagged before reaching the driver.
 - Window surfaces: `eglCreateWindowSurface` accepts a Surface,
   SurfaceView, SurfaceHolder or SurfaceTexture (as AOSP) and creates a
   pbuffer the size of the Surface's software buffer queue. On

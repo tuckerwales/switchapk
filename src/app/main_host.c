@@ -6,6 +6,7 @@
 #include "../native/natives.h"
 #include "../platform/platform.h"
 #include "apk_info.h"
+#include "../nativeloader/nativeloader.h"
 
 #include <pthread.h>
 
@@ -30,6 +31,7 @@ static void usage(void) {
             "  --trace              trace every instruction\n"
             "  --raw-stdio          write System.out/err directly to stdout/stderr\n"
             "  --apk-info           print the APK label and icon at 240 dpi, then exit\n"
+            "  --shim-symbols       print the names the native shim provides, then exit\n"
             "  -v / -vv             verbose logging\n");
 }
 
@@ -62,6 +64,17 @@ static void *vm_main(void *arg) {
         else if (!strcmp(a, "--screenshots") && i + 1 < ma->argc) shots = ma->argv[++i];
         else if (!strcmp(a, "--screen") && i + 1 < ma->argc) i++; /* platform_init reads it */
         else if (!strcmp(a, "--apk-info")) apk_info = true;
+        else if (!strcmp(a, "--shim-symbols")) {
+            /* For tools/corpus.py: imports missing here (except GL and EGL, from the driver) bind to logging stubs. */
+            const ShimSym *(*tables[])(size_t *) = {shim_libc_symbols, shim_android_symbols};
+            for (size_t k = 0; k < 2; k++) {
+                size_t n;
+                const ShimSym *syms = tables[k](&n);
+                for (size_t j = 0; j < n; j++) printf("%s\n", syms[j].name);
+            }
+            ma->rc = 0;
+            return NULL;
+        }
         else if (!strcmp(a, "--trace")) g_vm.trace = true;
         else if (!strcmp(a, "--raw-stdio")) {
             extern bool g_raw_stdio;

@@ -789,3 +789,22 @@ what is left in flight.
 - `make`, VmTest, NetTest, ZipTest and tests/apps/net pass, and
   `make -f Makefile.switch` builds the NRO without warnings (zlib was
   already linked there). Nothing new was run on hardware.
+
+### Session 24 (2026-10-09, branch ccr-31b62939-cph34m)
+
+- WS13 real-app corpus. `tests/corpus/corpus.json` pins 13 F-Droid APKs
+  in tiers: plain framework (Pixel Dungeon, Replica Island, Blockinger,
+  Frozen Bubble), libGDX/Arc games (Shattered Pixel Dungeon, Vector
+  Pinball, Mindustry, Unciv), support library and light AndroidX (Andor's
+  Trail, Simple Solitaire, Simon Tatham's Puzzles, DroidFish) and a
+  Kotlin/AndroidX utility (Simple Calculator).
+- `tools/corpus.py` fetches them, scans bytecode references against
+  framework.dex and android.jar (with the VM's effect for each miss),
+  checks native imports against the shim, boots each APK with a smoke
+  script, and writes the generated tables in docs/COMPATIBILITY.md.
+  `switchapk-host --shim-symbols` lists the shim's names for it.
+- Results: Pixel Dungeon and Replica Island reach their title screens.
+  The others stop at specific gaps, listed with workstreams in
+  COMPATIBILITY.md "Findings" and PLAN next steps item 9.
+- `make` and VmTest pass. Nothing was run on hardware.
+

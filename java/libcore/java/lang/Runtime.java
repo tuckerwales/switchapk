@@ -82,4 +82,31 @@ public class Runtime {
     public Process exec(String[] cmdarray) throws java.io.IOException {
         throw new java.io.IOException("Cannot run program: not supported");
     }
+
+    public Process exec(String command, String[] envp) throws java.io.IOException {
+        return exec(command);
+    }
+
+    public Process exec(String command, String[] envp, java.io.File dir) throws java.io.IOException {
+        return exec(command);
+    }
+
+    public Process exec(String[] cmdarray, String[] envp) throws java.io.IOException {
+        return exec(cmdarray);
+    }
+
+    public Process exec(String[] cmdarray, String[] envp, java.io.File dir) throws java.io.IOException {
+        return exec(cmdarray);
+    }
+
+    @Deprecated
+    public static void runFinalizersOnExit(boolean value) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void traceInstructions(boolean on) {
+    }
+
+    public void traceMethodCalls(boolean on) {
+    }
 }

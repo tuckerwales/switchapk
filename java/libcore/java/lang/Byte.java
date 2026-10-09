@@ -117,4 +117,7 @@ public final class Byte extends Number implements Comparable<Byte> {
         return x & 0xffL;
     }
 
+    public static int compareUnsigned(byte x, byte y) {
+        return toUnsignedInt(x) - toUnsignedInt(y);
+    }
 }

@@ -329,4 +329,41 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
     public java.util.stream.IntStream chars() {
         return toString().chars();
     }
+
+    public int codePointBefore(int index) {
+        int i = index - 1;
+        if (i < 0 || i >= count) {
+            throw new StringIndexOutOfBoundsException(index);
+        }
+        return Character.codePointBefore(value, index, 0);
+    }
+
+    public int codePointCount(int beginIndex, int endIndex) {
+        if (beginIndex < 0 || endIndex > count || beginIndex > endIndex) {
+            throw new IndexOutOfBoundsException();
+        }
+        return Character.codePointCount(value, beginIndex, endIndex - beginIndex);
+    }
+
+    public int offsetByCodePoints(int index, int codePointOffset) {
+        if (index < 0 || index > count) {
+            throw new IndexOutOfBoundsException();
+        }
+        return Character.offsetByCodePoints(value, 0, count, index, codePointOffset);
+    }
+
+    public AbstractStringBuilder insert(int dstOffset, CharSequence s, int start, int end) {
+        if (s == null) {
+            s = "null";
+        }
+        if (dstOffset < 0 || dstOffset > count || start < 0 || end < 0 || start > end || end > s.length()) {
+            throw new IndexOutOfBoundsException("dstOffset " + dstOffset + ", start " + start + ", end " + end
+                    + ", s.length() " + s.length() + ", length() " + count);
+        }
+        return insert(dstOffset, s.subSequence(start, end).toString());
+    }
+
+    public java.util.stream.IntStream codePoints() {
+        return toString().codePoints();
+    }
 }

@@ -52,6 +52,11 @@ public abstract class ClassLoader {
         }
     }
 
+    @Deprecated
+    protected final Class<?> defineClass(byte[] b, int off, int len) throws ClassFormatError {
+        throw new UnsupportedOperationException("can't load this type of class file");
+    }
+
     protected final Class<?> defineClass(String name, byte[] b, int off, int len) throws ClassFormatError {
         throw new UnsupportedOperationError("can't load this type of class file");
     }
@@ -97,5 +102,56 @@ public abstract class ClassLoader {
         public String toString() {
             return "dalvik.system.PathClassLoader[switchapk]";
         }
+    }
+
+    protected final Class<?> findSystemClass(String name) throws ClassNotFoundException {
+        return Class.forName(name, false, getSystemClassLoader());
+    }
+
+    protected Package definePackage(String name, String specTitle, String specVersion, String specVendor,
+            String implTitle, String implVersion, String implVendor, URL sealBase) throws IllegalArgumentException {
+        return Package.getPackage(name);
+    }
+
+    protected Package getPackage(String name) {
+        return Package.getPackage(name);
+    }
+
+    protected Package[] getPackages() {
+        return new Package[0];
+    }
+
+    protected URL findResource(String name) {
+        return null;
+    }
+
+    protected Enumeration<URL> findResources(String name) throws java.io.IOException {
+        return Collections.emptyEnumeration();
+    }
+
+    protected static boolean registerAsParallelCapable() {
+        return true;
+    }
+
+    protected final void resolveClass(Class<?> c) {
+    }
+
+    protected final void setSigners(Class<?> c, Object[] signers) {
+    }
+
+    public static Enumeration<URL> getSystemResources(String name) throws java.io.IOException {
+        return getSystemClassLoader().getResources(name);
+    }
+
+    public void clearAssertionStatus() {
+    }
+
+    public void setClassAssertionStatus(String className, boolean enabled) {
+    }
+
+    public void setDefaultAssertionStatus(boolean enabled) {
+    }
+
+    public void setPackageAssertionStatus(String packageName, boolean enabled) {
     }
 }

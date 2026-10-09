@@ -15,6 +15,8 @@ public class Throwable implements java.io.Serializable {
 
     private static final StackTraceElement[] EMPTY_TRACE = new StackTraceElement[0];
 
+    private boolean suppressionDisabled;
+
     public Throwable() {
         fillInStackTrace();
     }
@@ -40,6 +42,7 @@ public class Throwable implements java.io.Serializable {
         if (writableStackTrace) {
             fillInStackTrace();
         }
+        this.suppressionDisabled = !enableSuppression;
         detailMessage = message;
         this.cause = cause;
     }
@@ -161,6 +164,9 @@ public class Throwable implements java.io.Serializable {
         }
         if (exception == null) {
             throw new NullPointerException("Cannot suppress a null exception.");
+        }
+        if (suppressionDisabled) {
+            return;
         }
         if (suppressedExceptions == null) {
             suppressedExceptions = new ArrayList<Throwable>(1);

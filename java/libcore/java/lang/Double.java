@@ -8,6 +8,7 @@ public final class Double extends Number implements Comparable<Double> {
     public static final double MIN_NORMAL = 0x1.0p-1022;
     public static final double MIN_VALUE = 0x0.0000000000001P-1022;
     public static final int MAX_EXPONENT = 1023;
+    public static final int PRECISION = 53;
     public static final int MIN_EXPONENT = -1022;
     public static final int SIZE = 64;
     public static final int BYTES = 8;

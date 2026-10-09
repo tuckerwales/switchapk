@@ -265,6 +265,41 @@ NATIVE(Class_getEnclosingClassNative) {
     R_OBJ(ctx.result);
 }
 
+static void enclosing_method_ann(DexFile *d, const char *type, uint32_t vis, const uint8_t *el, void *ctx) {
+    SA_UNUSED(vis);
+    AnnCtx *c = ctx;
+    if (strcmp(type, "Ldalvik/annotation/EnclosingMethod;") != 0) return;
+    uint32_t n = dex_uleb128(&el);
+    for (uint32_t i = 0; i < n; i++) {
+        const char *ename = dex_string(d, dex_uleb128(&el));
+        DexEncodedValue v;
+        dex_read_encoded_value(&el, &v);
+        if (!strcmp(ename, "value") && v.type == DEV_METHOD) {
+            DexMethodId mid;
+            dex_method_id(d, v.u.idx, &mid);
+            const char *name = dex_string(d, mid.name_idx);
+            const char *desc = dex_proto_desc(d, mid.proto_idx);
+            size_t len = strlen(name) + strlen(desc) + 1;
+            char *buf = sa_malloc(len);
+            snprintf(buf, len, "%s%s", name, desc);
+            c->result = vm_new_string_mutf8(c->t, buf);
+            free(buf);
+        }
+    }
+}
+
+/* "name(params)ret" of the method or constructor a local or anonymous class is declared in, or null. */
+NATIVE(Class_getEnclosingMethodDesc) {
+    UNUSED_ARGS();
+    Class *c = this_class(args);
+    if (!c->dex) return;
+    DexClassDef cd;
+    dex_class_def(c->dex, (uint32_t)c->class_def_idx, &cd);
+    AnnCtx ctx = {"Ldalvik/annotation/EnclosingMethod;", NULL, t, false, 0};
+    dex_class_annotations(c->dex, &cd, enclosing_method_ann, &ctx);
+    R_OBJ(ctx.result);
+}
+
 /* ---- String -------------------------------------------------------------------------- */
 
 NATIVE(String_intern) {
@@ -610,7 +645,12 @@ static void java_fp_to_string(double v, bool is_float, char *out, size_t outsz) 
     for (int p = 1; p <= maxp; p++) {
         snprintf(buf, sizeof buf, "%.*e", p - 1, v);
         double back = strtod(buf, NULL);
-        if (is_float ? ((float)back == (float)v) : (back == v)) break;
+        if (is_float ? ((float)back == (float)v) : (back == v)) {
+            /* Like Java, a one-digit result is replaced by the closest two-digit decimal (MIN_VALUE prints
+             * 1.4E-45, not 1.0E-45); trailing zeros are dropped below. */
+            if (p == 1) snprintf(buf, sizeof buf, "%.1e", v);
+            break;
+        }
     }
     /* parse "-d.ddde+XX" */
     const char *p = buf;
@@ -771,6 +811,7 @@ static const NativeMethodReg g_regs[] = {
     {"Ljava/lang/Class;", "getInnerClassName", "()Ljava/lang/String;", Class_getInnerClassName},
     {"Ljava/lang/Class;", "isInnerClassNative", "()Z", Class_isInnerClassNative},
     {"Ljava/lang/Class;", "getEnclosingClassNative", "()Ljava/lang/Class;", Class_getEnclosingClassNative},
+    {"Ljava/lang/Class;", "getEnclosingMethodDesc", "()Ljava/lang/String;", Class_getEnclosingMethodDesc},
 
     {"Ljava/lang/String;", "intern", "()Ljava/lang/String;", String_intern},
     {"Ljava/lang/String;", "equals", "(Ljava/lang/Object;)Z", String_equals},

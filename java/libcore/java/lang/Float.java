@@ -8,6 +8,7 @@ public final class Float extends Number implements Comparable<Float> {
     public static final float MIN_NORMAL = 0x1.0p-126f;
     public static final float MIN_VALUE = 0x0.000002P-126f;
     public static final int MAX_EXPONENT = 127;
+    public static final int PRECISION = 24;
     public static final int MIN_EXPONENT = -126;
     public static final int SIZE = 32;
     public static final int BYTES = 4;

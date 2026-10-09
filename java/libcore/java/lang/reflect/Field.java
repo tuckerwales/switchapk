@@ -157,4 +157,17 @@ public final class Field extends AccessibleObject implements Member {
     public Annotation[] getAnnotations() {
         return getDeclaredAnnotations();
     }
+
+    public boolean isAnnotationPresent(Class<? extends Annotation> annotationClass) {
+        return getAnnotation(annotationClass) != null;
+    }
+
+    public <T extends Annotation> T[] getAnnotationsByType(Class<T> annotationClass) {
+        return AnnotationParser.byType(getAnnotations(), annotationClass);
+    }
+
+    /* Generic signatures are not read, so this is toString(). */
+    public String toGenericString() {
+        return toString();
+    }
 }

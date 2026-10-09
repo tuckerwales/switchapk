@@ -12,4 +12,24 @@ public interface AnnotatedElement {
     Annotation[] getAnnotations();
 
     Annotation[] getDeclaredAnnotations();
+
+    default <T extends Annotation> T[] getAnnotationsByType(Class<T> annotationClass) {
+        return AnnotationParser.byType(getAnnotations(), annotationClass);
+    }
+
+    default <T extends Annotation> T getDeclaredAnnotation(Class<T> annotationClass) {
+        if (annotationClass == null) {
+            throw new NullPointerException("annotationClass");
+        }
+        for (Annotation a : getDeclaredAnnotations()) {
+            if (annotationClass.isInstance(a)) {
+                return annotationClass.cast(a);
+            }
+        }
+        return null;
+    }
+
+    default <T extends Annotation> T[] getDeclaredAnnotationsByType(Class<T> annotationClass) {
+        return AnnotationParser.byType(getDeclaredAnnotations(), annotationClass);
+    }
 }

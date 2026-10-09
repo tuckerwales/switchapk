@@ -75,4 +75,65 @@ public class ThreadGroup implements Thread.UncaughtExceptionHandler {
     public String toString() {
         return getClass().getName() + "[name=" + getName() + ",maxpri=" + maxPriority + "]";
     }
+
+    @Deprecated
+    public boolean allowThreadSuspension(boolean b) {
+        return true;
+    }
+
+    @Deprecated
+    public boolean isDestroyed() {
+        return false;
+    }
+
+    public final boolean parentOf(ThreadGroup g) {
+        for (; g != null; g = g.parent) {
+            if (g == this) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public int activeGroupCount() {
+        return 0;
+    }
+
+    public int enumerate(ThreadGroup[] list) {
+        return 0;
+    }
+
+    public int enumerate(ThreadGroup[] list, boolean recurse) {
+        return 0;
+    }
+
+    public int enumerate(Thread[] list, boolean recurse) {
+        return enumerate(list);
+    }
+
+    public final void checkAccess() {
+    }
+
+    @Deprecated
+    public final void destroy() {
+    }
+
+    public void list() {
+        System.out.println(this);
+    }
+
+    @Deprecated
+    public final void resume() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Deprecated
+    public final void stop() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Deprecated
+    public final void suspend() {
+        throw new UnsupportedOperationException();
+    }
 }

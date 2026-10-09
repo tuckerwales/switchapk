@@ -53,4 +53,8 @@ public final class Constructor<T> extends Executable {
         }
         return sb.append(')').toString();
     }
+
+    public String toGenericString() {
+        return toString();
+    }
 }

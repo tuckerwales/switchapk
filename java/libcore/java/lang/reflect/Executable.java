@@ -80,4 +80,28 @@ public abstract class Executable extends AccessibleObject implements Member, Gen
     public Annotation[] getAnnotations() {
         return getDeclaredAnnotations();
     }
+
+    public boolean isAnnotationPresent(Class<? extends Annotation> annotationClass) {
+        return getAnnotation(annotationClass) != null;
+    }
+
+    public <T extends Annotation> T[] getAnnotationsByType(Class<T> annotationClass) {
+        return AnnotationParser.byType(getAnnotations(), annotationClass);
+    }
+
+    public Type[] getGenericExceptionTypes() {
+        return getExceptionTypes();
+    }
+
+    /* Generic signatures are not read, so this is toString(). */
+    public abstract String toGenericString();
+
+    /* Dex files built without -parameters carry no names, so parameters are arg0, arg1, ... as on Android. */
+    public Parameter[] getParameters() {
+        Parameter[] out = new Parameter[parameterTypes.length];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = new Parameter("arg" + i, 0, this, i);
+        }
+        return out;
+    }
 }

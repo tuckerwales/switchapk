@@ -446,4 +446,163 @@ public final class Class<T> implements java.io.Serializable, GenericDeclaration,
         }
         return (isInterface() ? "interface " : "class ") + getName();
     }
+
+    public <A extends Annotation> A getDeclaredAnnotation(Class<A> annotationClass) {
+        return GenericDeclaration.super.getDeclaredAnnotation(annotationClass);
+    }
+
+    public <A extends Annotation> A[] getAnnotationsByType(Class<A> annotationClass) {
+        return AnnotationParser.byType(getAnnotations(), annotationClass);
+    }
+
+    public <A extends Annotation> A[] getDeclaredAnnotationsByType(Class<A> annotationClass) {
+        return AnnotationParser.byType(getDeclaredAnnotations(), annotationClass);
+    }
+
+    private native String getEnclosingMethodDesc();
+
+    public Method getEnclosingMethod() {
+        String desc = getEnclosingMethodDesc();
+        if (desc == null || desc.startsWith("<")) {
+            return null;
+        }
+        Class<?> enc = getEnclosingClass();
+        for (Method m : enc.getDeclaredMethods()) {
+            if ((m.getName() + descriptorOf(m.getParameterTypes(), m.getReturnType())).equals(desc)) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    public Constructor<?> getEnclosingConstructor() {
+        String desc = getEnclosingMethodDesc();
+        if (desc == null || !desc.startsWith("<init>")) {
+            return null;
+        }
+        Class<?> enc = getEnclosingClass();
+        for (Constructor<?> c : enc.getDeclaredConstructors()) {
+            if (("<init>" + descriptorOf(c.getParameterTypes(), void.class)).equals(desc)) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    private static String descriptorOf(Class<?>[] params, Class<?> ret) {
+        StringBuilder sb = new StringBuilder("(");
+        for (Class<?> c : params) {
+            sb.append(c.descriptorString());
+        }
+        return sb.append(')').append(ret.descriptorString()).toString();
+    }
+
+    public String descriptorString() {
+        if (isPrimitive()) {
+            switch (getName()) {
+                case "boolean": return "Z";
+                case "byte": return "B";
+                case "char": return "C";
+                case "short": return "S";
+                case "int": return "I";
+                case "long": return "J";
+                case "float": return "F";
+                case "double": return "D";
+                default: return "V";
+            }
+        }
+        if (isArray()) {
+            return "[" + getComponentType().descriptorString();
+        }
+        return "L" + getName().replace('.', '/') + ";";
+    }
+
+    public Class<?> componentType() {
+        return isArray() ? getComponentType() : null;
+    }
+
+    public Class<?> arrayType() {
+        return java.lang.reflect.Array.newInstance(this, 0).getClass();
+    }
+
+    public String toGenericString() {
+        if (isPrimitive()) {
+            return toString();
+        }
+        StringBuilder sb = new StringBuilder();
+        Class<?> component = this;
+        int arrayDepth = 0;
+        if (isArray()) {
+            do {
+                arrayDepth++;
+                component = component.getComponentType();
+            } while (component.isArray());
+            sb.append(component.getName());
+        } else {
+            int modifiers = getModifiers() & Modifier.classModifiers();
+            if (modifiers != 0) {
+                sb.append(Modifier.toString(modifiers)).append(' ');
+            }
+            if (isAnnotation()) {
+                sb.append('@');
+            }
+            if (isInterface()) {
+                sb.append("interface");
+            } else if (isEnum()) {
+                sb.append("enum");
+            } else {
+                sb.append("class");
+            }
+            sb.append(' ').append(getName());
+        }
+        TypeVariable<?>[] typeparms = component.getTypeParameters();
+        if (typeparms.length > 0) {
+            sb.append('<');
+            for (int i = 0; i < typeparms.length; i++) {
+                if (i > 0) {
+                    sb.append(',');
+                }
+                sb.append(typeparms[i].getTypeName());
+            }
+            sb.append('>');
+        }
+        for (int i = 0; i < arrayDepth; i++) {
+            sb.append("[]");
+        }
+        return sb.toString();
+    }
+
+    public boolean isRecord() {
+        return false;
+    }
+
+    public boolean isSealed() {
+        return false;
+    }
+
+    public Class<?>[] getPermittedSubclasses() {
+        return null;
+    }
+
+    public Class<?> getNestHost() {
+        Class<?> c = this;
+        Class<?> enc;
+        while ((enc = c.getEnclosingClass()) != null) {
+            c = enc;
+        }
+        return c;
+    }
+
+    public boolean isNestmateOf(Class<?> c) {
+        return this == c || (!isPrimitive() && !isArray() && !c.isPrimitive() && !c.isArray()
+                && getNestHost() == c.getNestHost());
+    }
+
+    public Class<?>[] getNestMembers() {
+        return new Class<?>[] {getNestHost()};
+    }
+
+    public Object[] getSigners() {
+        return null;
+    }
 }

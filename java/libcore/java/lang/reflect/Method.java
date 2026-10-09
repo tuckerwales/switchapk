@@ -75,4 +75,8 @@ public final class Method extends Executable {
         }
         return sb.append(')').toString();
     }
+
+    public String toGenericString() {
+        return toString();
+    }
 }

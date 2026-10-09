@@ -17,6 +17,10 @@ public interface CharSequence {
         return toString().chars();
     }
 
+    default java.util.stream.IntStream codePoints() {
+        return toString().codePoints();
+    }
+
     static int compare(CharSequence cs1, CharSequence cs2) {
         return cs1.toString().compareTo(cs2.toString());
     }

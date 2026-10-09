@@ -356,4 +356,34 @@ public final class Long extends Number implements Comparable<Long> {
     public static long min(long a, long b) {
         return Math.min(a, b);
     }
+
+    public static long parseLong(CharSequence s, int beginIndex, int endIndex, int radix)
+            throws NumberFormatException {
+        java.util.Objects.requireNonNull(s);
+        java.util.Objects.checkFromToIndex(beginIndex, endIndex, s.length());
+        return parseLong(s.subSequence(beginIndex, endIndex).toString(), radix);
+    }
+
+    public static long parseUnsignedLong(CharSequence s, int beginIndex, int endIndex, int radix)
+            throws NumberFormatException {
+        java.util.Objects.requireNonNull(s);
+        java.util.Objects.checkFromToIndex(beginIndex, endIndex, s.length());
+        return parseUnsignedLong(s.subSequence(beginIndex, endIndex).toString(), radix);
+    }
+
+    public static String toUnsignedString(long i, int radix) {
+        if (i >= 0) {
+            return toString(i, radix);
+        }
+        if (radix < Character.MIN_RADIX || radix > Character.MAX_RADIX) {
+            radix = 10;
+        }
+        long quot = ((i >>> 1) / radix) << 1;
+        long rem = i - quot * radix;
+        if (rem >= radix || rem < 0) {
+            rem -= radix;
+            quot++;
+        }
+        return toString(quot, radix) + Character.forDigit((int) rem, radix);
+    }
 }

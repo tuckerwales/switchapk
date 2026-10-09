@@ -171,4 +171,9 @@ public final class StringBuffer extends AbstractStringBuilder implements java.io
     public synchronized String toString() {
         return new String(value, 0, count);
     }
+
+    public StringBuffer insert(int dstOffset, CharSequence s, int start, int end) {
+        super.insert(dstOffset, s, start, end);
+        return this;
+    }
 }

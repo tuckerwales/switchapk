@@ -941,6 +941,22 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (EGL_WINDOW_BIT is rewritten to EGL_PBUFFER_BIT, and reported back on
   query); EGL_RECORDABLE_ANDROID and EGL_FRAMEBUFFER_TARGET_ANDROID are
   dropped. The host uses the surfaceless Mesa platform.
+- FBO surfaces: the Switch's Mesa (devkitPro switch-mesa, every branch)
+  offers only EGL_WINDOW_BIT configs and cannot create pbuffers, but has
+  EGL_KHR_surfaceless_context. When `eglInitialize` finds no pbuffer
+  configs (or `SWITCHAPK_EGL_FBO=1` is set, to test on the host), every
+  `SaSurf` has no driver surface: configs are chosen with
+  EGL_SURFACE_TYPE 0 (and report window and pbuffer bits), contexts are
+  made current with EGL_NO_SURFACE, and the surface's framebuffer object
+  (RGBA8 colour, depth/stencil renderbuffer per the config's sizes) is
+  created in that context on first use, bound, and given the viewport
+  and scissor a window would get. `glBindFramebuffer(OES)` with 0, from
+  the Java bindings (`sa_gl` holds the wrapper) and native code
+  (`sa_egl_native_proc`), binds the current surface's FBO instead.
+  Readback reads the FBO. Resizing reallocates the renderbuffers; FBOs
+  of surfaces destroyed while their context is not current are deleted
+  when it next is, and forgotten when it is destroyed. eglSwapInterval
+  succeeds without effect.
 - Window surfaces: `eglCreateWindowSurface` accepts a Surface,
   SurfaceView, SurfaceHolder or SurfaceTexture (as AOSP) and creates a
   pbuffer the size of the Surface's software buffer queue. On
@@ -954,8 +970,9 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   therefore show GL frames with no special casing, and views over a
   GLSurfaceView composite normally. A direct NWindow path for fullscreen
   GL on the Switch is a later optimisation.
-- Native EGL: the NDK shim resolves `egl*` through `sa_egl_native_proc`
-  before the driver (`sa_gl_proc`). `eglGetDisplay` uses the same
+- Native EGL: the NDK shim resolves `egl*` (and `glBindFramebuffer(OES)`,
+  for FBO surfaces) through `sa_egl_native_proc` before the driver
+  (`sa_gl_proc`). `eglGetDisplay` uses the same
   surfaceless display as Java. `eglChooseConfig` rewrites
   EGL_WINDOW_BIT to EGL_PBUFFER_BIT and drops the two Android-only
   attributes; `eglGetConfigAttrib` reports the window bit again.

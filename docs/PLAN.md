@@ -292,6 +292,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] GLES1 rendering verified (Ubuntu's Mesa has no ES1 contexts; the
     sample checks the failure panel there)
   - [x] Switch build links switch-mesa (with -lstdc++) and builds without it
+  - [x] Switch: window and pbuffer surfaces as framebuffer objects in a
+    surfaceless context (switch-mesa has no pbuffers, which showed
+    "No configs match configSpec" on hardware); host tests the path with
+    SWITCHAPK_EGL_FBO=1
   - [ ] Switch: verify GL on hardware; direct NWindow presentation for
     fullscreen GL
   - [ ] EGL15 syncs/images, SurfaceTexture.updateTexImage, ETC1Util
@@ -474,6 +478,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-09 (WS8, touches WS9): `sa_egl_native_proc` also returns
+  wrappers for `glBindFramebuffer` and `glBindFramebufferOES`, so the
+  NDK shim hands native code the redirect FBO surfaces need. No new
+  native fields. ARCHITECTURE 6.6 updated.
 
 - 2026-10-02 (WS13, touches WS10): `make -f Makefile.switch dist`
   packages every directory under `tests/apps` that has an

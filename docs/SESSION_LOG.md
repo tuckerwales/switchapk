@@ -711,3 +711,21 @@ what is left in flight.
   host Mesa (libEGL is absent here). `make -f Makefile.switch` builds
   the NRO.
 
+### Session 19 (2026-10-09, branch claude/new-session-0z3wws)
+
+- WS8 on hardware: tests/apps/gles showed "OpenGL ES unavailable / No
+  configs match configSpec" in both views on a Switch. devkitPro's
+  switch-mesa EGL driver (src/egl/drivers/switch, all branches) gives
+  every config EGL_SURFACE_TYPE = EGL_WINDOW_BIT only and returns NULL
+  from CreatePbufferSurface, so our pbuffer configs matched nothing.
+- FBO surfaces (android_gl.c): when a display has no pbuffer configs,
+  surfaces are framebuffer objects in a surfaceless context (the driver
+  has EGL_KHR_surfaceless_context), and binding framebuffer 0 binds the
+  current surface's FBO, for the Java bindings and native code alike.
+  `SWITCHAPK_EGL_FBO=1` forces the mode on the host. The Java side is
+  unchanged.
+- `make`, VmTest, and the gles and native samples pass with host Mesa in
+  both modes (installed libegl1/libgles2/libgl1-mesa-dri here). `make -f
+  Makefile.switch` builds the NRO without warnings. Not yet run on a
+  console: the GLES1 view (llvmpipe has no ES1) and the Switch driver's
+  FBO completeness for each depth/stencil config are unverified there.

@@ -9,7 +9,9 @@
 - For OpenGL ES samples: Mesa EGL/GLES (`apt install libegl1 libgles2
   libgl1-mesa-dri`); the headers (`libegl-dev libgles-dev`) only to
   regenerate the bindings. Without them GL apps show "OpenGL ES
-  unavailable" instead of rendering.
+  unavailable" instead of rendering. `SWITCHAPK_EGL_FBO=1` makes EGL
+  surfaces framebuffer objects as on the Switch (whose Mesa has no
+  pbuffers); run the gles and native samples both ways after EGL changes.
 - Internet access to dl.google.com, sqlite.org and Docker Hub (for devkitPro)
 
 ## Fetch toolchains

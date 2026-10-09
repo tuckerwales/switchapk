@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.zip.GZIPInputStream;
 
 /**
  * HTTP/1.1 client behind URL.openConnection() for http URLs. One socket per request (no connection pool, no cache,
@@ -26,6 +27,7 @@ final class HttpURLConnectionImpl extends HttpURLConnection {
     private InputStream in;
     private OutputStream out;
     private boolean requestSent;
+    private boolean transparentGzip;
     private ByteArrayOutputStream bufferedBody;
     private byte[] replayBody;
     private StreamingBody streamingBody;
@@ -130,6 +132,11 @@ final class HttpURLConnectionImpl extends HttpURLConnection {
         }
         if (!hasRequestProperty("Connection")) {
             sb.append("Connection: close\r\n");
+        }
+        // Like OkHttp: ask for gzip unless the app chose an encoding or a range, then unzip transparently.
+        transparentGzip = !hasRequestProperty("Accept-Encoding") && !hasRequestProperty("Range");
+        if (transparentGzip) {
+            sb.append("Accept-Encoding: gzip\r\n");
         }
         if (ifModifiedSince != 0 && !hasRequestProperty("If-Modified-Since")) {
             sb.append("If-Modified-Since: ").append(formatHttpDate(ifModifiedSince)).append("\r\n");
@@ -329,6 +336,55 @@ final class HttpURLConnectionImpl extends HttpURLConnection {
         return new UntilCloseBody();
     }
 
+    /*
+     * A gzip response to our own Accept-Encoding is decoded here, and Content-Encoding and Content-Length are
+     * dropped because they describe the compressed bytes (OkHttp's BridgeInterceptor does the same). The gzip
+     * header is read on first use, so an empty body only fails if the app reads it.
+     */
+    private void unzipBody() {
+        if (!transparentGzip || !"gzip".equalsIgnoreCase(header("Content-Encoding")) || method.equals("HEAD")
+                || responseCode == HTTP_NO_CONTENT || responseCode == HTTP_NOT_MODIFIED) {
+            return;
+        }
+        for (int i = headers.size() - 1; i >= 1; i--) {
+            String k = headers.get(i)[0];
+            if (k.equalsIgnoreCase("Content-Encoding") || k.equalsIgnoreCase("Content-Length")) {
+                headers.remove(i);
+            }
+        }
+        final InputStream raw = body;
+        body = new InputStream() {
+            private InputStream gz;
+
+            private InputStream gz() throws IOException {
+                if (gz == null) {
+                    gz = new GZIPInputStream(raw);
+                }
+                return gz;
+            }
+
+            public int read() throws IOException {
+                return gz().read();
+            }
+
+            public int read(byte[] b, int off, int len) throws IOException {
+                return gz().read(b, off, len);
+            }
+
+            public int available() throws IOException {
+                return gz == null ? 0 : gz.available();
+            }
+
+            public void close() throws IOException {
+                if (gz != null) {
+                    gz.close();
+                } else {
+                    raw.close();
+                }
+            }
+        };
+    }
+
     private static boolean isRedirect(int code) {
         return code == HTTP_MULT_CHOICE || code == HTTP_MOVED_PERM || code == HTTP_MOVED_TEMP
                 || code == HTTP_SEE_OTHER || code == 307 || code == 308;
@@ -352,6 +408,7 @@ final class HttpURLConnectionImpl extends HttpURLConnection {
                 readResponseHead();
                 body = makeBody();
                 if (!followRedirect()) {
+                    unzipBody();
                     return;
                 }
             }

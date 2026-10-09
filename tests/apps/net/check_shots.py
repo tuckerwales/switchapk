@@ -28,6 +28,8 @@ LINES = [
     "I/NET: default available wifi",
     "I/NET: broadcast noConnectivity=false type=WIFI",
     "I/NET: http 200 text/plain hello from switchapk!",
+    "I/NET: gzip 200 length=-1 encoding=null squeezed through gzip",
+    "I/NET: raw gzip encoding=gzip magic=1f8b text=squeezed through gzip",
     'I/NET: post 201 {"a":1}',
     "I/NET: 404 404 err=nope",
     "I/NET: https javax.net.ssl.SSLHandshakeException",

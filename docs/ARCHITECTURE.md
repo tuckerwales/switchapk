@@ -385,7 +385,8 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   SOURCE_DPAD for D-pad keys, SOURCE_KEYBOARD otherwise; PEV_JOYSTICK
   becomes an ACTION_MOVE `MotionEvent` from SOURCE_JOYSTICK with the eight
   axes (plus AXIS_BRAKE/GAS mirroring the triggers). PEV_SENSOR goes to
-  `PlatformInput.setSensorSink` (for WS15). PEV_FOCUS also tells
+  the sink set with `PlatformInput.setSensorSink`, which is
+  `SystemSensorManager` (see 6.8). PEV_FOCUS also tells
   `WindowManagerGlobal.setPlatformFocus`.
 - Input devices (`InputDevice`): id -1 virtual keyboard (US
   `KeyCharacterMap`), id 1 touch screen, id 2 "Nintendo Switch Controller"
@@ -903,7 +904,7 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   started on the first play and not stopped. Headless and Switch both
   pull 1024 frames and, on Switch, discard them; audren/audout is WS10.
   `android.media.MixDebug` reports which sources have contributed a
-  non-silent sample. Vibrator already calls `platform_vibrate`.
+  non-silent sample. Vibration is in 6.8.
 - OpenGL ES (WS8, built): see 6.6.1.
 
 ### 6.6.1 OpenGL ES and EGL
@@ -1108,6 +1109,59 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (no pipe/poll), libc++_shared coverage checks, socket APIs.
   NativeActivity and native EGL have not been run on hardware.
 
+### 6.8 System services (WS15)
+
+- Sensors (`android.hardware`): `SystemSensorManager` is a process-wide
+  singleton behind `SENSOR_SERVICE` and the PEV_SENSOR sink. It lists the
+  platform's accelerometer and gyroscope (natives
+  `SystemSensorManager.nGetSensorMask` and `nSetRate(type, periodUs)`
+  in `android_os.c`) plus, when both exist, gravity, linear
+  acceleration, rotation vector, game rotation vector and the legacy
+  orientation sensor computed by a Mahony filter (gyroscope integrated,
+  accelerometer pulling the tilt toward gravity, gain 1 rad/s), and
+  uncalibrated variants with zero bias. With no magnetometer the heading
+  starts at 0 and only follows the gyroscope; TYPE_ROTATION_VECTOR equals
+  the game rotation vector with heading accuracy -1. Each base sensor
+  runs at the fastest period any listener needs (5 ms to 1 s; SENSOR_DELAY
+  constants map as AOSP getDelay) and each listener is paced at its own
+  period. Events are delivered on the main thread, or posted to the
+  listener's Handler, with accuracy HIGH announced through
+  onAccuracyChanged before the first event. `flush` completes later
+  through onFlushCompleted. There is no one-shot sensor, so
+  `requestTriggerSensor` throws for the null sensor as AOSP does. The
+  deprecated `SensorListener` API rides on the same entries.
+- Battery: `BatteryManager.nGetState(int[5])` reads
+  `platform_battery_state`. `BroadcastQueue` asks
+  `BatteryManager.stickyBatteryIntent` for the sticky
+  ACTION_BATTERY_CHANGED when its sticky list is built and when a filter
+  has a battery action. Once a receiver registers for one, the main
+  thread polls every 2 s and sends ACTION_BATTERY_CHANGED (sticky),
+  ACTION_POWER_CONNECTED/DISCONNECTED, BatteryManager.ACTION_CHARGING/
+  DISCHARGING and ACTION_BATTERY_LOW (at 15 % unplugged) / OKAY (20 % or
+  plugged), all registered-only.
+- Vibration: `Vibrator.SystemVibrator` plays a `VibrationEffect`
+  waveform (timings, amplitudes, repeat index) on a "vibrator"
+  HandlerThread, sending each on segment to
+  `nativeVibrate(ms, amplitude)`; predefined effects and compositions
+  become short waveforms. `VibratorManager` (VIBRATOR_MANAGER_SERVICE)
+  has the one vibrator, id 0.
+- Power: `PowerManager` (POWER_SERVICE) counts wake locks (timed
+  acquires release themselves); the screen is always on, power save,
+  idle and thermal states never change.
+- Absent hardware answers like an Android device without it, never with
+  a null service: `LocationManager` (LOCATION_SERVICE) lists the gps,
+  network, fused and passive providers, all disabled (location off), has
+  no last fix, accepts requests and tells the listener
+  onProviderDisabled, and throws only for unknown providers as AOSP does;
+  `Location` is complete (AOSP Vincenty distance and bearing, convert).
+  `TelephonyManager` (TELEPHONY_SERVICE) reports no phone, an absent SIM,
+  empty operator strings and null identifiers. `Camera` has no cameras
+  (`open()` null, `open(int)` throws) and camera2 `CameraManager`
+  (CAMERA_SERVICE) an empty id list.
+- `PackageManager.hasSystemFeature` reports the touch screen
+  (multi-touch), gamepad, Wi-Fi, audio output, both screen orientations
+  and the accelerometer and gyroscope when the sensor service lists them.
+
 ## 7. Platform layer (src/platform/platform.h)
 
 Single C interface implemented once per target:
@@ -1127,7 +1181,28 @@ Single C interface implemented once per target:
   `/data/local/tmp/network`) or `SWITCHAPK_NETWORK` says `none`, `wifi`
   or `ethernet`, read on every call. The Switch asks nifm
   (`nifmGetInternetConnectionStatus`, service opened on first use).
-- misc: `platform_vibrate(ms)`, `platform_framework_path()`,
+- sensors (WS15): `platform_sensor_mask()` returns a bit `1 << type`
+  per present sensor (`PLATFORM_SENSOR_ACCELEROMETER` = 1,
+  `PLATFORM_SENSOR_GYROSCOPE` = 4, the Android type numbers);
+  `platform_sensor_set_rate(type, period_us)` starts sampling (<= 0
+  stops). Samples arrive as PEV_SENSOR with Android units and device axes
+  (m/s^2 with +9.8 on z lying screen up, rad/s). Headless has both
+  sensors at rest (0, 0, 9.80665) and (0, 0, 0); a sampling thread posts
+  the current value at the requested period (5 ms minimum), and the
+  script's `sensor accel|gyro x y z` sets it. The Switch reads the
+  six-axis sensor of the handheld Joy-Cons or player 1's controller in
+  `platform_switch_pump`; the axis signs are not yet checked on hardware
+  (`ACCEL_SIGN` in `platform_switch.c`).
+- battery (WS15): `platform_battery_state(PlatformBattery*)` fills
+  `level` (percent), `plugged` (`PLATFORM_PLUGGED_NONE/AC/USB`),
+  `charging`, `voltage_mv` (0 unknown) and `temperature` (0.1 C); cheap
+  enough to poll. Headless starts at 100 % unplugged and follows the
+  script's `battery <level> [none|ac|usb]`; the Switch asks psm (opened
+  on first use, closed in `platform_shutdown`).
+- misc: `platform_vibrate(ms, amplitude)` (amplitude 1..255, -1 default;
+  ms 0 stops; headless logs `vibrate <ms> ms amplitude <a>`, the Switch
+  sends HD rumble to the handheld Joy-Cons or player 1's controller from
+  the pump), `platform_framework_path()`,
   `platform_native_window()` (NWindow* for EGL), `platform_is_headless()`,
   `platform_screenshot(path)`, headless-only `platform_set_headless_script`
   and `platform_set_screenshot_dir`
@@ -1137,7 +1212,8 @@ Single C interface implemented once per target:
 Headless implementation: in-memory frame, event queue, script thread
 (`wait`, `idle [ms]`, `tap x y`, `down/move/up x y`, `swipe`, `key NAME`,
 `keydown/keyup`, `text ...`, `screen WxH@dpi` (changes the display and
-posts PEV_RESIZE, to simulate a dock switch), `screenshot file.png`,
+posts PEV_RESIZE, to simulate a dock switch), `sensor accel|gyro x y z`,
+`battery <level> [none|ac|usb]`, `screenshot file.png`,
 `log`, `quit`), audio
 consumer thread that discards samples in real time. When the script ends
 it posts PEV_QUIT.

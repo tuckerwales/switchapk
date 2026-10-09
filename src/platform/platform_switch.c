@@ -401,6 +401,157 @@ static void applet_hook(AppletHookType hook, void *param) {
     }
 }
 
+/* ---- motion sensors: the six-axis sensor of the controller in use (main thread) ---- */
+
+/* Sensor periods requested by the VM thread; the main thread applies them in poll_sixaxis. */
+static pthread_mutex_t g_motion_lock = PTHREAD_MUTEX_INITIALIZER;
+static int g_sensor_period_us[2]; /* 0 accelerometer, 1 gyroscope */
+static int64_t g_sensor_due[2];
+static HidSixAxisSensorHandle g_sixaxis[2];
+static int g_sixaxis_count;
+static u32 g_sixaxis_style; /* style the handles belong to, 0 = none started */
+static u64 g_sixaxis_sample;
+
+unsigned platform_sensor_mask(void) {
+    return (1u << PLATFORM_SENSOR_ACCELEROMETER) | (1u << PLATFORM_SENSOR_GYROSCOPE);
+}
+
+void platform_sensor_set_rate(int type, int period_us) {
+    int i = type == PLATFORM_SENSOR_ACCELEROMETER ? 0 : type == PLATFORM_SENSOR_GYROSCOPE ? 1 : -1;
+    if (i < 0) return;
+    pthread_mutex_lock(&g_motion_lock);
+    if (period_us > 0 && g_sensor_period_us[i] <= 0) g_sensor_due[i] = 0;
+    g_sensor_period_us[i] = period_us > 0 ? period_us : 0;
+    pthread_mutex_unlock(&g_motion_lock);
+}
+
+static void stop_sixaxis(void) {
+    for (int i = 0; i < g_sixaxis_count; i++) hidStopSixAxisSensor(g_sixaxis[i]);
+    g_sixaxis_count = 0;
+    g_sixaxis_style = 0;
+}
+
+/* Starts the sensors of the handheld Joy-Cons, or else of player 1's controller, when that changes. */
+static void start_sixaxis(void) {
+    HidNpadIdType id = HidNpadIdType_Handheld;
+    u32 style = hidGetNpadStyleSet(HidNpadIdType_Handheld) & HidNpadStyleTag_NpadHandheld;
+    if (!style) {
+        id = HidNpadIdType_No1;
+        u32 set = hidGetNpadStyleSet(HidNpadIdType_No1);
+        style = (set & HidNpadStyleTag_NpadFullKey)    ? HidNpadStyleTag_NpadFullKey
+                : (set & HidNpadStyleTag_NpadJoyDual)  ? HidNpadStyleTag_NpadJoyDual
+                : (set & HidNpadStyleTag_NpadJoyLeft)  ? HidNpadStyleTag_NpadJoyLeft
+                : (set & HidNpadStyleTag_NpadJoyRight) ? HidNpadStyleTag_NpadJoyRight
+                                                        : 0;
+    }
+    if (style == g_sixaxis_style) return;
+    stop_sixaxis();
+    if (!style) return;
+    int n = (style == HidNpadStyleTag_NpadHandheld || style == HidNpadStyleTag_NpadJoyDual) ? 2 : 1;
+    if (R_FAILED(hidGetSixAxisSensorHandles(g_sixaxis, n, id, (HidNpadStyleTag)style))) return;
+    for (int i = 0; i < n; i++) hidStartSixAxisSensor(g_sixaxis[i]);
+    g_sixaxis_count = n;
+    g_sixaxis_style = style;
+}
+
+/*
+ * The six-axis sensor reports acceleration in G and angular velocity in turns per second, in the controller's
+ * frame: x right, y toward the top edge, z out of the face. Android wants m/s^2 for the force that holds the device
+ * up (gravity reads +9.8 on z when it lies screen up) and rad/s. The HID values point along gravity, so the
+ * acceleration is negated. Not yet checked on hardware: if tilting reads backwards, flip ACCEL_SIGN.
+ */
+#define ACCEL_SIGN (-9.80665f)
+#define GYRO_SCALE (6.2831853f)
+
+static void poll_sixaxis(void) {
+    int period[2];
+    int64_t due[2];
+    pthread_mutex_lock(&g_motion_lock);
+    memcpy(period, g_sensor_period_us, sizeof period);
+    memcpy(due, g_sensor_due, sizeof due);
+    pthread_mutex_unlock(&g_motion_lock);
+    if (period[0] <= 0 && period[1] <= 0) {
+        if (g_sixaxis_count) stop_sixaxis();
+        return;
+    }
+    start_sixaxis();
+    if (!g_sixaxis_count) return;
+    HidSixAxisSensorState st;
+    if (!hidGetSixAxisSensorStates(g_sixaxis[0], &st, 1) || st.sampling_number == g_sixaxis_sample) return;
+    g_sixaxis_sample = st.sampling_number;
+    const int64_t now = (int64_t)sa_time_ns();
+    for (int i = 0; i < 2; i++) {
+        if (period[i] <= 0 || now < due[i]) continue;
+        PlatformEvent ev = {0};
+        ev.kind = PEV_SENSOR;
+        ev.time_ns = now;
+        if (i == 0) {
+            ev.a = PLATFORM_SENSOR_ACCELEROMETER;
+            ev.f[0] = st.acceleration.x * ACCEL_SIGN;
+            ev.f[1] = st.acceleration.y * ACCEL_SIGN;
+            ev.f[2] = st.acceleration.z * ACCEL_SIGN;
+        } else {
+            ev.a = PLATFORM_SENSOR_GYROSCOPE;
+            ev.f[0] = st.angular_velocity.x * GYRO_SCALE;
+            ev.f[1] = st.angular_velocity.y * GYRO_SCALE;
+            ev.f[2] = st.angular_velocity.z * GYRO_SCALE;
+        }
+        platform_push_event(&ev);
+        due[i] = (due[i] && now - due[i] < (int64_t)period[i] * 1000 ? due[i] : now) + (int64_t)period[i] * 1000;
+    }
+    pthread_mutex_lock(&g_motion_lock);
+    for (int i = 0; i < 2; i++) {
+        if (g_sensor_period_us[i] == period[i]) g_sensor_due[i] = due[i];
+    }
+    pthread_mutex_unlock(&g_motion_lock);
+}
+
+/* ---- rumble: requested from any thread, sent to the controller in use by the main thread ---- */
+
+static int64_t g_rumble_until; /* sa_time_ns deadline, 0 = off */
+static float g_rumble_amp;
+static bool g_rumble_on;
+static HidVibrationDeviceHandle g_rumble_dev[2];
+static u32 g_rumble_style;
+
+void platform_vibrate(int ms, int amplitude) {
+    pthread_mutex_lock(&g_motion_lock);
+    g_rumble_until = ms > 0 ? (int64_t)sa_time_ns() + (int64_t)ms * 1000000 : 0;
+    g_rumble_amp = amplitude < 0 ? 0.5f : (float)(amplitude > 255 ? 255 : amplitude) / 255.0f;
+    pthread_mutex_unlock(&g_motion_lock);
+}
+
+static void update_rumble(void) {
+    pthread_mutex_lock(&g_motion_lock);
+    const bool want = g_rumble_until && (int64_t)sa_time_ns() < g_rumble_until;
+    const float amp = g_rumble_amp;
+    if (!want) g_rumble_until = 0;
+    pthread_mutex_unlock(&g_motion_lock);
+    if (!want && !g_rumble_on) return;
+    const bool handheld = hidGetNpadStyleSet(HidNpadIdType_Handheld) & HidNpadStyleTag_NpadHandheld;
+    const u32 style = handheld ? HidNpadStyleTag_NpadHandheld : HidNpadStyleTag_NpadFullKey;
+    const u32 set = handheld ? style : hidGetNpadStyleSet(HidNpadIdType_No1);
+    const u32 use = handheld ? style : (set & HidNpadStyleTag_NpadFullKey) ? HidNpadStyleTag_NpadFullKey
+                                                                            : HidNpadStyleTag_NpadJoyDual;
+    if (use != g_rumble_style) {
+        if (R_FAILED(hidInitializeVibrationDevices(g_rumble_dev, use == HidNpadStyleTag_NpadFullKey ? 1 : 2,
+                                                   handheld ? HidNpadIdType_Handheld : HidNpadIdType_No1,
+                                                   (HidNpadStyleTag)use))) {
+            return;
+        }
+        g_rumble_style = use;
+    }
+    HidVibrationValue v[2];
+    for (int i = 0; i < 2; i++) {
+        v[i].amp_low = want ? amp : 0.0f;
+        v[i].freq_low = 160.0f;
+        v[i].amp_high = want ? amp : 0.0f;
+        v[i].freq_high = 320.0f;
+    }
+    hidSendVibrationValues(g_rumble_dev, v, g_rumble_style == HidNpadStyleTag_NpadFullKey ? 1 : 2);
+    g_rumble_on = want;
+}
+
 /* Called by main_switch.c on the main thread while the app runs. False once the system asked to exit. */
 bool platform_switch_pump(void) {
     if (!appletMainLoop()) {
@@ -409,6 +560,8 @@ bool platform_switch_pump(void) {
     }
     poll_pad();
     poll_touch();
+    poll_sixaxis();
+    update_rumble();
     show_keyboard();
     return true;
 }
@@ -439,8 +592,9 @@ bool platform_init(int argc, char **argv) {
     return g_fb_ready;
 }
 
-/* nifm is opened on first use (platform_network_state) and closed here. */
+/* nifm and psm are opened on first use (platform_network_state, platform_battery_state) and closed here. */
 static bool g_nifm;
+static bool g_psm;
 
 void platform_shutdown(void) {
     appletUnhook(&g_hook_cookie);
@@ -448,6 +602,13 @@ void platform_shutdown(void) {
         nifmExit();
         g_nifm = false;
     }
+    if (g_psm) {
+        psmExit();
+        g_psm = false;
+    }
+    stop_sixaxis();
+    platform_vibrate(0, 0);
+    update_rumble();
     /* A Java thread may still be presenting: wait for it, then stop presenting for good. */
     pthread_mutex_lock(&g_fb_lock);
     if (g_fb_ready) {
@@ -487,7 +648,24 @@ bool platform_audio_start(int sample_rate, PlatformAudioCallback cb, void *user)
 
 void platform_audio_stop(void) { g_audio_run = false; }
 
-void platform_vibrate(int ms) { SA_UNUSED(ms); }
+void platform_battery_state(PlatformBattery *b) {
+    b->level = 100;
+    b->plugged = PLATFORM_PLUGGED_NONE;
+    b->charging = false;
+    b->voltage_mv = 0;
+    b->temperature = 250;
+    if (!g_psm) {
+        if (R_FAILED(psmInitialize())) return;
+        g_psm = true;
+    }
+    u32 pct = 100;
+    if (R_SUCCEEDED(psmGetBatteryChargePercentage(&pct))) b->level = pct > 100 ? 100 : (int)pct;
+    PsmChargerType charger = PsmChargerType_Unconnected;
+    if (R_SUCCEEDED(psmGetChargerType(&charger)) && charger != PsmChargerType_Unconnected) {
+        b->plugged = charger == PsmChargerType_EnoughPower ? PLATFORM_PLUGGED_AC : PLATFORM_PLUGGED_USB;
+        b->charging = b->level < 100;
+    }
+}
 
 void platform_network_state(PlatformNetwork *n) {
     n->connected = false;

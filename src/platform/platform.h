@@ -70,8 +70,31 @@ typedef struct {
 /* Cheap enough to poll every few seconds. */
 void platform_network_state(PlatformNetwork *n);
 
+/* ---- sensors (WS15) ---- */
+/* Android sensor type numbers (Sensor.TYPE_*) of the motion sensors a platform may have. */
+enum { PLATFORM_SENSOR_ACCELEROMETER = 1, PLATFORM_SENSOR_GYROSCOPE = 4 };
+/* Bit (1 << type) for every sensor present now. */
+unsigned platform_sensor_mask(void);
+/* Starts sampling a sensor with about period_us between samples, or stops it when period_us <= 0. Samples arrive
+ * as PEV_SENSOR with a = type and f[0..2] in Android units and device axes (m/s^2 and rad/s; x right, y up along
+ * the screen in its natural landscape orientation, z out of the screen). */
+void platform_sensor_set_rate(int type, int period_us);
+
+/* ---- battery (WS15) ---- */
+enum { PLATFORM_PLUGGED_NONE = 0, PLATFORM_PLUGGED_AC = 1, PLATFORM_PLUGGED_USB = 2 };
+typedef struct {
+    int level;       /* percent, 0..100 */
+    int plugged;     /* PLATFORM_PLUGGED_* */
+    bool charging;   /* plugged and gaining charge */
+    int voltage_mv;  /* millivolts, 0 when unknown */
+    int temperature; /* tenths of a degree Celsius */
+} PlatformBattery;
+/* Cheap enough to poll every few seconds. */
+void platform_battery_state(PlatformBattery *b);
+
 /* ---- misc ---- */
-void platform_vibrate(int ms);
+/* Rumble for ms milliseconds (0 stops). amplitude is 1..255, or -1 for the default strength. */
+void platform_vibrate(int ms, int amplitude);
 /* Root of the writable data tree and the location of bundled files. */
 const char *platform_data_root(void);
 const char *platform_framework_path(void); /* directory holding framework.dex / framework-res.apk */

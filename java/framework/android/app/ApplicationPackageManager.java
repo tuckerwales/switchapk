@@ -91,12 +91,37 @@ public class ApplicationPackageManager extends PackageManager {
 
     @Override public int checkPermission(String permName, String packageName) { return PERMISSION_GRANTED; }
 
-    @Override
-    public boolean hasSystemFeature(String featureName) {
-        return FEATURE_TOUCHSCREEN.equals(featureName) || FEATURE_FAKETOUCH.equals(featureName);
+    /** What the console has: a multi-touch screen, controllers, Wi-Fi, audio and the controller IMU (WS15). */
+    private static String[] features() {
+        ArrayList<String> f = new ArrayList<String>();
+        String[] fixed = {FEATURE_TOUCHSCREEN, FEATURE_TOUCHSCREEN_MULTITOUCH, FEATURE_TOUCHSCREEN_MULTITOUCH_DISTINCT,
+            FEATURE_FAKETOUCH, FEATURE_GAMEPAD, FEATURE_WIFI, FEATURE_AUDIO_OUTPUT, FEATURE_SCREEN_LANDSCAPE,
+            FEATURE_SCREEN_PORTRAIT};
+        for (String s : fixed) f.add(s);
+        android.hardware.SensorManager sm = android.hardware.SystemSensorManager.getInstance();
+        if (sm.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) != null) f.add(FEATURE_SENSOR_ACCELEROMETER);
+        if (sm.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE) != null) f.add(FEATURE_SENSOR_GYROSCOPE);
+        return f.toArray(new String[f.size()]);
     }
 
-    @Override public FeatureInfo[] getSystemAvailableFeatures() { return new FeatureInfo[0]; }
+    @Override
+    public boolean hasSystemFeature(String featureName) {
+        for (String f : features()) {
+            if (f.equals(featureName)) return true;
+        }
+        return false;
+    }
+
+    @Override
+    public FeatureInfo[] getSystemAvailableFeatures() {
+        String[] names = features();
+        FeatureInfo[] out = new FeatureInfo[names.length];
+        for (int i = 0; i < names.length; i++) {
+            out[i] = new FeatureInfo();
+            out[i].name = names[i];
+        }
+        return out;
+    }
 
     @Override
     public ResolveInfo resolveActivity(Intent intent, int flags) {

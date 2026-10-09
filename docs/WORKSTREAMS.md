@@ -45,7 +45,7 @@ duplicating work.
 | WS12 | VM performance and memory | none | not started | |
 | WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip with every tests/apps APK; screenshot runner and VmTest on CI remain) | session 15, 2026-10-02 |
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
-| WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | not started | |
+| WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress (sensors with fused gravity/rotation/orientation, battery broadcasts, rumble waveforms, PowerManager, and location/telephony/camera answering as absent done on the host, tests/apps/sensors; the IMU axis signs, rumble and psm have not been run on a console) | session 18, 2026-10-08 |
 
 Parallelism: after WS0 lands, WS1, WS4, WS6, WS7, WS9, WS10, WS11, WS12,
 WS13, WS15 can all run at once. WS2, WS3, WS5 start once the View API of
@@ -366,3 +366,14 @@ Vibrator/VibratorManager; BatteryManager and ACTION_BATTERY_CHANGED sticky
 intent (psm on Switch); ConnectivityManager; Settings.Secure.ANDROID_ID
 stable per install; LocationManager (no providers); TelephonyManager
 (no telephony); Camera/Camera2 (no cameras, graceful).
+
+Status: all of the above is in on the host (see ARCHITECTURE 6.8 and
+tests/apps/sensors). ConnectivityManager came with WS11 and Settings
+with WS6. Remaining: run the Switch side on a console (six-axis axis
+signs, `ACCEL_SIGN` in platform_switch.c; HD rumble; psm), and sensors
+the console could add later (the original model's ambient light sensor
+through lbl).
+
+Acceptance: an app sees the accelerometer, gyroscope and the fused
+sensors at the rates it asks for, tilting and turning the console move
+them the right way, and battery and rumble work on hardware.

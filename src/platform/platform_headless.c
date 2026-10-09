@@ -27,6 +27,9 @@
 #include <pthread.h>
 #include <time.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <sys/random.h>
+#include <unistd.h>
 
 #define LOG_TAG "headless"
 
@@ -513,6 +516,35 @@ bool platform_audio_start(int sample_rate, PlatformAudioCallback cb, void *user)
 void platform_audio_stop(void) { g_audio_run = false; }
 
 void platform_vibrate(int ms, int amplitude) { LOGI("vibrate %d ms amplitude %d", ms, amplitude); }
+
+bool platform_random_bytes(void *buf, size_t len) {
+    uint8_t *p = buf;
+    while (len > 0) {
+        ssize_t n = getrandom(p, len, 0);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        p += n;
+        len -= (size_t)n;
+    }
+    if (len == 0) return true;
+    /* Kernels without getrandom(2). */
+    int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return false;
+    while (len > 0) {
+        ssize_t n = read(fd, p, len);
+        if (n <= 0) {
+            if (n < 0 && errno == EINTR) continue;
+            close(fd);
+            return false;
+        }
+        p += n;
+        len -= (size_t)n;
+    }
+    close(fd);
+    return true;
+}
 
 /* The host reports Wi-Fi with full signal. "none", "wifi" or "ethernet" in <data root>/tmp/network (Android path
  * /data/local/tmp/network) or else in SWITCHAPK_NETWORK overrides it. Read on every call, so a test can change it

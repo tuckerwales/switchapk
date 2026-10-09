@@ -95,6 +95,8 @@ void platform_battery_state(PlatformBattery *b);
 /* ---- misc ---- */
 /* Rumble for ms milliseconds (0 stops). amplitude is 1..255, or -1 for the default strength. */
 void platform_vibrate(int ms, int amplitude);
+/* Fills buf with len cryptographically secure random bytes (OS entropy). Returns false on failure. */
+bool platform_random_bytes(void *buf, size_t len);
 /* Root of the writable data tree and the location of bundled files. */
 const char *platform_data_root(void);
 const char *platform_framework_path(void); /* directory holding framework.dex / framework-res.apk */

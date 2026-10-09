@@ -73,6 +73,22 @@ public abstract class InputStream implements Closeable {
         return n;
     }
 
+    public void skipNBytes(long n) throws IOException {
+        while (n > 0) {
+            long ns = skip(n);
+            if (ns > 0 && ns <= n) {
+                n -= ns;
+            } else if (ns == 0) {
+                if (read() == -1) {
+                    throw new EOFException();
+                }
+                n--;
+            } else {
+                throw new IOException("Unable to skip exactly");
+            }
+        }
+    }
+
     public long transferTo(OutputStream out) throws IOException {
         long transferred = 0;
         byte[] buffer = new byte[8192];

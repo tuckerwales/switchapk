@@ -999,6 +999,56 @@ static const char *sh_gai_strerror(int code) {
 
 #endif
 
+/* ---- Android's system libstdc++.so: new/delete, pure virtuals, static-local guards ---------------------------- */
+
+/* operator new cannot throw std::bad_alloc without a C++ runtime: allocation failure aborts, as -fno-exceptions does */
+static void *sh_new(size_t n) {
+    void *p = malloc(n ? n : 1);
+    if (!p) {
+        LOGE("operator new(%zu) failed", n);
+        abort();
+    }
+    return p;
+}
+static void *sh_new_nothrow(size_t n, const void *tag) {
+    SA_UNUSED(tag);
+    return malloc(n ? n : 1);
+}
+static void sh_delete(void *p) { free(p); }
+static void sh_delete_sized(void *p, size_t n) {
+    SA_UNUSED(n);
+    free(p);
+}
+static void sh_delete_nothrow(void *p, const void *tag) {
+    SA_UNUSED(tag);
+    free(p);
+}
+
+static void sh_cxa_pure_virtual(void) {
+    LOGE("pure virtual function called");
+    abort();
+}
+
+/* Itanium ABI guards: byte 0 set once the static is initialized; one recursive lock serializes initializers */
+static pthread_mutex_t g_guard_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static int sh_cxa_guard_acquire(uint64_t *g) {
+    if (__atomic_load_n((uint8_t *)g, __ATOMIC_ACQUIRE)) return 0;
+    pthread_mutex_lock(&g_guard_lock);
+    if (*(uint8_t *)g) {
+        pthread_mutex_unlock(&g_guard_lock);
+        return 0;
+    }
+    return 1; /* the caller initializes, then calls release (or abort) */
+}
+static void sh_cxa_guard_release(uint64_t *g) {
+    __atomic_store_n((uint8_t *)g, 1, __ATOMIC_RELEASE);
+    pthread_mutex_unlock(&g_guard_lock);
+}
+static void sh_cxa_guard_abort(uint64_t *g) {
+    SA_UNUSED(g);
+    pthread_mutex_unlock(&g_guard_lock);
+}
+
 /* ---- misc -------------------------------------------------------------------------------------------------------- */
 
 /* bionic's struct mallinfo has size_t fields */
@@ -1063,6 +1113,12 @@ static const ShimSym g_syms[] = {
     W(sigfillset, sh_sigfillset), W(sigaddset, sh_sigaddset), W(sigdelset, sh_sigdelset),
     W(sigismember, sh_sigismember), W(sigprocmask, sh_sigprocmask), W(pthread_sigmask, sh_sigprocmask),
     /* misc */
+    /* libstdc++ */
+    W(_Znwm, sh_new), W(_Znam, sh_new), W(_ZnwmRKSt9nothrow_t, sh_new_nothrow), W(_ZnamRKSt9nothrow_t, sh_new_nothrow),
+    W(_ZdlPv, sh_delete), W(_ZdaPv, sh_delete), W(_ZdlPvm, sh_delete_sized), W(_ZdaPvm, sh_delete_sized),
+    W(_ZdlPvRKSt9nothrow_t, sh_delete_nothrow), W(_ZdaPvRKSt9nothrow_t, sh_delete_nothrow),
+    W(__cxa_pure_virtual, sh_cxa_pure_virtual), W(__cxa_guard_acquire, sh_cxa_guard_acquire),
+    W(__cxa_guard_release, sh_cxa_guard_release), W(__cxa_guard_abort, sh_cxa_guard_abort),
     W(mallinfo, sh_mallinfo), W(dl_iterate_phdr, sh_dl_iterate_phdr), W(getcwd, sh_getcwd),
     W(gethostname, sh_gethostname), W(gai_strerror, sh_gai_strerror), S(tzset),
 #ifndef __SWITCH__

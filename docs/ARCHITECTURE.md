@@ -229,6 +229,13 @@ util.logging (Logger hierarchy, Level, LogRecord with caller inference, Handler,
 ConsoleHandler to System.err, SimpleFormatter as "LEVEL: message", LogManager reading only
 `.level`, `<name>.level`, `<name>.useParentHandlers` and `handlers`; no ResourceBundle, JMX or
 java.beans members) and dalvik.system (below).
+`FileChannel` (one per stream, as in the JDK; closing the stream closes it) has `lock`/`tryLock`:
+there is one app process, so a lock only conflicts with an overlapping one held through the same
+channel (OverlappingFileLockException, like the JDK's in-process table); closing the channel
+invalidates its locks. `map` returns a `MappedByteBuffer` that is a heap copy of the region
+(`java.nio.HeapMappedByteBuffer`, framework-internal): READ_ONLY is read-only, PRIVATE a private
+copy, READ_WRITE grows the file to the region and writes back on `force()`; later writes to the
+file through other channels are not seen by an existing map.
 `System` properties carry ART's identity: `java.vm.vendor` and `java.vendor` "The Android
 Project", `java.runtime.name` "Android Runtime", `java.vm.name` "Dalvik", `java.version` "0",
 the `java.vm.specification.*` and `java.specification.*` values, `java.class.version` 50.0.

@@ -26,8 +26,12 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
         return fd;
     }
 
-    public java.nio.channels.FileChannel getChannel() {
-        return java.nio.channels.FileChannel.forFd(fd.fd, true, true);
+    private java.nio.channels.FileChannel channel;
+
+    /** The same channel on every call, as in the JDK (its locks belong to it). */
+    public synchronized java.nio.channels.FileChannel getChannel() {
+        if (channel == null) channel = java.nio.channels.FileChannel.forFd(fd.fd, true, true);
+        return channel;
     }
 
     public int read() throws IOException {
@@ -104,6 +108,7 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
     }
 
     public void close() throws IOException {
+        if (channel != null) channel.close();
         if (!closed) {
             closed = true;
             Os.close(fd.fd);

@@ -54,6 +54,7 @@ public class FileOutputStream extends OutputStream {
     }
 
     public void close() throws IOException {
+        if (channel != null) channel.close();
         if (closed) {
             return;
         }
@@ -67,7 +68,11 @@ public class FileOutputStream extends OutputStream {
         return fd;
     }
 
-    public java.nio.channels.FileChannel getChannel() {
-        return java.nio.channels.FileChannel.forFd(fd.fd, false, true);
+    private java.nio.channels.FileChannel channel;
+
+    /** The same channel on every call, as in the JDK (its locks belong to it). */
+    public synchronized java.nio.channels.FileChannel getChannel() {
+        if (channel == null) channel = java.nio.channels.FileChannel.forFd(fd.fd, false, true);
+        return channel;
     }
 }

@@ -19,17 +19,40 @@ public class ParcelFileDescriptor implements Parcelable, java.io.Closeable {
 
     private final File mFile;
     private final int mMode;
+    // A real descriptor: native code (androidx datastore's shared counter) truncates and maps it.
     private final FileDescriptor mFd = new FileDescriptor();
+    private final ParcelFileDescriptor mWrapped;
+    private boolean mClosed;
 
-    ParcelFileDescriptor(File file, int mode) {
+    ParcelFileDescriptor(File file, int mode, int fd) {
         mFile = file;
         mMode = mode;
+        mWrapped = null;
+        mFd.setInt$(fd);
+    }
+
+    public ParcelFileDescriptor(ParcelFileDescriptor wrapped) {
+        mFile = wrapped.mFile;
+        mMode = wrapped.mMode;
+        mWrapped = wrapped;
+        mFd.setInt$(wrapped.mFd.getInt$());
     }
 
     public static ParcelFileDescriptor open(File file, int mode) throws FileNotFoundException {
         if ((mode & MODE_CREATE) == 0 && !file.exists()) throw new FileNotFoundException(file.getPath());
-        return new ParcelFileDescriptor(file, mode);
+        int flags;
+        if ((mode & MODE_READ_WRITE) == MODE_READ_WRITE) flags = libcore.io.Os.O_RDWR;
+        else if ((mode & MODE_WRITE_ONLY) != 0) flags = libcore.io.Os.O_WRONLY;
+        else flags = libcore.io.Os.O_RDONLY;
+        if ((mode & MODE_CREATE) != 0) flags |= libcore.io.Os.O_CREAT;
+        if ((mode & MODE_TRUNCATE) != 0) flags |= libcore.io.Os.O_TRUNC;
+        if ((mode & MODE_APPEND) != 0) flags |= libcore.io.Os.O_APPEND;
+        int fd = libcore.io.Os.open(file.getPath(), flags, 0600);
+        return new ParcelFileDescriptor(file, mode, fd);
     }
+
+    /** Takes ownership of fd. */
+    public static ParcelFileDescriptor adoptFd(int fd) { return new ParcelFileDescriptor(null, MODE_READ_WRITE, fd); }
 
     public static int parseMode(String mode) {
         switch (mode) {
@@ -44,10 +67,37 @@ public class ParcelFileDescriptor implements Parcelable, java.io.Closeable {
 
     public File getFile() { return mFile; }
     public FileDescriptor getFileDescriptor() { return mFd; }
-    public long getStatSize() { return mFile.length(); }
-    public int getFd() { return -1; }
-    public int detachFd() { return -1; }
-    public void close() throws IOException {}
+    public long getStatSize() { return mFile != null ? mFile.length() : -1; }
+
+    public int getFd() {
+        if (mClosed) throw new IllegalStateException("Already closed");
+        return mFd.getInt$();
+    }
+
+    public int detachFd() {
+        if (mClosed) throw new IllegalStateException("Already closed");
+        int fd = mFd.getInt$();
+        mFd.setInt$(-1);
+        mClosed = true;
+        return fd;
+    }
+
+    public void close() throws IOException {
+        if (mClosed) return;
+        mClosed = true;
+        if (mWrapped != null) {
+            mWrapped.close();
+        } else if (mFd.getInt$() >= 0) {
+            libcore.io.Os.close(mFd.getInt$());
+        }
+        mFd.setInt$(-1);
+    }
+
+    public void closeWithError(String msg) throws IOException { close(); }
+    public boolean canDetectErrors() { return false; }
+    public void checkError() throws IOException {}
+
+    public String toString() { return "{ParcelFileDescriptor: " + mFd.getInt$() + "}"; }
     public int describeContents() { return CONTENTS_FILE_DESCRIPTOR; }
     public void writeToParcel(Parcel out, int flags) { out.writeValue(this); }
 
@@ -57,12 +107,36 @@ public class ParcelFileDescriptor implements Parcelable, java.io.Closeable {
     };
 
     public static class AutoCloseInputStream extends FileInputStream {
-        public AutoCloseInputStream(ParcelFileDescriptor pfd) throws FileNotFoundException { super(pfd.mFile); }
+        private final ParcelFileDescriptor mPfd;
+
+        public AutoCloseInputStream(ParcelFileDescriptor pfd) {
+            super(pfd.getFileDescriptor());
+            mPfd = pfd;
+        }
+
+        public void close() throws IOException {
+            try {
+                super.close();
+            } finally {
+                mPfd.close();
+            }
+        }
     }
 
     public static class AutoCloseOutputStream extends FileOutputStream {
-        public AutoCloseOutputStream(ParcelFileDescriptor pfd) throws FileNotFoundException {
-            super(pfd.mFile, (pfd.mMode & MODE_APPEND) != 0);
+        private final ParcelFileDescriptor mPfd;
+
+        public AutoCloseOutputStream(ParcelFileDescriptor pfd) {
+            super(pfd.getFileDescriptor());
+            mPfd = pfd;
+        }
+
+        public void close() throws IOException {
+            try {
+                super.close();
+            } finally {
+                mPfd.close();
+            }
         }
     }
 }

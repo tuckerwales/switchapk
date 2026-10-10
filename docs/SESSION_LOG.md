@@ -850,4 +850,17 @@ what is left in flight.
   on the host (passes). Builds for the Switch; not run on hardware.
 - Native relative paths fail as under Android's "/" (`shim_map_path`);
   OSRS's `imgui.ini` no longer lands in the host's working directory.
+- Corpus re-run with everything above: Vector Pinball is past libGDX's
+  loader (java.runtime.name) and stops at java.io serialization; native
+  unresolved imports fell across the corpus (Mindustry 11 to 0, DroidFish
+  61 to 4), but Mindustry still renders black. Added libstdc++'s
+  new/delete, __cxa_pure_virtual and __cxa_guard_* to shim_posix.c.
+- WS16: FileChannel lock/tryLock (FileLock, the channel exceptions) and
+  map (MappedByteBuffer as a heap copy, write-back on force); streams
+  return one cached channel. tests/dex/ChannelTest.java matches OpenJDK.
+  Unciv now stops at DisplayManager instead of FileChannel.lock.
+- WS6: ParcelFileDescriptor holds a real descriptor (open, getFd,
+  detachFd, close, adoptFd, the auto-close streams over it); Firebase's
+  datastore no longer fails with "Bad file descriptor" in OSRS.
+- All dex tests pass, tests/apps/store passes; Switch build links.
 

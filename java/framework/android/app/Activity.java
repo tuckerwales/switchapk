@@ -735,7 +735,8 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         }
     }
 
-    final boolean isResumed() { return mResumed; }
+    /** @hide AOSP has it public (hidden); PreferenceActivity uses it. */
+    public final boolean isResumed() { return mResumed; }
 
     final boolean isStopped() { return mStopped; }
 

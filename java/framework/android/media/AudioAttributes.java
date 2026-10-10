@@ -15,6 +15,8 @@ public final class AudioAttributes implements Parcelable {
     public static final int FLAG_AUDIBILITY_ENFORCED = 1;
     public static final int FLAG_HW_AV_SYNC = 16;
     public static final int FLAG_LOW_LATENCY = 256;
+    /** @hide */
+    public static final int FLAG_BYPASS_INTERRUPTION_POLICY = 0x1 << 6;
     public static final int SPATIALIZATION_BEHAVIOR_AUTO = 0;
     public static final int SPATIALIZATION_BEHAVIOR_NEVER = 1;
     public static final int USAGE_UNKNOWN = 0;

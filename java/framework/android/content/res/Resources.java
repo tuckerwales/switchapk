@@ -64,6 +64,7 @@ public class Resources {
                 dm.setToDefaults();
                 Configuration c = new Configuration();
                 c.setToDefaults();
+                c.setLocales(android.os.LocaleList.getDefault());
                 sSystem = new Resources(AssetManager.getSystem(), dm, c);
             }
             return sSystem;

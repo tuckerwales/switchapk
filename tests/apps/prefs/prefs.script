@@ -1,0 +1,29 @@
+idle 800
+screenshot prefs.png
+# Sound effects off: Music depends on it and is disabled
+tap 640 180
+idle 500
+# a disabled Music row ignores the tap
+tap 640 276
+idle 500
+screenshot off.png
+tap 640 620
+idle 500
+# Difficulty opens the list dialog; Hard closes it
+tap 640 425
+idle 800
+screenshot dialog.png
+tap 390 429
+idle 800
+# Player name opens an EditText dialog
+tap 640 522
+idle 800
+screenshot edit.png
+tap 640 350
+idle 300
+text Ada
+idle 500
+tap 966 456
+idle 800
+screenshot done.png
+quit

@@ -794,13 +794,16 @@ static void bag_merge(ResTable *t, uint32_t id, ResBag *out, int depth) {
     const ResEntryDef *e = arsc_get_entry(t, id);
     if (!e || !e->complex) return;
     if (e->parent) bag_merge(t, e->parent, out, depth + 1);
+    /* As AssetManager2::GetBag: an entry's own items are all kept (array items may share a key);
+     * only keys inherited from the parent are overridden. */
+    uint32_t inherited = out->count;
     for (uint32_t i = 0; i < e->nitems; i++) {
         uint32_t k;
-        for (k = 0; k < out->count; k++)
+        for (k = 0; k < inherited; k++)
             if (out->items[k].name == e->items[i].name) break;
-        if (k == out->count) {
+        if (k == inherited) {
             out->items = sa_realloc(out->items, (out->count + 1) * sizeof(ResBagItem));
-            out->count++;
+            k = out->count++;
         }
         out->items[k] = e->items[i];
     }

@@ -891,6 +891,11 @@ what is left in flight.
   `sdmc:/switch/switchapk/launcher/icons`, so the reload after each app
   does not reopen every APK. A splash with the app icon shows while the VM
   boots, and the error screen scrolls and offers Try again.
+- The palette follows the project logo: deep navy from the console
+  outline, Joy-Con blue and red glows on the left and right, a
+  blue-to-red selection ring like the hexagon border, "apk" and Android
+  greens for Play, and a hexagon header mark. Letter tiles use logo
+  tones only.
 - The NRO shows the project logo in hbmenu: cropped and scaled from
   `docs/assets/logo.jpg` by the host build at build time and encoded by
   `tools/ppm_to_jpeg.py` (no new binary committed).

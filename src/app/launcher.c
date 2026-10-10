@@ -22,16 +22,21 @@
 /* Icons are read from the xxxhdpi bucket (192 px) so they stay sharp on the large tiles. */
 #define ICON_DENSITY 640
 
-#define COL_BG_TOP 0xFF0E121C
-#define COL_BG_BOTTOM 0xFF1A2130
-#define COL_CARD 0xFF1F2738
-#define COL_CARD_HI 0xFF2A3449
-#define COL_TEXT 0xFFF3F6FB
-#define COL_DIM 0xFF9AA5BA
-#define COL_FAINT 0xFF5E6A82
-#define COL_ACCENT 0xFF3DDC84
+/* Palette taken from docs/assets/logo.jpg: the console's deep navy outline and screen, Joy-Con blue and red
+ * (left and right, as on the hexagon border), and the green of "apk" and the Android robot. */
+#define COL_BG_TOP 0xFF06141F
+#define COL_BG_BOTTOM 0xFF0C2738
+#define COL_CARD 0xFF0F2A3C
+#define COL_CARD_HI 0xFF183A50
+#define COL_TEXT 0xFFF5F8FA
+#define COL_DIM 0xFF9DB3C2
+#define COL_FAINT 0xFF5D798C
+#define COL_ACCENT 0xFF47C86E    /* "apk" green */
+#define COL_ACCENT_HI 0xFF84D056 /* Android green */
 #define COL_ON_ACCENT 0xFF06281A
-#define COL_DANGER 0xFFFF6B6B
+#define COL_BLUE 0xFF09B4E0      /* left Joy-Con */
+#define COL_RED 0xFFE8343A       /* right Joy-Con */
+#define COL_DANGER 0xFFFF5A5F
 #define COL_WARN 0xFFFFD166
 
 #define MARGIN 84
@@ -123,6 +128,27 @@ static void grad_rrect(float l, float t, float r, float b, float rad, uint32_t t
     p.shader = &sh;
     if (rad > 0) gfx_draw_round_rect(&g_t, &g_id, &g_clip, l, t, r, b, rad, rad, &p);
     else gfx_draw_rect(&g_t, &g_id, &g_clip, l, t, r, b, &p);
+}
+
+/* A rounded-rect outline shaded left to right, like the logo's blue-to-red hexagon border. */
+static void stroke_rrect_hgrad(float l, float t, float r, float b, float rad, float width, uint32_t left,
+                               uint32_t right) {
+    uint32_t cols[2] = {left, right};
+    GfxShader sh;
+    memset(&sh, 0, sizeof sh);
+    sh.type = GFX_SHADER_LINEAR;
+    sh.x0 = l;
+    sh.y0 = t;
+    sh.x1 = r;
+    sh.y1 = t;
+    sh.colors = cols;
+    sh.ncolors = 2;
+    gfx_matrix_identity(&sh.local);
+    GfxPaint p = fill_paint(0xFF000000);
+    p.shader = &sh;
+    p.style = GFX_STROKE;
+    p.stroke_width = width;
+    gfx_draw_round_rect(&g_t, &g_id, &g_clip, l, t, r, b, rad, rad, &p);
 }
 
 static void radial_glow(float cx, float cy, float radius, uint32_t color) {
@@ -270,8 +296,9 @@ static uint32_t *render_background(uint32_t glow_a, uint32_t glow_b) {
     uint32_t *bg = new_canvas(UI_W, UI_H);
     SavedTarget s = push_target(bg, UI_W, UI_H);
     grad_rrect(0, 0, UI_W, UI_H, 0, COL_BG_TOP, COL_BG_BOTTOM);
-    radial_glow(160, -60, 620, glow_a);
-    radial_glow(UI_W - 80, UI_H + 120, 720, glow_b);
+    radial_glow(120, -80, 640, glow_a);
+    radial_glow(UI_W - 60, UI_H + 120, 700, glow_b);
+    radial_glow(UI_W / 2.0f, UI_H + 260, 560, 0x1447C86E);
     pop_target(s);
     return bg;
 }
@@ -291,27 +318,22 @@ static uint32_t *fit_icon(const uint32_t *px, int w, int h, int size) {
     return out;
 }
 
-static uint32_t hsv(float h, float s, float v) {
-    float c = v * s, x = c * (1 - fabsf(fmodf(h / 60.0f, 2) - 1)), m = v - c;
-    float r = 0, g = 0, b = 0;
-    if (h < 60) r = c, g = x;
-    else if (h < 120) r = x, g = c;
-    else if (h < 180) g = c, b = x;
-    else if (h < 240) g = x, b = c;
-    else if (h < 300) r = x, b = c;
-    else r = c, b = x;
-    return gfx_argb(255, (int)((r + m) * 255), (int)((g + m) * 255), (int)((b + m) * 255));
-}
-
 /* A colored rounded square with the label's first letter, for APKs without a bitmap icon. */
 static uint32_t *letter_icon(const char *label, int size) {
+    /* logo colors: Joy-Con blue, Android green, Joy-Con red, "apk" green, and a teal between blue and green */
+    static const struct {
+        uint32_t top, bottom;
+    } tones[] = {
+        {0xFF2CC6EE, 0xFF0787B8}, {0xFF9BDC6A, 0xFF4FA83A}, {0xFFF2585C, 0xFFB81F2A},
+        {0xFF5ED884, 0xFF2A9A55}, {0xFF2FD0C4, 0xFF138A93},
+    };
     uint32_t hash = 2166136261u;
     for (const char *p = label; p && *p; p++) hash = (hash ^ (unsigned char)*p) * 16777619u;
-    float hue = (float)(hash % 360);
+    const int tone = (int)(hash % SA_ARRAY_LEN(tones));
     uint32_t *out = new_canvas(size, size);
     SavedTarget s = push_target(out, size, size);
     float r = (float)size * 0.22f;
-    grad_rrect(0, 0, (float)size, (float)size, r, hsv(hue, 0.55f, 0.92f), hsv(fmodf(hue + 24, 360), 0.70f, 0.62f));
+    grad_rrect(0, 0, (float)size, (float)size, r, tones[tone].top, tones[tone].bottom);
     char letter[8] = "?";
     if (label && label[0]) {
         unsigned char c = (unsigned char)label[0];
@@ -384,11 +406,41 @@ static void draw_hints(Hits *hits, const Hint *hints, int n) {
 
 static void draw_bottom_bar(void) { fill_rect(MARGIN, BAR_TOP, UI_W - MARGIN, BAR_TOP + 1, 0x1FFFFFFF); }
 
-/* The app mark: an accent rounded square with a play triangle. */
+/* A pointy-top hexagon of radius r around (cx, cy), filled with a horizontal two-color shade. */
+static void fill_hexagon(float cx, float cy, float r, uint32_t left, uint32_t right) {
+    static const uint8_t verbs[] = {GFX_VERB_MOVE, GFX_VERB_LINE, GFX_VERB_LINE, GFX_VERB_LINE,
+                                    GFX_VERB_LINE, GFX_VERB_LINE, GFX_VERB_CLOSE};
+    float pts[12];
+    for (int i = 0; i < 6; i++) {
+        float a = (float)(M_PI / 3.0 * i - M_PI / 2.0);
+        pts[i * 2] = cx + r * cosf(a);
+        pts[i * 2 + 1] = cy + r * sinf(a);
+    }
+    uint32_t cols[2] = {left, right};
+    GfxShader sh;
+    memset(&sh, 0, sizeof sh);
+    sh.type = GFX_SHADER_LINEAR;
+    sh.x0 = cx - r;
+    sh.y0 = cy;
+    sh.x1 = cx + r;
+    sh.y1 = cy;
+    sh.colors = cols;
+    sh.ncolors = 2;
+    gfx_matrix_identity(&sh.local);
+    GfxPathData path = {verbs, 7, pts, 12, GFX_FILL_WINDING};
+    GfxPaint p = fill_paint(0xFF000000);
+    p.shader = &sh;
+    gfx_draw_path(&g_t, &g_id, &g_clip, &path, &p);
+}
+
+/* The app mark, after the logo: a blue-to-red hexagon rim around a green hexagon with a play triangle. */
 static void draw_logo(float x, float y, float size) {
-    grad_rrect(x, y, x + size, y + size, size * 0.28f, 0xFF5BE89C, 0xFF1FA463);
-    float cx = x + size * 0.53f, cy = y + size / 2, s = size * 0.2f;
-    fill_triangle(cx - s * 0.8f, cy - s, cx - s * 0.8f, cy + s, cx + s, cy, COL_ON_ACCENT);
+    const float cx = x + size / 2, cy = y + size / 2, r = size * 0.56f;
+    fill_hexagon(cx, cy, r, COL_BLUE, COL_RED);
+    fill_hexagon(cx, cy, r * 0.80f, 0xFFFFFFFF, 0xFFFFFFFF);
+    fill_hexagon(cx, cy, r * 0.70f, COL_ACCENT_HI, COL_ACCENT);
+    const float tx = cx + size * 0.03f, s = size * 0.17f;
+    fill_triangle(tx - s * 0.8f, cy - s, tx - s * 0.8f, cy + s, tx + s, cy, 0xFF0B2C3F);
 }
 
 static void draw_battery(float right, float cy, const UiStatus *st) {
@@ -804,7 +856,7 @@ Launcher *launcher_create(const char *apk_dir, const char *state_dir) {
     l->state_path = sa_sprintf("%s/launcher.ini", state_dir);
     l->cache_dir = sa_sprintf("%s/icons", state_dir);
     sa_mkdirs(l->cache_dir);
-    l->bg = render_background(0x2E3DDC84, 0x264F7CFF);
+    l->bg = render_background(0x3009B4E0, 0x2AE8343A);
     load_state(l);
     scan(l);
     return l;
@@ -882,7 +934,8 @@ static void draw_tile(Launcher *l, int i) {
     if (hl > 0.01f) {
         for (int k = 4; k >= 1; k--) {
             float e = 7 + (float)k * 4;
-            stroke_rrect(L - e, T - e, R + e, B + e, rad + e, 4, alpha(COL_ACCENT, (int)(26 * hl / k)));
+            int a = (int)(30 * hl / k);
+            stroke_rrect_hgrad(L - e, T - e, R + e, B + e, rad + e, 4, alpha(COL_BLUE, a), alpha(COL_RED, a));
         }
     }
     grad_rrect(L, T, R, B, rad, COL_CARD_HI, COL_CARD);
@@ -896,12 +949,13 @@ static void draw_tile(Launcher *l, int i) {
     }
     if (hl > 0.01f) {
         const float e = 7;
-        stroke_rrect(L - e, T - e, R + e, B + e, rad + e, 4, alpha(COL_ACCENT, (int)(255 * hl)));
+        int a = (int)(255 * hl);
+        stroke_rrect_hgrad(L - e, T - e, R + e, B + e, rad + e, 4.5f, alpha(COL_BLUE, a), alpha(COL_RED, a));
     }
     if (it->loaded && played_time(l, it->file) == 0) {
         const float bw = 50, bh = 24;
-        fill_rrect(R - bw - 12, T + 12, R - 12, T + 12 + bh, bh / 2, COL_ACCENT);
-        draw_text_center("NEW", R - 12 - bw / 2, T + 12 + 17, 14, COL_ON_ACCENT, true, 0);
+        fill_rrect(R - bw - 12, T + 12, R - 12, T + 12 + bh, bh / 2, COL_RED);
+        draw_text_center("NEW", R - 12 - bw / 2, T + 12 + 17, 14, 0xFFFFFFFF, true, 0);
     }
     /* name under every tile, brighter for the selected one */
     uint32_t c = hl > 0.5f ? COL_TEXT : COL_DIM;
@@ -913,13 +967,13 @@ static void draw_tile(Launcher *l, int i) {
 static void draw_details(Launcher *l) {
     const Item *it = &l->items[l->sel];
     const float L = MARGIN, R = UI_W - MARGIN, T = PANEL_TOP, B = PANEL_BOTTOM;
-    grad_rrect(L, T, R, B, 28, 0xC8222B3E, 0xC81A2131);
+    grad_rrect(L, T, R, B, 28, 0xC8143448, 0xC80D2636);
     stroke_rrect(L + 0.5f, T + 0.5f, R - 0.5f, B - 0.5f, 28, 1, 0x18FFFFFF);
 
     /* Play button */
     const float bw = 236, bh = 76, bl = R - 40 - bw, bt = (T + B) / 2 - bh / 2;
     fill_rrect(bl, bt + 6, bl + bw, bt + bh + 6, bh / 2, 0x40000000);
-    grad_rrect(bl, bt, bl + bw, bt + bh, bh / 2, 0xFF5BE89C, 0xFF2DBE6F);
+    grad_rrect(bl, bt, bl + bw, bt + bh, bh / 2, COL_ACCENT_HI, COL_ACCENT);
     button_glyph("A", bl + 46, bt + bh / 2, 19, COL_ON_ACCENT, COL_ACCENT);
     draw_text("Play", bl + 82, bt + bh / 2 + 11, 32, COL_ON_ACCENT, true);
     add_hit(&l->hits, bl, bt, bl + bw, bt + bh, HIT_BUTTON, UI_BTN_A);
@@ -971,7 +1025,20 @@ static void draw_loading(Launcher *l) {
     const float w = 420, L = cx - w / 2, T = 392;
     fill_rrect(L, T, L + w, T + 10, 5, 0x22FFFFFF);
     float frac = l->count ? (float)l->loaded / (float)l->count : 1.0f;
-    if (frac > 0) fill_rrect(L, T, L + 10 + (w - 10) * frac, T + 10, 5, COL_ACCENT);
+    if (frac > 0) {
+        uint32_t cols[2] = {COL_BLUE, COL_ACCENT};
+        GfxShader sh;
+        memset(&sh, 0, sizeof sh);
+        sh.type = GFX_SHADER_LINEAR;
+        sh.x0 = L;
+        sh.x1 = L + w;
+        sh.colors = cols;
+        sh.ncolors = 2;
+        gfx_matrix_identity(&sh.local);
+        GfxPaint p = fill_paint(0xFF000000);
+        p.shader = &sh;
+        gfx_draw_round_rect(&g_t, &g_id, &g_clip, L, T, L + 10 + (w - 10) * frac, T + 10, 5, 5, &p);
+    }
     char msg[64];
     snprintf(msg, sizeof msg, "%d of %d", l->loaded, l->count);
     draw_text_center(msg, cx, T + 46, 20, COL_DIM, false, 0);
@@ -983,7 +1050,7 @@ static void draw_toast(Launcher *l, int64_t now) {
     float w = text_width(l->toast, 21, false) + 48;
     const float cx = UI_W / 2.0f, T = 32;
     fill_rrect(cx - w / 2, T + 4, cx + w / 2, T + 48, 22, 0x50000000);
-    fill_rrect(cx - w / 2, T, cx + w / 2, T + 44, 22, 0xF02F3A52);
+    fill_rrect(cx - w / 2, T, cx + w / 2, T + 44, 22, 0xF01C445C);
     draw_text_center(l->toast, cx, T + 29, 21, COL_TEXT, false, 0);
 }
 
@@ -1166,21 +1233,22 @@ int launcher_frame(Launcher *l, uint32_t *screen, const UiInput *in, const UiSta
 void ui_draw_splash(uint32_t *screen, const char *apk_path) {
     ApkIdentity id;
     apk_read_identity(apk_path, ICON_DENSITY, &id);
-    uint32_t *bg = render_background(0x383DDC84, 0x264F7CFF);
+    uint32_t *bg = render_background(0x3009B4E0, 0x2AE8343A);
     ui_begin(screen);
     memcpy(screen, bg, (size_t)UI_W * UI_H * sizeof *screen);
     free(bg);
     const float cx = UI_W / 2.0f, size = 200, T = 168;
     uint32_t *icon = id.icon ? fit_icon(id.icon, id.icon_w, id.icon_h, 152) : letter_icon(id.label, 152);
-    radial_glow(cx, T + size / 2, 260, 0x303DDC84);
+    radial_glow(cx, T + size / 2, 260, 0x2847C86E);
     fill_rrect(cx - size / 2, T + 10, cx + size / 2, T + size + 10, 44, 0x40000000);
     grad_rrect(cx - size / 2, T, cx + size / 2, T + size, 44, COL_CARD_HI, COL_CARD);
-    stroke_rrect(cx - size / 2 + 0.5f, T + 0.5f, cx + size / 2 - 0.5f, T + size - 0.5f, 44, 1, 0x18FFFFFF);
+    stroke_rrect_hgrad(cx - size / 2 - 7, T - 7, cx + size / 2 + 7, T + size + 7, 51, 4, COL_BLUE, COL_RED);
     draw_bitmap(icon, 152, 152, cx - 76, T + size / 2 - 76, cx + 76, T + size / 2 + 76);
     free(icon);
     draw_text_center(id.label, cx, T + size + 76, 40, COL_TEXT, true, UI_W - 2 * MARGIN);
     draw_text_center("Starting\xE2\x80\xA6", cx, T + size + 118, 23, COL_DIM, false, 0);
-    for (int i = 0; i < 3; i++) fill_circle(cx - 24 + (float)i * 24, T + size + 156, 5, alpha(COL_ACCENT, 255 - i * 70));
+    static const uint32_t dots[3] = {COL_BLUE, COL_ACCENT, COL_RED};
+    for (int i = 0; i < 3; i++) fill_circle(cx - 24 + (float)i * 24, T + size + 156, 5, dots[i]);
     draw_text_center("B works as Android's Back button. Leave the app to come back to your list.", cx, UI_H - 40, 19,
                      COL_FAINT, false, 0);
     apk_identity_free(&id);
@@ -1202,9 +1270,9 @@ void ui_draw_app_icon(uint32_t *px, int size, const uint32_t *src, int src_w, in
         return;
     }
     const float z = (float)size;
-    grad_rrect(0, 0, z, z, 0, 0xFF1C2436, COL_BG_TOP);
-    radial_glow(z * 0.2f, z * 0.05f, z * 0.9f, 0x483DDC84);
-    radial_glow(z * 0.95f, z * 1.05f, z * 0.8f, 0x304F7CFF);
+    grad_rrect(0, 0, z, z, 0, COL_BG_BOTTOM, COL_BG_TOP);
+    radial_glow(z * 0.05f, z * 0.05f, z * 0.9f, 0x4809B4E0);
+    radial_glow(z * 0.95f, z * 1.05f, z * 0.8f, 0x40E8343A);
     const float t = z * 0.52f, l = (z - t) / 2, top = z * 0.16f;
     fill_rrect(l, top + z * 0.03f, l + t, top + t + z * 0.03f, t * 0.28f, 0x50000000);
     draw_logo(l, top, t);
@@ -1248,7 +1316,7 @@ ErrorScreen *error_screen_create(const char *apk_path, int rc, const char *const
     e->icon = id.icon ? fit_icon(id.icon, id.icon_w, id.icon_h, 88) : letter_icon(e->label, 88);
     apk_identity_free(&id);
     e->log_path = sa_strdup(log_path ? log_path : "");
-    e->bg = render_background(0x30FF6B6B, 0x1E4F7CFF);
+    e->bg = render_background(0x38E8343A, 0x2409B4E0);
     e->rc = rc;
     e->lines = sa_calloc((size_t)(nlines > 0 ? nlines : 1), sizeof *e->lines);
     for (int i = 0; i < nlines; i++) e->lines[e->nlines++] = sa_strdup(lines[i] ? lines[i] : "");

@@ -84,7 +84,12 @@ Plain dex programs (VM testing):
 ```
 build/host/switchapk-host --raw-stdio program.dex MainClass args...
 tests/run_dex_test.sh tests/dex/VmTest.java
+for t in tests/dex/*Test.java; do tests/run_dex_test.sh $t; done   # every libcore test
 ```
+
+Each `tests/dex/*Test.java` runs on OpenJDK and on switchapk and diffs
+stdout (Lang, Util, Net, Zip, Nio, Regex, Xml, Unsafe, Logging, Generics,
+Selector, Vm).
 
 APKs (after WS0):
 
@@ -96,6 +101,9 @@ build/host/switchapk-host [--data build/data] [--screen 1280x720@240] \
 Useful flags: `-v` / `-vv` (debug/verbose logs), `--trace` (every
 instruction), `--framework path/to/framework.dex`. Look for `STUB:` lines
 to find framework APIs apps call that we do not implement.
+`SWITCHAPK_TRACE_THROW=1` logs every throw (`W/throw:` with method and
+line), including exceptions the app catches: the quickest way to find
+what an app's own crash screen is hiding.
 
 ## Building test APKs
 

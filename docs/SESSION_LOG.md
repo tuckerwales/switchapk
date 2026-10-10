@@ -808,3 +808,38 @@ what is left in flight.
   COMPATIBILITY.md "Findings" and PLAN next steps item 9.
 - `make` and VmTest pass. Nothing was run on hardware.
 
+
+### Session 25 (2026-10-09/10, branch ccr-0c4b5dc0-hmtab0)
+
+- Worked down the corpus first blockers (WS4, WS9, WS11, WS16). 12 of 13
+  corpus apps now reach a drawn screen on the host, up from 2;
+  COMPATIBILITY.md "Findings" lists what each fix unblocked.
+- Framework: android.preference, ListActivity and FragmentBreadCrumbs
+  ported from AOSP with a generated com.android.internal.R
+  (tools/gen_internal_r.py); tests/apps/prefs checks inflation, defaults,
+  dependencies, list and EditText dialogs and persistence over two runs.
+  activity-alias, ActivityManager, DisplayManager, InputManager,
+  MediaScannerConnection, RingtoneManager, real Intent.parseIntent,
+  versionName in PackageInfo, asset and ParcelFileDescriptor descriptors,
+  OverScroller Interpolator constructors, Holo decors via the Toolbar
+  decor, requestFeature after an early getDecorView.
+- Two resource/config bugs with wide reach: bag merging dropped array items
+  that share a key (all arrays from newer aapt2 collapsed to one item), and
+  Configuration.locale was null.
+- libcore: FileChannel (locks, mapping, MappedByteBuffer), regex Unicode
+  blocks/scripts/categories, runtime properties, SAX and
+  javax.xml.parsers, java.util.logging, ServiceLoader, generic
+  signatures, sun.misc.Unsafe, ProcessBuilder (refused), ObjectStreamField,
+  java.nio selectors and socket channels. New JDK-compared dex tests:
+  RegexTest, NioTest, XmlTest, UnsafeTest, LoggingTest, GenericsTest,
+  SelectorTest.
+- VM: dex_proto_desc overflowed a stack buffer on long Kotlin return
+  types; Log messages are written line by line so causes are not cut off;
+  SWITCHAPK_TRACE_THROW=1 logs every throw.
+- Native shim: shim_runtime.c (C++ runtime entry points, locale and wide
+  chars, syslog, semaphores, rwlocks, sincos, vasprintf) and
+  dl_iterate_phdr from the loader.
+- `make`, all tests/dex tests and the sample app checks pass (gles needs
+  host Mesa; it passed on a rerun after a cold-start timeout). `make -f
+  Makefile.switch` builds the NRO without warnings (devkitPro fetched with
+  tools/fetch_toolchains.py devkitpro). Nothing was run on hardware.

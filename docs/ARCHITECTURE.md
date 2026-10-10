@@ -70,8 +70,8 @@ src/nativeloader/ nativeloader.h, elf_loader.c (ELF loader, dl*), shim_libc.c
                  properties, zlib, GL lookup)
 src/app/         main_host.c (host driver), app_runner.c (APK runner),
                  main_switch.c (Switch launcher), apk_info.c (labels/icons)
-java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
-java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
+java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.*, org.xmlpull, org.xml.sax
+java/framework/  android.*, com.android.internal.*, org.json
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
 tools/           build_java.sh, fetch_toolchains.py, make_framework_res.py,
                  gen_gles.py (GLES bindings generator),
@@ -249,6 +249,24 @@ returning the first that holds `System.mapLibraryName(name)`. `ActivityThread` a
 `ApplicationInfo.nativeLibraryDir` and `<apk>!/lib/<Build.CPU_ABI>` through the hidden
 `BaseDexClassLoader.addNativePath(Collection)` before the Application exists (GameActivity
 and NativeActivity-style loaders call `((BaseDexClassLoader) getClassLoader()).findLibrary`).
+XML: `org.xmlpull.v1` (the pull parser `SimpleXmlPullParser` and serializer, used by
+`android.util.Xml` and resources) lives in libcore so SAX can sit on it. SAX2 is
+`org.xml.sax` with `ext` and `helpers`, plus `javax.xml.parsers.SAXParserFactory`/`SAXParser`;
+`libcore.xml.PullSaxReader` is the one `XMLReader`, driving the pull parser by `nextToken()`.
+It supports the `namespaces` and `namespace-prefixes` features (xmlns attributes are rebuilt
+from the parser's namespace stack), the `lexical-handler` property (comments, CDATA bounds),
+processing instructions and a `Locator`; parse errors reach the `ErrorHandler.fatalError` as a
+`SAXParseException` and are thrown. It is not validating and skips the DTD (no
+`DTDHandler`/`DeclHandler` events, `EntityResolver` unused), drops whitespace outside the
+root, and with namespaces off reports attribute local names equal to their qNames (as the
+JDK's Xerces does). SAX1 (`Parser`, `HandlerBase`) exists only for signatures:
+`SAXParser.getParser()` throws and `parse(..., HandlerBase)` throws SAXException.
+`getSchema`/`setSchema` are absent (no `javax.xml.validation`). `android.util.Xml.parse`
+overloads use the same reader.
+`ProcessBuilder.start()` and every `Runtime.exec` fail like a failed exec on Android, with an
+IOException "Cannot run program ...: error=38, Function not implemented": there are no child
+processes on the Switch and the host does not run bionic executables. Apps that start helper
+binaries (DroidFish's chess engine) catch it and report the error.
 Natives in `src/native`. File paths from Java are translated by
 `platform_map_path()` (src/native/java_io.c):
 
@@ -767,6 +785,20 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   that fire during layout are posted (AdapterView SelectionNotifier), so
   listeners can change other views. Transitions and window animations
   are not run.
+- Preferences (`android.preference`, AOSP ports on framework-res layouts
+  and styles): Preference with its persistence to the default
+  SharedPreferences (or a PreferenceDataStore), PreferenceGroup/Category/
+  Screen, TwoState/CheckBox/Switch, Dialog/EditText/List/MultiSelectList,
+  RingtonePreference (the picker is not available), PreferenceManager
+  (`getDefaultSharedPreferences`, `setDefaultValues`, XML inflation through
+  PreferenceInflater) and PreferenceGroupAdapter. PreferenceActivity is the
+  single-pane (phone) form only: headers (`onBuildHeaders`) are a list, and a
+  header's fragment starts the same activity again with EXTRA_SHOW_FRAGMENT and
+  EXTRA_NO_HEADERS (its intent is started as is); `addPreferencesFromResource`
+  fills a code-built content view (list with id `android.R.id.list` in a frame
+  0x00ff0010). PreferenceFragment inflates `preference_list_fragment`.
+  Nested PreferenceScreens open as a full-screen Dialog, as AOSP. ListActivity
+  is the AOSP port over `list_content_simple`.
 
 ### 6.5 Application model (design)
 - The app runner (C, `app_run_apk`) opens the APK, sets `g_app_zip` and
@@ -1127,7 +1159,10 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   stack protector, `__cxa_atexit` (native destructors never run), pthread
   mutexes, condition variables and rwlocks (bionic's 40/48/56-byte objects hold a
   pointer to a lazily created host object, so zeroed static initializers
-  and the recursive initializer work), bionic pthread_attr_t, liblog
+  and the recursive initializer work), unnamed POSIX semaphores (`sem_init`,
+  `sem_wait`/`trywait`/`timedwait`, `sem_post`, `sem_getvalue`; the 16-byte bionic
+  sem_t points at a mutex/condition counter, since newlib has no sem_t; `sem_open`
+  is absent), bionic pthread_attr_t, liblog
   (to sa_log), AAssetManager (reads `assets/` from the APK; no file
   descriptors), `__system_property_get` (SDK 29 values), zlib, and GL/EGL
   names resolved from the driver (`sa_gl_proc`, 6.6.1), with the EGL

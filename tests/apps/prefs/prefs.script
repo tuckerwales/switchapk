@@ -1,0 +1,23 @@
+idle 800
+screenshot prefs_start.png
+tap 640 180
+idle 500
+tap 640 386
+idle 500
+screenshot prefs_toggled.png
+tap 640 482
+idle 800
+screenshot prefs_list_dialog.png
+tap 400 429
+idle 800
+tap 640 632
+idle 800
+screenshot prefs_edit_dialog.png
+tap 640 350
+idle 300
+text Ana
+idle 300
+tap 966 456
+idle 800
+screenshot prefs_done.png
+quit

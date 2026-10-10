@@ -876,4 +876,20 @@ what is left in flight.
   reporting AT_HWCAP (the A57's NEON, AES, PMULL, SHA and CRC32 on the
   Switch; the real values on Linux hosts) so OpenSSL and codecs take their
   fast paths. Both builds clean; not run on hardware.
-
+- WS4: android.preference ported from AOSP on framework-res layouts
+  (Preference and its persistence, groups and screens, TwoState/CheckBox/
+  Switch, Dialog/EditText/List/MultiSelectList, PreferenceManager with XML
+  inflation and setDefaultValues, PreferenceFragment, single-pane
+  PreferenceActivity with headers) and ListActivity; tests/apps/prefs
+  checks inflation, a toggle that persists across two runs, and a list
+  dialog. The default Configuration carries the device locale.
+- libcore: SAX2 (org.xml.sax, ext, helpers), javax.xml.parsers and
+  libcore.xml.PullSaxReader over the pull parser (moved to libcore);
+  android.util.Xml.parse. tests/dex/SaxTest.java matches OpenJDK.
+  ProcessBuilder (start fails like a failed exec) and Runtime.exec through
+  it. Native shim: unnamed POSIX semaphores (tests/c/shim_sem_test.c).
+  OverScroller gained its Interpolator constructors.
+- Corpus re-run (all but OSRS): Andor's Trail, Frozen Bubble and DroidFish
+  now draw (DroidFish's engine reports "Cannot run program"). New first
+  blockers: Blockinger needs the Holo decor ActionBarView, Solitaire an
+  AIOOBE in its own code; the rest are unchanged (COMPATIBILITY findings).

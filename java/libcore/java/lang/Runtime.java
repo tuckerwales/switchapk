@@ -76,27 +76,32 @@ public class Runtime {
     }
 
     public Process exec(String command) throws java.io.IOException {
-        throw new java.io.IOException("Cannot run program \"" + command + "\": not supported");
-    }
-
-    public Process exec(String[] cmdarray) throws java.io.IOException {
-        throw new java.io.IOException("Cannot run program: not supported");
+        return exec(command, null, null);
     }
 
     public Process exec(String command, String[] envp) throws java.io.IOException {
-        return exec(command);
+        return exec(command, envp, null);
     }
 
     public Process exec(String command, String[] envp, java.io.File dir) throws java.io.IOException {
-        return exec(command);
+        if (command.length() == 0) throw new IllegalArgumentException("Empty command");
+        java.util.StringTokenizer st = new java.util.StringTokenizer(command);
+        String[] cmdarray = new String[st.countTokens()];
+        for (int i = 0; st.hasMoreTokens(); i++) cmdarray[i] = st.nextToken();
+        return exec(cmdarray, envp, dir);
+    }
+
+    public Process exec(String[] cmdarray) throws java.io.IOException {
+        return exec(cmdarray, null, null);
     }
 
     public Process exec(String[] cmdarray, String[] envp) throws java.io.IOException {
-        return exec(cmdarray);
+        return exec(cmdarray, envp, null);
     }
 
+    /** Fails like a failed exec: see ProcessBuilder.start. */
     public Process exec(String[] cmdarray, String[] envp, java.io.File dir) throws java.io.IOException {
-        return exec(cmdarray);
+        return new ProcessBuilder(cmdarray).environment(envp).directory(dir).start();
     }
 
     @Deprecated

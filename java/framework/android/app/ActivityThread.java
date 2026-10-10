@@ -677,6 +677,8 @@ public final class ActivityThread {
         display.getMetrics(metrics);
         Configuration config = new Configuration();
         config.setToDefaults();
+        // A device's configuration always names its locale (apps read the deprecated Configuration.locale)
+        config.setLocales(android.os.LocaleList.getDefault());
         config.densityDpi = metrics.densityDpi;
         config.touchscreen = Configuration.TOUCHSCREEN_FINGER;
         config.keyboard = Configuration.KEYBOARD_NOKEYS;

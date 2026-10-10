@@ -589,6 +589,108 @@ static int sh_condattr_noop(void *a, ...) {
     return 0;
 }
 
+/* bionic 64-bit sem_t is 16 bytes (count plus reserved words): it holds an ShObj pointing at a host
+ * counting semaphore built from a mutex and a condition (newlib on the Switch has no sem_t). */
+typedef struct {
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+    unsigned count;
+} ShSem;
+static ShSem *sem_of(void *sem) {
+    ShObj *o = sem;
+    if (__atomic_load_n(&o->magic, __ATOMIC_ACQUIRE) == SH_MAGIC) return o->host;
+    pthread_mutex_lock(&g_lazy_lock);
+    if (o->magic != SH_MAGIC) {
+        ShSem *h = sa_malloc(sizeof *h);
+        pthread_mutex_init(&h->lock, NULL);
+        pthread_cond_init(&h->cond, NULL);
+        h->count = 0;
+        o->host = h;
+        __atomic_store_n(&o->magic, SH_MAGIC, __ATOMIC_RELEASE);
+    }
+    pthread_mutex_unlock(&g_lazy_lock);
+    return o->host;
+}
+static int sh_sem_init(void *sem, int pshared, unsigned value) {
+    SA_UNUSED(pshared);
+    if (value > 0x7fffffffu) {
+        errno = EINVAL;
+        return -1;
+    }
+    memset(sem, 0, 16);
+    sem_of(sem)->count = value;
+    return 0;
+}
+static int sh_sem_destroy(void *sem) {
+    ShObj *o = sem;
+    if (o->magic == SH_MAGIC) {
+        ShSem *h = o->host;
+        pthread_cond_destroy(&h->cond);
+        pthread_mutex_destroy(&h->lock);
+        free(h);
+    }
+    memset(sem, 0, 16);
+    return 0;
+}
+static int sh_sem_post(void *sem) {
+    ShSem *h = sem_of(sem);
+    pthread_mutex_lock(&h->lock);
+    if (h->count == 0x7fffffffu) {
+        pthread_mutex_unlock(&h->lock);
+        errno = EOVERFLOW;
+        return -1;
+    }
+    h->count++;
+    pthread_cond_signal(&h->cond);
+    pthread_mutex_unlock(&h->lock);
+    return 0;
+}
+static int sh_sem_wait(void *sem) {
+    ShSem *h = sem_of(sem);
+    pthread_mutex_lock(&h->lock);
+    while (h->count == 0) pthread_cond_wait(&h->cond, &h->lock);
+    h->count--;
+    pthread_mutex_unlock(&h->lock);
+    return 0;
+}
+static int sh_sem_trywait(void *sem) {
+    ShSem *h = sem_of(sem);
+    pthread_mutex_lock(&h->lock);
+    int ok = h->count > 0;
+    if (ok) h->count--;
+    pthread_mutex_unlock(&h->lock);
+    if (!ok) {
+        errno = EAGAIN;
+        return -1;
+    }
+    return 0;
+}
+static int sh_sem_timedwait(void *sem, const struct timespec *abs) {
+    if (abs == NULL || abs->tv_nsec < 0 || abs->tv_nsec >= 1000000000L) {
+        errno = EINVAL;
+        return -1;
+    }
+    ShSem *h = sem_of(sem);
+    int r = 0;
+    pthread_mutex_lock(&h->lock);
+    while (h->count == 0 && r == 0) r = pthread_cond_timedwait(&h->cond, &h->lock, abs);
+    int ok = h->count > 0;
+    if (ok) h->count--;
+    pthread_mutex_unlock(&h->lock);
+    if (!ok) {
+        errno = ETIMEDOUT;
+        return -1;
+    }
+    return 0;
+}
+static int sh_sem_getvalue(void *sem, int *value) {
+    ShSem *h = sem_of(sem);
+    pthread_mutex_lock(&h->lock);
+    *value = (int)h->count;
+    pthread_mutex_unlock(&h->lock);
+    return 0;
+}
+
 /* bionic pthread_attr_t (64-bit): flags, stack_base, stack_size, guard_size, policy, priority, reserved */
 typedef struct {
     uint32_t flags;
@@ -748,6 +850,9 @@ static const ShimSym g_syms[] = {
     W(pthread_cond_signal, sh_cond_signal), W(pthread_cond_broadcast, sh_cond_broadcast),
     W(pthread_condattr_init, sh_condattr_init), W(pthread_condattr_destroy, sh_condattr_noop),
     W(pthread_condattr_setclock, sh_condattr_noop), W(pthread_condattr_setpshared, sh_condattr_noop),
+    W(sem_init, sh_sem_init), W(sem_destroy, sh_sem_destroy), W(sem_post, sh_sem_post),
+    W(sem_wait, sh_sem_wait), W(sem_trywait, sh_sem_trywait), W(sem_timedwait, sh_sem_timedwait),
+    W(sem_getvalue, sh_sem_getvalue),
     W(pthread_attr_init, sh_attr_init), W(pthread_attr_destroy, sh_attr_destroy),
     W(pthread_attr_setdetachstate, sh_attr_setdetachstate), W(pthread_attr_getdetachstate, sh_attr_getdetachstate),
     W(pthread_attr_setstacksize, sh_attr_setstacksize), W(pthread_attr_getstacksize, sh_attr_getstacksize),

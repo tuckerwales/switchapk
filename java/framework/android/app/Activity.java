@@ -735,7 +735,8 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         }
     }
 
-    final boolean isResumed() { return mResumed; }
+    /** framework-internal (hidden in AOSP): android.preference reads it. */
+    public final boolean isResumed() { return mResumed; }
 
     final boolean isStopped() { return mStopped; }
 

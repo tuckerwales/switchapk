@@ -392,6 +392,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] Old School RuneScape reaches its own rendered client screen on the
     host (GameActivity, GLES3 from a native render thread, posix shim);
     stops at "Error connecting to server"
+  - [x] android.preference, ListActivity, SAX2 and ProcessBuilder: Andor's
+    Trail, Frozen Bubble and DroidFish draw (2026-10-10)
 
 ## Next steps (in order)
 
@@ -457,20 +459,18 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    auto-stubs silently today.
 
 9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`).
-   Pixel Dungeon and Replica Island reach their title screens on the
-   host. First blockers for the rest, by apps unblocked:
-   `android.preference` (4 apps at start, 7 reference it, WS4);
-   `java.runtime.name` unset so libGDX takes the desktop library path
-   (2, WS16; set to "Android Runtime" on 2026-10-10, those apps not re-run
-   yet); regex `\p{InBlock}` classes (Shattered PD, WS16);
-   `FileChannel.lock/map` (Unciv, WS16); activity-alias launch (Simple
-   Calculator, WS4); `ListActivity` (Blockinger, WS4); shim gaps
-   C++ `operator new/delete` and wide-char ctype remain (`sincos`,
-   `vasprintf`, syslog, `dl_iterate_phdr` and rwlocks landed with
-   shim_posix.c on 2026-10-10; Mindustry not re-run yet, WS9). Old School
-   RuneScape now draws its own "Error connecting to server" screen on the
-   host; its next step is the game connection (WS11). Re-run the corpus
-   after each fix and update the findings table.
+   Pixel Dungeon, Replica Island, Andor's Trail, Frozen Bubble and
+   DroidFish draw on the host. First blockers for the rest: the Holo decor
+   `ActionBarView` (Blockinger, WS4); java.io serialization (Vector
+   Pinball, WS16); regex `\p{InBlock}` classes (Shattered PD, WS16);
+   DisplayManager (Unciv, WS15); activity-alias launch (Simple Calculator,
+   WS4); an AIOOBE in Solitaire's own GameSelector (WS4, untraced);
+   Mindustry's black screen (WS8/WS9); Puzzles' missing helper (WS9).
+   DroidFish's engine needs an in-process exec of a bionic executable on
+   the ELF loader (WS9). Old School RuneScape draws its own "Error
+   connecting to server" screen on the host; its next step is the game
+   connection (WS11). Re-run the corpus after each fix and update the
+   findings table.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -527,6 +527,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-10 (WS4 with WS9; corpus apps): `org.xmlpull.v1` moved from
+  java/framework to java/libcore (package unchanged) so libcore's SAX2
+  (`org.xml.sax`, `javax.xml.parsers`, `libcore.xml.PullSaxReader`) can use
+  the pull parser; framework code is unaffected. `Activity.isResumed()` is
+  `public final` as in AOSP (hidden there) for android.preference. The default
+  Configuration now carries `LocaleList.getDefault()`, so the deprecated
+  `Configuration.locale` is never null. New shim entries `sem_*` in shim_libc.c.
+  `ProcessBuilder.start` and `Runtime.exec` throw IOException. No Java fields
+  are read from C. ARCHITECTURE 2, 5, 6.4.1, 6.7 updated.
 
 - 2026-10-10 (WS9, touches WS10): new `src/nativeloader/vfd.c` (virtual
   pipes and `vfd_poll`) used by native_looper.c and native_input.c on the

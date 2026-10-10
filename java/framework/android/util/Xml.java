@@ -20,6 +20,29 @@ public class Xml {
         return p;
     }
 
+    public static void parse(String xml, org.xml.sax.ContentHandler contentHandler) throws org.xml.sax.SAXException {
+        try {
+            parse(new StringReader(xml), contentHandler);
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    public static void parse(Reader in, org.xml.sax.ContentHandler contentHandler) throws IOException, org.xml.sax.SAXException {
+        org.xml.sax.XMLReader reader = new libcore.xml.PullSaxReader();
+        reader.setContentHandler(contentHandler);
+        reader.parse(new org.xml.sax.InputSource(in));
+    }
+
+    public static void parse(InputStream in, Encoding encoding, org.xml.sax.ContentHandler contentHandler)
+            throws IOException, org.xml.sax.SAXException {
+        org.xml.sax.XMLReader reader = new libcore.xml.PullSaxReader();
+        reader.setContentHandler(contentHandler);
+        org.xml.sax.InputSource source = new org.xml.sax.InputSource(in);
+        source.setEncoding(encoding.expatName);
+        reader.parse(source);
+    }
+
     public static XmlSerializer newSerializer() { return new org.xmlpull.v1.SimpleXmlSerializer(); }
 
     public static AttributeSet asAttributeSet(XmlPullParser parser) {

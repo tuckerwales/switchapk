@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="Game">
+        <CheckBoxPreference android:key="sound" android:title="Sound" android:summaryOn="Sound is on"
+            android:summaryOff="Sound is off" android:defaultValue="true" />
+        <Preference android:key="volume" android:title="Volume" android:summary="Needs sound"
+            android:dependency="sound" />
+        <SwitchPreference android:key="music" android:title="Music" android:defaultValue="false" />
+        <ListPreference android:key="level" android:title="Level" android:summary="Now: %s"
+            android:entries="@array/levels" android:entryValues="@array/level_values" android:defaultValue="2" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="Player">
+        <EditTextPreference android:key="name" android:title="Name" android:defaultValue="Player" />
+    </PreferenceCategory>
+</PreferenceScreen>

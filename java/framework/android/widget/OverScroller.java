@@ -3,11 +3,11 @@ package android.widget;
 import android.content.Context;
 import android.os.SystemClock;
 import android.view.ViewConfiguration;
+import android.view.animation.Interpolator;
 
 /**
  * Scroller that can overshoot and spring back (AOSP OverScroller).
- * Constructors that take an Interpolator are omitted: that type is not in this tree yet.
- * The Context constructor uses the viscous-fluid scroll and the flywheel fling.
+ * Without an Interpolator, startScroll uses the viscous-fluid curve; fling uses the flywheel spline.
  */
 public class OverScroller {
     private static final int DEFAULT_DURATION = 250;
@@ -18,12 +18,37 @@ public class OverScroller {
     private final SplineOverScroller mScrollerX;
     private final SplineOverScroller mScrollerY;
     private final boolean mFlywheel;
+    private Interpolator mInterpolator;
 
     public OverScroller(Context context) {
-        mFlywheel = true;
+        this(context, null);
+    }
+
+    public OverScroller(Context context, Interpolator interpolator) {
+        this(context, interpolator, true);
+    }
+
+    /** @deprecated the bounce coefficients are ignored, as in AOSP */
+    @Deprecated
+    public OverScroller(Context context, Interpolator interpolator, float bounceCoefficientX, float bounceCoefficientY) {
+        this(context, interpolator, true);
+    }
+
+    /** @deprecated the bounce coefficients are ignored, as in AOSP */
+    @Deprecated
+    public OverScroller(Context context, Interpolator interpolator, float bounceCoefficientX, float bounceCoefficientY,
+            boolean flywheel) {
+        this(context, interpolator, flywheel);
+    }
+
+    private OverScroller(Context context, Interpolator interpolator, boolean flywheel) {
+        mInterpolator = interpolator;
+        mFlywheel = flywheel;
         mScrollerX = new SplineOverScroller(context);
         mScrollerY = new SplineOverScroller(context);
     }
+
+    void setInterpolator(Interpolator interpolator) { mInterpolator = interpolator; }
 
     public final void setFriction(float friction) {
         mScrollerX.setFriction(friction);
@@ -57,7 +82,8 @@ public class OverScroller {
                 long elapsed = SystemClock.uptimeMillis() - mScrollerX.mStartTime;
                 int duration = mScrollerX.mDuration;
                 if (elapsed < duration) {
-                    float q = FlingMath.viscous(elapsed / (float) duration);
+                    float t = elapsed / (float) duration;
+                    float q = mInterpolator == null ? FlingMath.viscous(t) : mInterpolator.getInterpolation(t);
                     mScrollerX.updateScroll(q);
                     mScrollerY.updateScroll(q);
                 } else {

@@ -20,6 +20,7 @@
 #include "../gfx/gfx.h"
 
 #include <switch.h>
+#include <malloc.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <time.h>
@@ -626,19 +627,71 @@ void platform_shutdown(void) {
     pthread_mutex_unlock(&g_fb_lock);
 }
 
-/* ---- audio: drained in real time until the audout backend lands ---------------- */
+/* ---- audio: audout (48 kHz stereo s16), or drained in real time when it cannot start ---------------- */
+
+#define AUDIO_FRAMES 1024 /* 21 ms per buffer */
+#define AUDIO_BUFFERS 4
+#define AUDIO_BYTES (AUDIO_FRAMES * 2 * (int)sizeof(int16_t)) /* 4096: audout wants 0x1000-aligned sizes */
 
 static PlatformAudioCallback g_audio_cb;
 static void *g_audio_user;
 static int g_audio_rate;
 static volatile bool g_audio_run;
 
-static void *audio_thread(void *arg) {
-    float buf[2 * 1024];
-    while (g_audio_run) {
-        g_audio_cb(buf, 1024, g_audio_user);
-        sa_sleep_ns((uint64_t)1024 * 1000000000ull / (uint64_t)g_audio_rate);
+static void mix_into(AudioOutBuffer *b, float *mix) {
+    g_audio_cb(mix, AUDIO_FRAMES, g_audio_user);
+    int16_t *out = b->buffer;
+    for (int i = 0; i < AUDIO_FRAMES * 2; i++) {
+        float v = mix[i];
+        if (v > 1.0f) v = 1.0f;
+        else if (v < -1.0f) v = -1.0f;
+        out[i] = (int16_t)(v * 32767.0f);
     }
+    b->data_size = AUDIO_BYTES;
+    b->data_offset = 0;
+}
+
+static void *audio_thread(void *arg) {
+    float mix[2 * AUDIO_FRAMES];
+    static AudioOutBuffer bufs[AUDIO_BUFFERS];
+    void *mem = NULL;
+    bool audout = R_SUCCEEDED(audoutInitialize());
+    if (audout && audoutGetSampleRate() == (u32)g_audio_rate && audoutGetChannelCount() == 2) {
+        mem = memalign(0x1000, (size_t)AUDIO_BYTES * AUDIO_BUFFERS);
+        audout = mem && R_SUCCEEDED(audoutStartAudioOut());
+    } else if (audout) {
+        LOGW("audout runs at %u Hz with %u channels, the mixer at %d Hz stereo: audio is muted", audoutGetSampleRate(),
+             audoutGetChannelCount(), g_audio_rate);
+        audoutExit();
+        audout = false;
+    }
+    if (!audout) {
+        LOGW("audout is unavailable: audio is mixed and dropped");
+        free(mem);
+        while (g_audio_run) {
+            g_audio_cb(mix, AUDIO_FRAMES, g_audio_user);
+            sa_sleep_ns((uint64_t)AUDIO_FRAMES * 1000000000ull / (uint64_t)g_audio_rate);
+        }
+        return arg;
+    }
+    memset(mem, 0, (size_t)AUDIO_BYTES * AUDIO_BUFFERS);
+    for (int i = 0; i < AUDIO_BUFFERS; i++) {
+        bufs[i].next = NULL;
+        bufs[i].buffer = (uint8_t *)mem + (size_t)i * AUDIO_BYTES;
+        bufs[i].buffer_size = AUDIO_BYTES;
+        mix_into(&bufs[i], mix);
+        audoutAppendAudioOutBuffer(&bufs[i]);
+    }
+    while (g_audio_run) {
+        AudioOutBuffer *released = NULL;
+        u32 count = 0;
+        if (R_FAILED(audoutWaitPlayFinish(&released, &count, 100000000ull /* 100 ms */)) || !released) continue;
+        mix_into(released, mix);
+        audoutAppendAudioOutBuffer(released);
+    }
+    audoutStopAudioOut();
+    audoutExit();
+    free(mem);
     return arg;
 }
 

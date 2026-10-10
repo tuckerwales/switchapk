@@ -872,4 +872,8 @@ what is left in flight.
   are static-asserted against devkitA64. Host samples (native, input, ndk,
   gles) still pass. OSRS was not re-run after these changes: the session's
   permission checks refused running it once the TLS experiment was declined.
+- Switch audio through audout instead of draining (WS10), and getauxval
+  reporting AT_HWCAP (the A57's NEON, AES, PMULL, SHA and CRC32 on the
+  Switch; the real values on Linux hosts) so OpenSSL and codecs take their
+  fast paths. Both builds clean; not run on hardware.
 

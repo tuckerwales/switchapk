@@ -1360,7 +1360,11 @@ Single C interface implemented once per target:
   `fn` runs after every wake and push, without platform locks held (the
   main ALooper's wake, 6.4)
 - text: `platform_request_text(id, initial, hint, input_type, max_len)`
-- audio: `platform_audio_start(rate, cb, user)`, `platform_audio_stop()`
+- audio: `platform_audio_start(rate, cb, user)`, `platform_audio_stop()`.
+  The Switch plays through audout (48 kHz stereo s16, four 1024-frame
+  buffers refilled as they are released; the mixer runs at 48 kHz) and
+  drains in real time only when audout cannot start. Not yet heard on
+  hardware.
 - network: `platform_network_state(PlatformNetwork*)` fills `connected`,
   `transport` (`PLATFORM_NET_NONE/WIFI/ETHERNET`) and `signal` (Wi-Fi
   bars 0..3, -1 unknown); cheap enough to poll. Headless reports Wi-Fi

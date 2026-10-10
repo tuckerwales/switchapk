@@ -36,6 +36,7 @@
 #ifndef __SWITCH__
 #include <malloc.h>
 #include <sys/mman.h>
+#include <sys/auxv.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #endif
@@ -118,9 +119,18 @@ static void sh_assert(const char *file, int line, const char *expr) {
     abort();
 }
 
+/* CPU feature bits for libraries that pick NEON or ARMv8 crypto code paths (OpenSSL, codecs), and the page size */
 static unsigned long sh_getauxval(unsigned long type) {
-    SA_UNUSED(type);
+    if (type == 6 /* AT_PAGESZ */) return 0x1000;
+#if defined(__SWITCH__)
+    /* the Switch's Cortex-A57: fp, asimd, aes, pmull, sha1, sha2, crc32 (HWCAP_*); no AT_HWCAP2 features */
+    if (type == 16 /* AT_HWCAP */) return 0x1 | 0x2 | 0x8 | 0x10 | 0x20 | 0x40 | 0x80;
     return 0;
+#elif defined(__linux__)
+    return getauxval(type);
+#else
+    return 0;
+#endif
 }
 
 static int sh_gettid(void) {

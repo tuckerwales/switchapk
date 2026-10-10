@@ -272,7 +272,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] first boot on hardware (confirmed 2026-10-02)
   - [x] APK labels and icons in the launcher (tests/apps/labeled,
     switchapk-host --apk-info)
-  - [ ] audio (audren/audout), rumble, 1080p docked
+  - [ ] audio (audout output written 2026-10-10, not heard on hardware), rumble, 1080p docked
 
 ### M4
 - [x] WS5 animation

@@ -304,11 +304,13 @@ public class File implements Serializable, Comparable<File> {
     }
 
     public long getTotalSpace() {
-        return 32L * 1024 * 1024 * 1024;
+        long[] v = Os.statvfs(path);
+        return v == null ? 0 : v[0] * v[1];
     }
 
     public long getFreeSpace() {
-        return Os.freeSpace(path);
+        long[] v = Os.statvfs(path);
+        return v == null ? 0 : v[0] * v[2];
     }
 
     public long getUsableSpace() {

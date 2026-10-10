@@ -628,7 +628,7 @@ static const ShimSym g_syms[] = {
     W(remove, sh_remove), W(rename, sh_rename),
     /* files */
     W(open, sh_open), W(__open_2, sh_open_2), S(close), S(read), S(write), S(lseek), W(access, sh_access),
-    W(unlink, sh_unlink), W(mkdir, sh_mkdir), W(stat, sh_stat), W(lstat, sh_lstat), S(fstat),
+    W(unlink, sh_unlink), W(mkdir, sh_mkdir), W(stat, sh_stat), W(lstat, sh_lstat), S(fstat), S(ftruncate), S(fsync),
     W(opendir, sh_opendir), S(readdir), S(closedir), S(isatty), S(dup), S(dup2),
 #ifdef __SWITCH__
     W(pipe, sh_pipe),

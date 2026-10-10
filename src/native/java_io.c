@@ -10,8 +10,9 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <time.h>
-#ifndef __SWITCH__
+/* devkitA64's newlib declares statvfs; libnx implements it for sdmc: through its fs devoptab. */
 #include <sys/statvfs.h>
+#ifndef __SWITCH__
 #include <utime.h>
 #endif
 
@@ -350,19 +351,35 @@ NATIVE(Os_hostPath) {
     free(path);
 }
 
-NATIVE(Os_freeSpace) {
-    UNUSED_ARGS();
-#ifdef __SWITCH__
-    R_LONG(4ll * 1024 * 1024 * 1024);
-#else
+/* static long[] Os.statvfs(String path): {fragment size, blocks, free blocks, available blocks}, or null. */
+NATIVE(Os_statvfs) {
     char *path = mapped_arg(t, A_OBJ(0));
     if (!path) return;
     struct statvfs sv;
-    int64_t v = 4ll * 1024 * 1024 * 1024;
-    if (statvfs(path, &sv) == 0) v = (int64_t)sv.f_bavail * (int64_t)sv.f_frsize;
+    int rc = statvfs(path, &sv);
+    free(path);
+    if (rc != 0) {
+        R_OBJ(NULL);
+        return;
+    }
+    ArrayObject *r = vm_alloc_prim_array(t, 'J', 4);
+    if (!r) return;
+    int64_t *v = ARRAY_DATA(r, int64_t);
+    v[0] = (int64_t)(sv.f_frsize ? sv.f_frsize : sv.f_bsize);
+    v[1] = (int64_t)sv.f_blocks;
+    v[2] = (int64_t)sv.f_bfree;
+    v[3] = (int64_t)sv.f_bavail;
+    R_OBJ(r);
+}
+
+NATIVE(Os_freeSpace) {
+    char *path = mapped_arg(t, A_OBJ(0));
+    if (!path) return;
+    struct statvfs sv;
+    int64_t v = 0;
+    if (statvfs(path, &sv) == 0) v = (int64_t)sv.f_bavail * (int64_t)(sv.f_frsize ? sv.f_frsize : sv.f_bsize);
     free(path);
     R_LONG(v);
-#endif
 }
 
 static const NativeMethodReg g_regs[] = {
@@ -382,6 +399,7 @@ static const NativeMethodReg g_regs[] = {
     {"Llibcore/io/Os;", "setLastModified", "(Ljava/lang/String;J)Z", Os_setLastModified},
     {"Llibcore/io/Os;", "hostPath", "(Ljava/lang/String;)Ljava/lang/String;", Os_hostPath},
     {"Llibcore/io/Os;", "freeSpace", "(Ljava/lang/String;)J", Os_freeSpace},
+    {"Llibcore/io/Os;", "statvfs", "(Ljava/lang/String;)[J", Os_statvfs},
 };
 
 void natives_java_io_register(void) { vm_register_natives(g_regs, SA_ARRAY_LEN(g_regs)); }

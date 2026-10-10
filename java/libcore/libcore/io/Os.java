@@ -38,6 +38,9 @@ public final class Os {
     /** Returns {exists, isDir, isFile, length, mtimeMillis, readable, writable} encoded in a long[]. */
     public static native long[] stat(String path);
 
+    /** {fragment size, total blocks, free blocks, blocks available to apps} of the file system, or null. */
+    public static native long[] statvfs(String path);
+
     public static native String[] list(String path);
 
     public static native boolean mkdir(String path);

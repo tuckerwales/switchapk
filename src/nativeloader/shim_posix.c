@@ -858,6 +858,7 @@ static int sh_getaddrinfo(const char *node, const char *service, const ShAddrinf
         h.ai_protocol = hints->ai_protocol;
     }
     int r = getaddrinfo(node, service, hints ? &h : NULL, &list);
+    LOGD("getaddrinfo(%s, %s): %s", node ? node : "NULL", service ? service : "NULL", r ? gai_strerror(r) : "ok");
     if (r != 0) {
         *res = NULL;
         return r; /* EAI_* values: bionic's are the positive BSD numbers, glibc's negative (mapped below) */
@@ -929,6 +930,26 @@ static int sh_gethostname(char *name, size_t len) {
     if (len < 10) return fail(ENAMETOOLONG);
     strcpy(name, "localhost");
     return 0;
+}
+
+/* connect, with the address in the verbose log: native clients talk to their servers from C */
+static int sh_connect(int fd, const struct sockaddr *addr, socklen_t len) {
+    int r = connect(fd, addr, len);
+    if (sa_log_level <= SA_LOG_DEBUG && addr) {
+        char host[INET6_ADDRSTRLEN] = "?";
+        int port = 0;
+        if (addr->sa_family == AF_INET) {
+            const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
+            inet_ntop(AF_INET, &in->sin_addr, host, sizeof host);
+            port = ntohs(in->sin_port);
+        } else if (addr->sa_family == AF_INET6) {
+            const struct sockaddr_in6 *in = (const struct sockaddr_in6 *)addr;
+            inet_ntop(AF_INET6, &in->sin6_addr, host, sizeof host);
+            port = ntohs(in->sin6_port);
+        }
+        LOGD("connect(%d, %s port %d): %s", fd, host, port, r == 0 ? "ok" : strerror(errno));
+    }
+    return r;
 }
 
 /* Android reports the kernel truthfully, and the machine as the ABI's CPU */
@@ -1051,7 +1072,7 @@ static const ShimSym g_syms[] = {
     W(statfs, sh_statfs), W(readlink, sh_readlink), S(mremap), S(msync), S(mlock), S(munlock), S(poll),
     S(select), S(pselect), S(epoll_create), S(epoll_create1), S(epoll_ctl), S(epoll_wait), S(eventfd),
     /* sockets */
-    S(socket), S(socketpair), S(bind), S(listen), S(accept), S(accept4), S(connect), S(shutdown), S(send),
+    S(socket), S(socketpair), S(bind), S(listen), S(accept), S(accept4), W(connect, sh_connect), S(shutdown), S(send),
     S(recv), S(sendto), S(recvfrom), S(sendmsg), S(recvmsg), S(setsockopt), S(getsockopt), S(getsockname),
     S(getpeername), S(__cmsg_nxthdr),
     /* name lookup */

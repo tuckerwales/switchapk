@@ -123,11 +123,25 @@ installations' cross-process lock, caught), `javax.net.ssl` missing
 `onUpdateInternetAvailable` called before the client registered its
 natives (the app catches it), "requires the Google Play Store".
 
-Next: the connection. The client resolves and connects from C (now
-plain host sockets); find out which host and port it wants, whether
-this container can reach it, and whether it needs TLS from Java first
-(WS11). Then input, audio (OpenSL ES), and the Jagex Account login
-(AppAuth through a browser redirect).
+The connection (checked with `switchapk-host -v`, which logs the shim's
+`getaddrinfo` and `connect`): the client resolves
+`oldschool.config.runescape.com` and connects to port 443 from C. It
+links OpenSSL 1.0.2o statically and does its own TLS, so it needs only
+sockets, not `javax.net.ssl`. In the cloud container this was run in,
+outbound TLS is re-terminated by the sandbox's egress proxy (its own CA)
+and the game port 43594 is blocked, so the error screen is the expected
+result there and says nothing about switchapk. Next steps:
+
+- Run it on a host with a plain network to see the next stage (the
+  config fetch, the world list, the login screen).
+- The Switch: sockets and name lookup are ENOSYS in `shim_posix.c` until
+  newlib/libnx translations exist (BSD socket constants), so the device
+  stops here even with a network (WS9/WS11).
+- Then input, audio (OpenSL ES), and the Jagex Account login (AppAuth
+  through a browser redirect).
+- The client writes `imgui.ini` with a relative path; on the host that
+  lands in the working directory (Android's is "/", read-only), so the
+  shim should map relative paths under the app's data dir or fail them.
 
 ## How gaps are found
 
@@ -173,7 +187,7 @@ First blockers, in the order that unblocks the most apps:
 | Launching an `activity-alias` (the launcher entry is an alias of SplashActivity) | Simple Calculator | run: ClassNotFoundException for the alias name | WS4 |
 | `android.app.ListActivity` | Blockinger (Replica Island references it too) | run: NoClassDefFoundError | WS4 |
 | Native shim: `sincos`/`sincosf`, C++ `operator new`/`delete` (`_Znwm`, `_ZdlPv`, ... for code linked against the system libstdc++), `__cxa_pure_virtual`, `vasprintf`, the `syslog` family, `dl_iterate_phdr`, `pthread_rwlock_*`, wide-char ctype | Mindustry renders black after `sincos` returns 0; Frozen Bubble, Vector Pinball, DroidFish libraries need the rest | run: "native code called sincos"; static scan | WS9 |
-| The game client cannot connect to its server (cause not yet known: network reach from the host, TLS, or the protocol) | Old School RuneScape | run: the client's own "Error connecting to server" screen | WS11 |
+| No game-server connection: in the sandbox where this ran, TLS is re-terminated and port 43594 blocked (environment); on the Switch, native sockets are ENOSYS | Old School RuneScape | run: the client's own "Error connecting to server" screen; `-v` shows connect to oldschool.config.runescape.com:443 | WS9/WS11 |
 | Simon Tatham's Puzzles quits after its own "missing a required file" check, probably the `libpuzzlesgen.so` helper it expects in nativeLibraryDir (not yet confirmed) | Simon Tatham's Puzzles | run: Toast, then System.exit | WS9 |
 
 Already working on the host: **Pixel Dungeon** and **Replica Island** reach

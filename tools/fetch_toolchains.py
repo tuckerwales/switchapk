@@ -35,6 +35,11 @@ OUT = os.path.join(ROOT, "build", "toolchains")
 AAPT2_VERSION = "8.13.2-14304508"
 AAPT2_URL = "https://dl.google.com/android/maven2/com/android/tools/build/aapt2/{v}/aapt2-{v}-linux.jar".format(v=AAPT2_VERSION)
 PLATFORM_URL = "https://dl.google.com/android/repository/platform-35_r02.zip"
+# Android's monospace font (Apache 2.0), pinned to a release tag and checked by hash. The Switch NRO
+# bundles it (the console has no monospace shared font); the host build reads it from build/toolchains.
+MONO_FONT_URL = ("https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r1/"
+                 "data/fonts/DroidSansMono.ttf?format=TEXT")
+MONO_FONT_SHA256 = "db19a1fdaba41cc4a2fec0330e5c15e71c6dd68a3ef074f4f28268828b45c862"
 SQLITE_URL = "https://www.sqlite.org/2024/sqlite-amalgamation-3460100.zip"
 DKP_IMAGE = "devkitpro/devkita64"
 DKP_TAG = "latest"
@@ -114,7 +119,23 @@ def fetch_sdk():
     if not os.path.exists(fwres):
         log("framework-res.apk")
         subprocess.check_call([sys.executable, os.path.join(ROOT, "tools", "make_framework_res.py"), jar, fwres])
+    fetch_fonts()
     log("sdk ready in " + sdk)
+
+
+def fetch_fonts():
+    font = os.path.join(OUT, "fonts", "DroidSansMono.ttf")
+    if os.path.exists(font):
+        return
+    log("DroidSansMono.ttf")
+    import base64
+    import hashlib
+    data = base64.b64decode(fetch(MONO_FONT_URL))
+    if hashlib.sha256(data).hexdigest() != MONO_FONT_SHA256:
+        raise SystemExit("DroidSansMono.ttf: unexpected sha256")
+    os.makedirs(os.path.dirname(font), exist_ok=True)
+    with open(font, "wb") as f:
+        f.write(data)
 
 
 def fetch_sqlite():

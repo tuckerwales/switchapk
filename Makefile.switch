@@ -44,7 +44,10 @@ FRAMEWORK_RES := build/toolchains/framework-res.apk
 
 all: $(BUILD)/switchapk.nro
 
-$(BUILD)/switchapk.nro: $(BUILD)/switchapk.elf $(BUILD)/switchapk.nacp $(ROMFS)/framework.dex $(ROMFS)/framework-res.apk
+MONO_FONT := build/toolchains/fonts/DroidSansMono.ttf
+
+$(BUILD)/switchapk.nro: $(BUILD)/switchapk.elf $(BUILD)/switchapk.nacp $(ROMFS)/framework.dex $(ROMFS)/framework-res.apk \
+		$(ROMFS)/fonts/DroidSansMono.ttf
 	$(TOOLS)/elf2nro $< $@ --icon=$(DEVKITPRO)/libnx/default_icon.jpg --nacp=$(BUILD)/switchapk.nacp --romfsdir=$(ROMFS)
 
 SQLITE_SRC := third_party/sqlite/sqlite3.c
@@ -77,6 +80,13 @@ $(ROMFS)/framework.dex: $(FRAMEWORK_DEX)
 $(ROMFS)/framework-res.apk: $(FRAMEWORK_RES)
 	@mkdir -p $(ROMFS)
 	cp $< $@
+
+$(ROMFS)/fonts/DroidSansMono.ttf: $(MONO_FONT)
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+$(MONO_FONT):
+	python3 tools/fetch_toolchains.py sdk
 
 $(FRAMEWORK_DEX):
 	@echo "build/java/framework.dex is missing: run make (the host build) first" && false

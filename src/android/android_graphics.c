@@ -400,6 +400,11 @@ NATIVE(Typeface_nDefault) {
     R_LONG((int64_t)(uintptr_t)gfx_font_default(A_BOOL(0)));
 }
 
+NATIVE(Typeface_nMonospace) {
+    UNUSED_ARGS();
+    R_LONG((int64_t)(uintptr_t)gfx_font_monospace());
+}
+
 NATIVE(Typeface_nLoad) {
     UNUSED_ARGS();
     ArrayObject *a = A_ARR(0);
@@ -578,6 +583,7 @@ static const NativeMethodReg g_regs[] = {
     {PT, "nGetTextPath", "(JF[CIIFF)[Ljava/lang/Object;", Paint_nGetTextPath},
     {PT, "nHasGlyph", "(JI)Z", Paint_nHasGlyph},
     {"Landroid/graphics/Typeface;", "nDefault", "(Z)J", Typeface_nDefault},
+    {"Landroid/graphics/Typeface;", "nMonospace", "()J", Typeface_nMonospace},
     {"Landroid/graphics/Typeface;", "nLoad", "([B)J", Typeface_nLoad},
     {"Landroid/graphics/Typeface;", "nLoadFile", "(Ljava/lang/String;)J", Typeface_nLoadFile},
     {"Landroid/graphics/BitmapFactory;", "nDecode", "([BII[IZI)[I", BitmapFactory_nDecode},

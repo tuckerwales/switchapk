@@ -145,6 +145,33 @@ bool gfx_font_init_default(void) {
     return true;
 }
 
+/*
+ * Android's monospace family is Droid Sans Mono. The Switch has no monospace shared font, so the NRO
+ * bundles it in romfs (fetched by tools/fetch_toolchains.py sdk); the host build reads the same copy
+ * from build/toolchains, then system monospace fonts. Without one, monospace is the default font.
+ */
+GfxFont *gfx_font_monospace(void) {
+    static bool tried;
+    static GfxFont *mono;
+    if (!tried) {
+        tried = true;
+        static const char *const paths[] = {
+            "romfs:/fonts/DroidSansMono.ttf",
+            "/system/fonts/DroidSansMono.ttf",
+            "build/toolchains/fonts/DroidSansMono.ttf",
+            "/usr/share/fonts/truetype/droid/DroidSansMono.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeMono.ttf",
+            NULL,
+        };
+        mono = load_first(paths);
+        if (!mono) LOGW("no monospace font found; monospace text uses the default font");
+    }
+    return mono ? mono : gfx_font_default(false);
+}
+
 GfxFont *gfx_font_default(bool bold) {
     if (!g_regular) gfx_font_init_default();
     return bold ? g_bold : g_regular;

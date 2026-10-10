@@ -1,312 +1,128 @@
 /*
  * Nintendo Switch entry point (switchapk.nro).
  *
- * Without arguments it shows a launcher listing the .apk files in sdmc:/switch/switchapk/apks,
- * each row the APK's label and icon. With an APK path as argv[1] (nxlink, forwarders) it runs
- * that APK directly.
+ * Without arguments it opens the home screen (launcher.c): a carousel of the
+ * .apk files in sdmc:/switch/switchapk/apks with their own icons and names,
+ * sorted by last played. With an APK path as argv[1] (nxlink, forwarders,
+ * "Try again") it runs that APK directly.
  * The chosen APK runs on a VM thread with a large stack while this thread
  * pumps the applet loop, input and the software keyboard. When the app ends
  * the NRO reloads itself (through hbloader) so the user returns to the list.
- * If the app fails, an error screen shows the last log lines; the full log is
- * in sdmc:/switch/switchapk/log.txt.
+ * If the app fails, the "app stopped" screen shows the last log lines and
+ * offers to go back or try again; the full log is in
+ * sdmc:/switch/switchapk/log.txt.
  */
 #include "../vm/vm.h"
 #include "../gfx/gfx.h"
 #include "../platform/platform.h"
-#include "apk_info.h"
+#include "launcher.h"
 
 #include <switch.h>
-#include <dirent.h>
 #include <pthread.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #define LOG_TAG "main"
 
 #define ROOT_DIR "sdmc:/switch/switchapk"
 #define APK_DIR ROOT_DIR "/apks"
 #define DATA_DIR ROOT_DIR "/data"
+#define LAUNCHER_DIR ROOT_DIR "/launcher"
 #define LOG_PATH ROOT_DIR "/log.txt"
-
-#define SCREEN_W 1280
-#define SCREEN_H 720
 
 bool platform_switch_pump(void);
 u64 platform_switch_buttons_down(void);
+u64 platform_switch_buttons_held(void);
 void platform_set_data_root(const char *root, const char *package);
 int app_run_apk(const char *path, const char *data_dir, void *stack_hi);
 
-/* ---- tiny immediate-mode drawing on a 1280x720 ARGB buffer ------------------------ */
-
 static uint32_t *g_screen;
 
-static GfxTarget screen_target(void) {
-    GfxTarget t = {g_screen, SCREEN_W, SCREEN_H, SCREEN_W};
-    return t;
+static void present_screen(void) { platform_present(g_screen, UI_W, UI_H, UI_W); }
+
+/* ---- home screen, splash and error screen driver ------------------------------------ */
+
+static const struct {
+    u64 mask;
+    uint32_t btn;
+} g_ui_buttons[] = {
+    {HidNpadButton_A, UI_BTN_A},         {HidNpadButton_B, UI_BTN_B},
+    {HidNpadButton_X, UI_BTN_X},         {HidNpadButton_Y, UI_BTN_Y},
+    {HidNpadButton_L, UI_BTN_L},         {HidNpadButton_R, UI_BTN_R},
+    {HidNpadButton_ZL, UI_BTN_ZL},       {HidNpadButton_ZR, UI_BTN_ZR},
+    {HidNpadButton_Plus, UI_BTN_PLUS},   {HidNpadButton_Minus, UI_BTN_MINUS},
+    {HidNpadButton_AnyUp, UI_BTN_UP},    {HidNpadButton_AnyDown, UI_BTN_DOWN},
+    {HidNpadButton_AnyLeft, UI_BTN_LEFT}, {HidNpadButton_AnyRight, UI_BTN_RIGHT},
+};
+
+static uint32_t ui_buttons(u64 hid) {
+    uint32_t out = 0;
+    for (size_t i = 0; i < SA_ARRAY_LEN(g_ui_buttons); i++)
+        if (hid & g_ui_buttons[i].mask) out |= g_ui_buttons[i].btn;
+    return out;
 }
 
-static GfxClip screen_clip(void) {
-    GfxClip c = {0, 0, SCREEN_W, SCREEN_H, NULL, 0};
-    return c;
-}
-
-static void fill_rect(int l, int t, int r, int b, uint32_t color) {
-    GfxTarget tg = screen_target();
-    GfxClip clip = screen_clip();
-    GfxMatrix m;
-    gfx_matrix_identity(&m);
-    GfxPaint p;
-    memset(&p, 0, sizeof p);
-    p.color = color;
-    p.style = GFX_FILL;
-    p.aa = true;
-    p.xfer = GFX_XFER_SRC_OVER;
-    gfx_draw_rect(&tg, &m, &clip, (float)l, (float)t, (float)r, (float)b, &p);
-}
-
-/* One Unicode scalar, BMP only. The text painter takes UTF-16 code units and this screen has no pairs. */
-static int utf8_next(const char *s, size_t n, size_t *i) {
-    unsigned char c = (unsigned char)s[*i];
-    if (c < 0x80) {
-        (*i)++;
-        return c;
+static UiInput read_input(void) {
+    UiInput in;
+    memset(&in, 0, sizeof in);
+    in.down = ui_buttons(platform_switch_buttons_down());
+    in.held = ui_buttons(platform_switch_buttons_held());
+    HidTouchScreenState ts = {0};
+    if (hidGetTouchScreenStates(&ts, 1) && ts.count > 0) {
+        in.touching = true;
+        in.touch_x = (int)ts.touches[0].x;
+        in.touch_y = (int)ts.touches[0].y;
     }
-    size_t need = 0;
-    unsigned cp = 0;
-    if ((c & 0xE0) == 0xC0) {
-        need = 2;
-        cp = c & 0x1F;
-    } else if ((c & 0xF0) == 0xE0) {
-        need = 3;
-        cp = c & 0x0F;
-    } else if ((c & 0xF8) == 0xF0) {
-        need = 4;
-        cp = c & 0x07;
-    } else {
-        (*i)++;
-        return '?';
-    }
-    if (n - *i < need) {
-        (*i)++;
-        return '?';
-    }
-    for (size_t k = 1; k < need; k++) {
-        unsigned char cc = (unsigned char)s[*i + k];
-        if ((cc & 0xC0) != 0x80) {
-            (*i)++;
-            return '?';
-        }
-        cp = (cp << 6) | (cc & 0x3F);
-    }
-    *i += need;
-    if ((need == 2 && cp < 0x80) || (need == 3 && cp < 0x800) || (need == 4 && cp < 0x10000)) return '?';
-    if (cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0xFFFF) return '?';
-    return (int)cp;
+    in.now_ns = (int64_t)sa_time_ns();
+    return in;
 }
 
-static void draw_text(const char *utf8, float x, float baseline, float size, uint32_t color, bool bold) {
-    GfxFont *f = gfx_font_default(bold);
-    if (!f || !utf8) return;
-    size_t n = strlen(utf8);
-    uint16_t *u = sa_malloc((n + 1) * sizeof *u);
-    size_t len = 0;
-    for (size_t i = 0; i < n;) u[len++] = (uint16_t)utf8_next(utf8, n, &i);
-    GfxTarget tg = screen_target();
-    GfxClip clip = screen_clip();
-    GfxMatrix m;
-    gfx_matrix_identity(&m);
-    GfxPaint p;
-    memset(&p, 0, sizeof p);
-    p.color = color;
-    p.style = GFX_FILL;
-    p.aa = true;
-    p.xfer = GFX_XFER_SRC_OVER;
-    gfx_draw_text(&tg, &m, &clip, f, size, u, (int)len, x, baseline, 0, false, &p);
-    free(u);
-}
-
-static void present_screen(void) { platform_present(g_screen, SCREEN_W, SCREEN_H, SCREEN_W); }
-
-/* ---- launcher ------------------------------------------------------------------ */
-
-typedef struct {
-    char *name;
-    char *label;
-    uint32_t *icon;
-    int icon_w, icon_h;
-} ApkEntry;
-
-typedef struct {
-    ApkEntry *items;
-    int count;
-} ApkList;
-
-static int cmp_entries(const void *a, const void *b) {
-    const ApkEntry *ea = a, *eb = b;
-    int c = strcasecmp(ea->label ? ea->label : "", eb->label ? eb->label : "");
-    if (c) return c;
-    return strcasecmp(ea->name ? ea->name : "", eb->name ? eb->name : "");
-}
-
-static ApkList list_apks(void) {
-    ApkList l = {NULL, 0};
-    DIR *d = opendir(APK_DIR);
-    if (!d) return l;
-    struct dirent *e;
-    while ((e = readdir(d)) != NULL) {
-        size_t n = strlen(e->d_name);
-        if (n <= 4 || strcasecmp(e->d_name + n - 4, ".apk") != 0) continue;
-        l.items = sa_realloc(l.items, (size_t)(l.count + 1) * sizeof *l.items);
-        ApkEntry *it = &l.items[l.count++];
-        memset(it, 0, sizeof *it);
-        it->name = sa_strdup(e->d_name);
-        char *path = sa_sprintf("%s/%s", APK_DIR, e->d_name);
-        ApkIdentity id;
-        apk_read_identity(path, APK_ICON_DENSITY, &id);
-        it->label = id.label;
-        it->icon = id.icon;
-        it->icon_w = id.icon_w;
-        it->icon_h = id.icon_h;
-        free(path);
+/* Clock every frame; battery and Wi-Fi every two seconds (each is an IPC call). */
+static void read_status(UiStatus *st) {
+    static UiStatus cached;
+    static int64_t next_poll;
+    int64_t now = (int64_t)sa_time_ns();
+    if (now >= next_poll) {
+        next_poll = now + 2000000000LL;
+        PlatformBattery bat;
+        platform_battery_state(&bat);
+        cached.has_battery = true;
+        cached.battery = bat.level;
+        cached.charging = bat.charging;
+        PlatformNetwork net;
+        platform_network_state(&net);
+        cached.wifi = net.connected ? (net.signal >= 0 ? net.signal : 3) : -1;
     }
-    closedir(d);
-    if (l.count > 1) qsort(l.items, (size_t)l.count, sizeof *l.items, cmp_entries);
-    return l;
+    *st = cached;
+    time_t t = time(NULL);
+    struct tm tm;
+    if (t > 0 && localtime_r(&t, &tm)) snprintf(st->clock, sizeof st->clock, "%02d:%02d", tm.tm_hour, tm.tm_min);
+    else st->clock[0] = 0;
 }
 
-#define ROW_H 64
-#define LIST_TOP 120
-#define VISIBLE_ROWS 8
-#define ICON_BOX 40
-#define ICON_X 48
-#define LABEL_X 104
+typedef int (*UiFrameFn)(void *ctx, uint32_t *screen, const UiInput *in, const UiStatus *st);
 
-static void draw_icon(const uint32_t *px, int w, int h, int box_x, int box_y, int box) {
-    if (!px || w <= 0 || h <= 0) return;
-    int dw, dh;
-    if (w >= h) {
-        dw = box;
-        dh = (int)((int64_t)h * box / w);
-        if (dh < 1) dh = 1;
-    } else {
-        dh = box;
-        dw = (int)((int64_t)w * box / h);
-        if (dw < 1) dw = 1;
-    }
-    int x = box_x + (box - dw) / 2;
-    int y = box_y + (box - dh) / 2;
-    GfxTarget src = {(uint32_t *)px, w, h, w};
-    GfxTarget tg = screen_target();
-    GfxClip clip = screen_clip();
-    GfxMatrix m;
-    gfx_matrix_identity(&m);
-    GfxPaint p;
-    memset(&p, 0, sizeof p);
-    p.color = 0xFFFFFFFF;
-    p.style = GFX_FILL;
-    p.filter = true;
-    p.xfer = GFX_XFER_SRC_OVER;
-    gfx_draw_bitmap(&tg, &m, &clip, &src, 0, 0, (float)w, (float)h, (float)x, (float)y, (float)(x + dw),
-                    (float)(y + dh), &p);
+static int frame_launcher(void *ctx, uint32_t *screen, const UiInput *in, const UiStatus *st) {
+    return launcher_frame(ctx, screen, in, st);
 }
 
-static void draw_launcher(const ApkList *l, int sel, int top) {
-    fill_rect(0, 0, SCREEN_W, SCREEN_H, 0xFF202124);
-    fill_rect(0, 0, SCREEN_W, 96, 0xFF00796B);
-    draw_text("switchapk", 48, 62, 36, 0xFFFFFFFF, true);
-    draw_text("A: run   +: exit   Up/Down or touch: choose", 640, 60, 22, 0xFFE0F2F1, false);
-    if (l->count == 0) {
-        draw_text("No APKs found.", 48, 200, 30, 0xFFFFFFFF, true);
-        draw_text("Copy .apk files to sdmc:/switch/switchapk/apks/ and start switchapk again.", 48, 250, 24,
-                  0xFFBDBDBD, false);
-        draw_text("Apps written in Java run; apps that need native (.so) libraries do not yet.", 48, 290, 24,
-                  0xFFBDBDBD, false);
-        return;
-    }
-    for (int row = 0; row < VISIBLE_ROWS && top + row < l->count; row++) {
-        const int i = top + row;
-        const int y = LIST_TOP + row * ROW_H;
-        if (i == sel) fill_rect(32, y, SCREEN_W - 32, y + ROW_H - 8, 0xFF37474F);
-        const ApkEntry *it = &l->items[i];
-        draw_icon(it->icon, it->icon_w, it->icon_h, ICON_X, y + 8, ICON_BOX);
-        draw_text(it->label ? it->label : it->name, LABEL_X, (float)(y + 38), 28, 0xFFFFFFFF, i == sel);
-    }
-    char footer[64];
-    snprintf(footer, sizeof footer, "%d of %d", sel + 1, l->count);
-    draw_text(footer, 48, SCREEN_H - 28, 22, 0xFF9E9E9E, false);
+static int frame_error(void *ctx, uint32_t *screen, const UiInput *in, const UiStatus *st) {
+    return error_screen_frame(ctx, screen, in, st);
 }
 
-/* Returns the chosen APK's full path, or NULL to exit. */
-static char *run_launcher(void) {
-    ApkList l = list_apks();
-    int sel = 0, top = 0;
-    bool was_touching = false;
-    int touch_row = -1;
-    char *chosen = NULL;
+/* Runs a screen until it returns a result. Frames that change nothing are not presented. */
+static int ui_loop(UiFrameFn fn, void *ctx) {
     while (appletMainLoop()) {
-        u64 down = platform_switch_buttons_down();
-        if (down & HidNpadButton_Plus) break;
-        if (l.count > 0) {
-            if (down & (HidNpadButton_Down | HidNpadButton_StickLDown)) sel = (sel + 1) % l.count;
-            if (down & (HidNpadButton_Up | HidNpadButton_StickLUp)) sel = (sel + l.count - 1) % l.count;
-            HidTouchScreenState ts = {0};
-            bool touching = hidGetTouchScreenStates(&ts, 1) && ts.count > 0;
-            if (touching && !was_touching) {
-                int row = ((int)ts.touches[0].y - LIST_TOP) / ROW_H;
-                touch_row = (ts.touches[0].y >= LIST_TOP && row >= 0 && row < VISIBLE_ROWS && top + row < l.count)
-                        ? top + row : -1;
-                if (touch_row >= 0) sel = touch_row;
-            }
-            bool tapped = was_touching && !touching && touch_row == sel && touch_row >= 0;
-            was_touching = touching;
-            if (sel < top) top = sel;
-            if (sel >= top + VISIBLE_ROWS) top = sel - VISIBLE_ROWS + 1;
-            if ((down & HidNpadButton_A) || tapped) {
-                chosen = sa_sprintf("%s/%s", APK_DIR, l.items[sel].name);
-                break;
-            }
-        }
-        draw_launcher(&l, sel, top);
-        present_screen();
+        UiInput in = read_input();
+        UiStatus st;
+        read_status(&st);
+        int rc = fn(ctx, g_screen, &in, &st);
+        if (rc == UI_REDRAW) present_screen(); /* waits for vsync */
+        else if (rc == UI_IDLE) svcSleepThread(16000000ll);
+        else return rc;
     }
-    for (int i = 0; i < l.count; i++) {
-        free(l.items[i].name);
-        free(l.items[i].label);
-        free(l.items[i].icon);
-    }
-    free(l.items);
-    return chosen;
-}
-
-/* ---- error screen ----------------------------------------------------------------- */
-
-/* Returns true to go back to the launcher, false to exit. */
-static bool show_error(const char *apk, int rc) {
-    const char *lines[48];
-    int n = sa_log_recent(lines, 48);
-    while (appletMainLoop()) {
-        u64 down = platform_switch_buttons_down();
-        if (down & HidNpadButton_A) return true;
-        if (down & HidNpadButton_Plus) return false;
-        fill_rect(0, 0, SCREEN_W, SCREEN_H, 0xFF202124);
-        fill_rect(0, 0, SCREEN_W, 96, 0xFFB71C1C);
-        char title[300];
-        const char *base = strrchr(apk, '/');
-        snprintf(title, sizeof title, "%s stopped (exit code %d)", base ? base + 1 : apk, rc);
-        draw_text(title, 48, 62, 32, 0xFFFFFFFF, true);
-        /* the newest lines that fit, oldest at the top */
-        const int max_rows = 24;
-        int first = n > max_rows ? n - max_rows : 0;
-        for (int i = first; i < n; i++) {
-            const char *s = lines[i];
-            uint32_t color = (s[0] == 'E' || s[0] == 'F') ? 0xFFFF8A80 : (s[0] == 'W' ? 0xFFFFE082 : 0xFFBDBDBD);
-            draw_text(s, 24, (float)(124 + (i - first) * 22), 17, color, false);
-        }
-        draw_text("A: back to the list   +: exit   Full log: sdmc:/switch/switchapk/log.txt", 24, SCREEN_H - 20, 20,
-                  0xFFFFFFFF, false);
-        present_screen();
-    }
-    return false;
+    return UI_EXIT;
 }
 
 /* ---- VM thread ------------------------------------------------------------------- */
@@ -373,6 +189,20 @@ static void make_dirs(void) {
     mkdir(ROOT_DIR, 0777);
     mkdir(APK_DIR, 0777);
     mkdir(DATA_DIR, 0777);
+    mkdir(LAUNCHER_DIR, 0777);
+}
+
+/* Makes hbloader start this NRO again once we exit: the home screen, or straight into apk ("Try again"). */
+static void relaunch(int argc, char **argv, const char *apk) {
+    if (argc < 1 || !argv[0] || !envHasNextLoad()) return;
+    if (!apk) {
+        envSetNextLoad(argv[0], argv[0]);
+        return;
+    }
+    /* libnx splits argv on spaces and honours double quotes */
+    char *args = sa_sprintf("\"%s\" \"%s\"", argv[0], apk);
+    envSetNextLoad(argv[0], args);
+    free(args);
 }
 
 int main(int argc, char **argv) {
@@ -387,7 +217,7 @@ int main(int argc, char **argv) {
 
     vm_init();
     platform_init(argc, argv);
-    g_screen = sa_calloc((size_t)SCREEN_W * SCREEN_H, sizeof *g_screen);
+    g_screen = sa_calloc((size_t)UI_W * UI_H, sizeof *g_screen);
     gfx_font_init_default();
 
     char *apk = NULL;
@@ -395,17 +225,29 @@ int main(int argc, char **argv) {
         size_t n = strlen(argv[1]);
         if (n > 4 && !strcasecmp(argv[1] + n - 4, ".apk")) apk = sa_strdup(argv[1]);
     }
-    if (!apk) apk = run_launcher();
+    if (!apk) {
+        Launcher *l = launcher_create(APK_DIR, LAUNCHER_DIR);
+        if (ui_loop(frame_launcher, l) == UI_RUN) apk = sa_strdup(launcher_chosen(l));
+        launcher_destroy(l);
+    }
 
-    bool relaunch = false;
     if (apk) {
+        ui_draw_splash(g_screen, apk);
+        present_screen();
         int rc = run_apk(apk);
-        if (rc != 0) relaunch = show_error(apk, rc);
-        else relaunch = true;
+        if (rc == 0) {
+            relaunch(argc, argv, NULL);
+        } else {
+            const char *lines[64];
+            int n = sa_log_recent(lines, 64);
+            ErrorScreen *e = error_screen_create(apk, rc, lines, n, LOG_PATH);
+            int choice = ui_loop(frame_error, e);
+            error_screen_destroy(e);
+            if (choice == UI_BACK) relaunch(argc, argv, NULL);
+            else if (choice == UI_RETRY) relaunch(argc, argv, apk);
+        }
         free(apk);
     }
-    /* Back to the launcher: hbloader starts this NRO again once we exit. */
-    if (relaunch && argc > 0 && argv[0] && envHasNextLoad()) envSetNextLoad(argv[0], argv[0]);
 
     LOGI("switchapk exiting");
     if (log) {

@@ -69,7 +69,8 @@ src/nativeloader/ nativeloader.h, elf_loader.c (ELF loader, dl*), shim_libc.c
                  (libc/libm), shim_android.c (liblog, libdl, assets,
                  properties, zlib, GL lookup)
 src/app/         main_host.c (host driver), app_runner.c (APK runner),
-                 main_switch.c (Switch launcher), apk_info.c (labels/icons)
+                 main_switch.c (Switch entry), launcher.c (home screen, splash,
+                 error screen; shared with the host), apk_info.c (labels/icons)
 java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
 java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
@@ -1400,16 +1401,39 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
 - Files: `romfs:/framework.dex`, `romfs:/framework-res.apk`; APKs in
   `sdmc:/switch/switchapk/apks`, app data in `sdmc:/switch/switchapk/data`,
   log in `sdmc:/switch/switchapk/log.txt` (flushed on warnings and errors).
-- Launcher: a C screen listing the APKs in `sdmc:/switch/switchapk/apks`
-  (D-pad, stick or touch, A runs, + exits). Each row shows the launcher
-  activity's `android:label` and `android:icon` when the APK has them
-  (else the application's, else the file name without `.apk`). Labels and
-  icons are read with the zip, binary XML and resource table code, at
-  240 dpi (`apk_read_identity` in `src/app/apk_info.c`). Bitmap icons are
-  drawn; XML drawables (adaptive icons, vectors) are skipped. `argv[1]`
-  ending in `.apk` skips the list (nxlink). When the app ends the NRO
-  reloads itself through hbloader (`envSetNextLoad`). A non-zero exit
-  shows the last 48 INFO+ log lines (`sa_log_recent`) on an error screen.
+- Launcher (`src/app/launcher.c`, `launcher.h`): a home screen for the
+  APKs in `sdmc:/switch/switchapk/apks`, drawn with gfx into a 1280x720
+  buffer. It knows nothing of libnx: input comes in as `UiInput` (UI_BTN_*
+  bits, touch point, clock) and the status bar as `UiStatus`, so the host
+  driver runs the same code (`switchapk-host --launcher <dir>`,
+  `--splash <apk>`, `--error-screen <apk>`, scripted and screenshotted by
+  the headless platform). A frame that changes nothing returns UI_IDLE and
+  is not presented.
+  - Carousel of tiles (D-pad, stick, swipe; L/R page, ZL/ZR ends; key
+    repeat on hold), a details panel (label, package, versionName, size,
+    last played) with a Play button, and button hints that are also touch
+    targets. A or a tap on the selected tile or Play runs the app; Y
+    switches between recently played and A to Z; X rescans; + exits.
+  - Each tile shows the launcher activity's `android:label` and
+    `android:icon` (else the application's, else the file name without
+    `.apk`), read at 640 dpi by `apk_read_identity`. APKs without a bitmap
+    icon (XML drawables are skipped) get a colored tile with their initial.
+  - State in `sdmc:/switch/switchapk/launcher/`: `launcher.ini` (sort
+    order, last app, `played=<unix time> <file>` lines) and `icons/`, one
+    `<file>.cache` per APK (label, package, version, 148 px PNG icon;
+    stale when the APK's size or mtime changes). With the cache the list
+    opens without reading any APK; otherwise a progress screen reads them.
+  - `argv[1]` ending in `.apk` skips the list (nxlink, Try again). A
+    splash with the app's icon shows while the VM boots. When the app ends
+    the NRO reloads itself through hbloader (`envSetNextLoad`), back to the
+    list. A non-zero exit opens the error screen with the last 64 INFO+
+    log lines (`sa_log_recent`, scrollable): A goes back to the list, X
+    reloads the NRO with the same APK as `argv[1]`, + exits.
+  - The hbmenu icon is the central part of `docs/assets/logo.jpg`, scaled
+    to 256 px by `switchapk-host --nro-icon` (`ui_draw_app_icon`, which
+    draws its own mark without a source) at build time and encoded by
+    `tools/ppm_to_jpeg.py`, so `make` must run before `make -f
+    Makefile.switch`.
 - GL: Mesa (switch-mesa) is linked when installed (6.6.1); not yet run on
   hardware.
 - Network: `main_switch.c` already calls `socketInitializeDefault()`, so
@@ -1433,7 +1457,10 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   checked for exceptions and `STUB:` lines.
 - Launcher identity (`apk_read_identity`) is checked on the host with
   `switchapk-host --apk-info` (`tests/apps/labeled/check_info.sh`), without
-  booting the VM.
+  booting the VM. The home screen itself (navigation, touch, saved state,
+  sort, empty folder, error screen) is checked by
+  `tests/launcher/check_launcher.sh`, which leaves screenshots of every
+  screen in `build/launcher-shots`.
 - Real-world APKs: `tests/corpus/corpus.json` pins open-source F-Droid
   APKs (fetched into `build/corpus`, never committed). `tools/corpus.py`
   scans each APK's bytecode references against framework.dex and

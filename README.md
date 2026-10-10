@@ -66,7 +66,20 @@ You need a Switch that runs homebrew (Atmosphere with hbmenu).
 2. Put any other APKs in `switch/switchapk/apks/`.
 3. Start hbmenu in full-memory mode: hold R while starting a game. The
    Album applet gives apps much less memory.
-4. Open switchapk, pick an app with the D-pad, stick or touch, and press A.
+4. Open switchapk. Your apps show as a row of tiles with their own icons
+   and names, the most recently played first. Pick one with the D-pad,
+   stick or a tap and press A (or tap the selected tile, or Play).
+
+Controls on the home screen:
+
+| Switch | Action |
+|---|---|
+| D-pad, stick, swipe | choose an app (hold to scroll) |
+| L / R, ZL / ZR | jump a page / to the ends |
+| A, or tap Play | start the selected app |
+| Y | sort by recently played or by name |
+| X | refresh after copying new APKs |
+| + | exit switchapk |
 
 Controls inside apps:
 
@@ -79,9 +92,9 @@ Controls inside apps:
 | + | options menu |
 | X, Y, L, R, ZL, ZR, - | gamepad buttons |
 
-When an app ends you return to the list; + exits switchapk. If an app
-fails, an error screen shows the last log lines, and the full log is in
-`sdmc:/switch/switchapk/log.txt`.
+When an app ends you return to the list, on the app you just played. If
+an app fails, a screen shows the last log lines with Back to apps (A) and
+Try again (X), and the full log is in `sdmc:/switch/switchapk/log.txt`.
 
 ## Building
 

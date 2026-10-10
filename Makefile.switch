@@ -44,8 +44,21 @@ FRAMEWORK_RES := build/toolchains/framework-res.apk
 
 all: $(BUILD)/switchapk.nro
 
-$(BUILD)/switchapk.nro: $(BUILD)/switchapk.elf $(BUILD)/switchapk.nacp $(ROMFS)/framework.dex $(ROMFS)/framework-res.apk
-	$(TOOLS)/elf2nro $< $@ --icon=$(DEVKITPRO)/libnx/default_icon.jpg --nacp=$(BUILD)/switchapk.nacp --romfsdir=$(ROMFS)
+$(BUILD)/switchapk.nro: $(BUILD)/switchapk.elf $(BUILD)/switchapk.nacp $(BUILD)/icon.jpg $(ROMFS)/framework.dex \
+                        $(ROMFS)/framework-res.apk
+	$(TOOLS)/elf2nro $< $@ --icon=$(BUILD)/icon.jpg --nacp=$(BUILD)/switchapk.nacp --romfsdir=$(ROMFS)
+
+# The hbmenu icon: the project logo's central part, scaled by the host build (ui_draw_app_icon, which draws
+# its own mark when the logo is missing).
+HOST := build/host/switchapk-host
+ICON_SRC := docs/assets/logo.jpg
+$(HOST):
+	@echo "missing $@; run make (the host build) first" && false
+
+$(BUILD)/icon.jpg: $(HOST) tools/ppm_to_jpeg.py $(wildcard $(ICON_SRC))
+	@mkdir -p $(BUILD)
+	$(HOST) --nro-icon --icon-source $(ICON_SRC) --icon-crop 0.74 $(BUILD)/icon.ppm
+	python3 tools/ppm_to_jpeg.py $(BUILD)/icon.ppm $@
 
 SQLITE_SRC := third_party/sqlite/sqlite3.c
 SQLITE_OBJ := $(BUILD)/third_party/sqlite/sqlite3.o

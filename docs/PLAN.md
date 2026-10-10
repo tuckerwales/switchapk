@@ -389,6 +389,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     `tools/corpus.py import`, Play split merge); Old School RuneScape added
   - [x] first Old School RuneScape scan and smoke run recorded (241.3:
     stops at android.os.UserManager; game library needs native sockets)
+  - [x] Old School RuneScape reaches its own rendered client screen on the
+    host (GameActivity, GLES3 from a native render thread, posix shim);
+    stops at "Error connecting to server"
 
 ## Next steps (in order)
 
@@ -458,11 +461,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    host. First blockers for the rest, by apps unblocked:
    `android.preference` (4 apps at start, 7 reference it, WS4);
    `java.runtime.name` unset so libGDX takes the desktop library path
-   (2, WS16); regex `\p{InBlock}` classes (Shattered PD, WS16);
+   (2, WS16; set to "Android Runtime" on 2026-10-10, those apps not re-run
+   yet); regex `\p{InBlock}` classes (Shattered PD, WS16);
    `FileChannel.lock/map` (Unciv, WS16); activity-alias launch (Simple
    Calculator, WS4); `ListActivity` (Blockinger, WS4); shim gaps
-   `sincos`/`sincosf`, C++ `operator new/delete`, `vasprintf`, syslog,
-   `dl_iterate_phdr` (Mindustry renders black, WS9). Re-run the corpus
+   C++ `operator new/delete` and wide-char ctype remain (`sincos`,
+   `vasprintf`, syslog, `dl_iterate_phdr` and rwlocks landed with
+   shim_posix.c on 2026-10-10; Mindustry not re-run yet, WS9). Old School
+   RuneScape now draws its own "Error connecting to server" screen on the
+   host; its next step is the game connection (WS11). Re-run the corpus
    after each fix and update the findings table.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
@@ -520,6 +527,24 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-10 (WS9 with WS4, WS8, WS10, WS16; for the Old School RuneScape
+  corpus run): `platform.h` gains `platform_set_wake_hook(void (*)(void))`,
+  implemented by both platforms and called after every `platform_wake` and
+  `platform_push_event`. The main thread gets a native ALooper before
+  `ActivityThread.main` (`nativeloader_prepare_main_looper`, called by
+  `app_runner`), and `MessageQueue.nativePollOnce` blocks in it
+  (`nativeloader_poll_main`) when it exists, so native fd callbacks run on
+  the Java main loop. New shim table `shim_posix_symbols` (nativeloader.h,
+  joined by `shim_lookup` and printed by `--shim-symbols`) and
+  `loader_dl_iterate_phdr` in elf_loader.c. Native EGL window swaps attach
+  non-VM threads with `nl_vm_enter`. libcore: `ClassLoader.getSystemClassLoader()`
+  is now a `dalvik.system.PathClassLoader` (new `dalvik.system`
+  BaseDexClassLoader, PathClassLoader, DexClassLoader) and `ActivityThread`
+  adds the app's native library paths to it; `java.vm.vendor` is "The
+  Android Project" and `java.runtime.name` "Android Runtime". No Java
+  fields are read from C. ARCHITECTURE 5, 6.4, 6.5, 6.6.1, 6.7, 6.8, 7
+  and 8 updated.
 
 - 2026-10-09 (WS8, touches WS9): `sa_egl_native_proc` also returns
   wrappers for `glBindFramebuffer` and `glBindFramebufferOES`, so the

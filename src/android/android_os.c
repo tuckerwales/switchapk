@@ -29,6 +29,8 @@ static void fill_event(ArrayObject *iv, ArrayObject *fv, ArrayObject *tv, const 
     if (tv && tv->length >= 1) ARRAY_DATA(tv, int64_t)[0] = ev->time_ns;
 }
 
+bool nativeloader_poll_main(int timeout_ms);
+
 /* static native void nativePollOnce(int timeoutMillis) */
 NATIVE(MessageQueue_nativePollOnce) {
     int timeout = A_INT(0);
@@ -36,7 +38,13 @@ NATIVE(MessageQueue_nativePollOnce) {
     PlatformEvent ev;
     memset(&ev, 0, sizeof ev);
     vm_gil_release(t);
-    bool got = platform_wait_event(&ev, timeout);
+    /* With a main ALooper the thread blocks there (native fd callbacks run); platform events wake it. */
+    bool got = platform_wait_event(&ev, 0);
+    if (!got && nativeloader_poll_main(timeout)) {
+        got = platform_wait_event(&ev, 0);
+    } else if (!got && timeout != 0) {
+        got = platform_wait_event(&ev, timeout);
+    }
     vm_gil_acquire(t);
     if (!got) {
         g_have_event = false;

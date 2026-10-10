@@ -450,6 +450,55 @@ static int sh_mutex_lock(void *m) { return pthread_mutex_lock(mutex_of(m)); }
 static int sh_mutex_trylock(void *m) { return pthread_mutex_trylock(mutex_of(m)); }
 static int sh_mutex_unlock(void *m) { return pthread_mutex_unlock(mutex_of(m)); }
 
+/* bionic 64-bit pthread_rwlock_t is 56 bytes, zero when static (PTHREAD_RWLOCK_INITIALIZER) */
+static pthread_rwlock_t *rwlock_of(void *rw) {
+    ShObj *o = rw;
+    if (__atomic_load_n(&o->magic, __ATOMIC_ACQUIRE) == SH_MAGIC) return o->host;
+    pthread_mutex_lock(&g_lazy_lock);
+    if (o->magic != SH_MAGIC) {
+        pthread_rwlock_t *h = sa_malloc(sizeof *h);
+        pthread_rwlock_init(h, NULL);
+        o->host = h;
+        __atomic_store_n(&o->magic, SH_MAGIC, __ATOMIC_RELEASE);
+    }
+    pthread_mutex_unlock(&g_lazy_lock);
+    return o->host;
+}
+static int sh_rwlock_init(void *rw, const void *attr) {
+    SA_UNUSED(attr);
+    memset(rw, 0, 56);
+    rwlock_of(rw);
+    return 0;
+}
+static int sh_rwlock_destroy(void *rw) {
+    ShObj *o = rw;
+    if (o->magic == SH_MAGIC) {
+        pthread_rwlock_destroy(o->host);
+        free(o->host);
+    }
+    memset(rw, 0, 56);
+    return 0;
+}
+static int sh_rwlock_rdlock(void *rw) { return pthread_rwlock_rdlock(rwlock_of(rw)); }
+static int sh_rwlock_wrlock(void *rw) { return pthread_rwlock_wrlock(rwlock_of(rw)); }
+static int sh_rwlock_tryrdlock(void *rw) { return pthread_rwlock_tryrdlock(rwlock_of(rw)); }
+static int sh_rwlock_trywrlock(void *rw) { return pthread_rwlock_trywrlock(rwlock_of(rw)); }
+static int sh_rwlock_unlock(void *rw) { return pthread_rwlock_unlock(rwlock_of(rw)); }
+/* bionic pthread_rwlockattr_t is a long; sharing and kind preferences do not matter in one process */
+static int sh_rwlockattr_init(long *a) {
+    *a = 0;
+    return 0;
+}
+static int sh_rwlockattr_noop(long *a, int v) {
+    SA_UNUSED(a);
+    SA_UNUSED(v);
+    return 0;
+}
+static int sh_rwlockattr_destroy(long *a) {
+    SA_UNUSED(a);
+    return 0;
+}
+
 static pthread_cond_t *cond_of(void *c) {
     ShObj *o = c;
     if (__atomic_load_n(&o->magic, __ATOMIC_ACQUIRE) == SH_MAGIC) return o->host;
@@ -657,6 +706,12 @@ static const ShimSym g_syms[] = {
     W(pthread_attr_setstacksize, sh_attr_setstacksize), W(pthread_attr_getstacksize, sh_attr_getstacksize),
     W(pthread_attr_setschedparam, sh_attr_noop), W(pthread_attr_setschedpolicy, sh_attr_noop),
     W(pthread_attr_setguardsize, sh_attr_noop),
+    W(pthread_rwlock_init, sh_rwlock_init), W(pthread_rwlock_destroy, sh_rwlock_destroy),
+    W(pthread_rwlock_rdlock, sh_rwlock_rdlock), W(pthread_rwlock_wrlock, sh_rwlock_wrlock),
+    W(pthread_rwlock_tryrdlock, sh_rwlock_tryrdlock), W(pthread_rwlock_trywrlock, sh_rwlock_trywrlock),
+    W(pthread_rwlock_unlock, sh_rwlock_unlock), W(pthread_rwlockattr_init, sh_rwlockattr_init),
+    W(pthread_rwlockattr_destroy, sh_rwlockattr_destroy), W(pthread_rwlockattr_setpshared, sh_rwlockattr_noop),
+    W(pthread_rwlockattr_setkind_np, sh_rwlockattr_noop),
     /* setjmp: glibc's _setjmp saves no signal mask, so it fits bionic's smaller jmp_buf; newlib's setjmp
      * saves no mask either (176 bytes on AArch64) */
 #ifdef __SWITCH__

@@ -132,6 +132,8 @@ struct SaLib {
     uint8_t *map;
     size_t map_size;
     uint8_t *bias; /* address of vaddr 0 */
+    Elf64Phdr *phdr; /* a copy of the program headers, for dl_iterate_phdr */
+    int phnum;
     const char *strtab;
     const Elf64Sym *symtab;
     const uint32_t *sysv_hash;
@@ -647,6 +649,7 @@ static void free_lib(SaLib *lib) {
     if (lib->map) unmap(lib->map, lib->map_size);
     if (lib->stubs) unmap(lib->stubs, lib->stubs_size);
     free(lib->needed);
+    free(lib->phdr);
     free(lib->name);
     free(lib);
 }
@@ -707,6 +710,9 @@ static SaLib *load_image(const char *name, const uint8_t *data, size_t len, char
         return NULL;
     }
     lib->bias = lib->map - lo;
+    lib->phnum = eh->e_phnum;
+    lib->phdr = sa_malloc(sizeof(Elf64Phdr) * (size_t)eh->e_phnum);
+    memcpy(lib->phdr, ph, sizeof(Elf64Phdr) * (size_t)eh->e_phnum);
     for (int i = 0; i < eh->e_phnum; i++)
         if (ph[i].p_type == PT_LOAD) memcpy(lib->bias + ph[i].p_vaddr, data + ph[i].p_offset, ph[i].p_filesz);
 
@@ -968,6 +974,41 @@ const char *nativeloader_load_library(VMThread *t, const char *name, bool is_lib
         return err;
     }
     return NULL;
+}
+
+/* bionic's LP64 struct dl_phdr_info */
+typedef struct {
+    uint64_t dlpi_addr;
+    const char *dlpi_name;
+    const Elf64Phdr *dlpi_phdr;
+    uint16_t dlpi_phnum;
+    unsigned long long dlpi_adds, dlpi_subs;
+    size_t dlpi_tls_modid;
+    void *dlpi_tls_data;
+} DlPhdrInfo;
+
+/* dl_iterate_phdr for the shim: every library we loaded (unwinders find .eh_frame_hdr this way), oldest first */
+int loader_dl_iterate_phdr(int (*cb)(void *info, size_t size, void *data), void *data) {
+    lock();
+    int n = 0;
+    for (SaLib *l = g_libs; l; l = l->next) n++;
+    SaLib **libs = sa_malloc(sizeof(SaLib *) * (size_t)(n ? n : 1));
+    int i = n;
+    for (SaLib *l = g_libs; l; l = l->next) libs[--i] = l;
+    int r = 0;
+    for (i = 0; i < n && r == 0; i++) {
+        DlPhdrInfo info;
+        memset(&info, 0, sizeof info);
+        info.dlpi_addr = (uint64_t)(uintptr_t)libs[i]->bias;
+        info.dlpi_name = libs[i]->name;
+        info.dlpi_phdr = libs[i]->phdr;
+        info.dlpi_phnum = (uint16_t)libs[i]->phnum;
+        info.dlpi_adds = (unsigned long long)n;
+        r = cb(&info, sizeof info, data);
+    }
+    free(libs);
+    unlock();
+    return r;
 }
 
 void *nativeloader_find_symbol(const char *name) {

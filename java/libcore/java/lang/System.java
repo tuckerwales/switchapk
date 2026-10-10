@@ -19,10 +19,22 @@ public final class System {
         props = new Properties();
         props.setProperty("java.vm.name", "Dalvik");
         props.setProperty("java.vm.version", "2.1.0");
-        props.setProperty("java.vm.vendor", "switchapk");
+        // The VM's identity as ART reports it: apps and libraries (libGDX, game clients) test these for "Android".
+        props.setProperty("java.vm.vendor", "The Android Project");
+        props.setProperty("java.vm.vendor.url", "http://www.android.com/");
+        props.setProperty("java.vm.specification.name", "Dalvik Virtual Machine Specification");
+        props.setProperty("java.vm.specification.vendor", "The Android Project");
+        props.setProperty("java.vm.specification.version", "0.9");
+        props.setProperty("java.runtime.name", "Android Runtime");
+        props.setProperty("java.runtime.version", "0.9");
         props.setProperty("java.version", "0");
         props.setProperty("java.vendor", "The Android Project");
+        props.setProperty("java.vendor.url", "http://www.android.com/");
+        props.setProperty("java.class.version", "50.0");
+        props.setProperty("java.specification.name", "Dalvik Core Library");
+        props.setProperty("java.specification.vendor", "The Android Project");
         props.setProperty("java.specification.version", "0.9");
+        props.setProperty("java.library.path", "/vendor/lib64:/system/lib64");
         props.setProperty("java.class.path", ".");
         props.setProperty("java.home", "/system");
         props.setProperty("java.io.tmpdir", "/data/local/tmp");

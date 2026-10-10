@@ -15,9 +15,16 @@
  * threads the app created. The Switch has no pipe or poll in newlib; there
  * the calls fail (prepare returns NULL, polls return ALOOPER_POLL_ERROR)
  * until the shim gets virtual descriptors (ARCHITECTURE 6.7).
+ *
+ * The main thread's looper is the one under android.os.MessageQueue, as on
+ * Android: app_runner prepares it before ActivityThread.main, nativePollOnce
+ * blocks in it (so descriptors native code adds to ALooper_forThread() on
+ * the main thread, like GameActivity's command pipe, get their callbacks),
+ * and platform events and wake-ups reach it through platform_set_wake_hook.
  */
 #include "ndk_android.h"
 #include "../core/common.h"
+#include "../platform/platform.h"
 
 #define LOG_TAG "looper"
 
@@ -42,6 +49,11 @@ int ALooper_pollAll(int timeoutMillis, int *outFd, int *outEvents, void **outDat
     return ALooper_pollOnce(timeoutMillis, outFd, outEvents, outData);
 }
 void ALooper_wake(ALooper *looper) { SA_UNUSED(looper); }
+bool nativeloader_prepare_main_looper(void) { return false; }
+bool nativeloader_poll_main(int timeout_ms) {
+    SA_UNUSED(timeout_ms);
+    return false;
+}
 int ALooper_addFd(ALooper *looper, int fd, int ident, int events, ALooper_callbackFunc callback, void *data) {
     SA_UNUSED(looper);
     SA_UNUSED(fd);
@@ -349,6 +361,30 @@ int ALooper_pollAll(int timeout_ms, int *out_fd, int *out_events, void **out_dat
         remaining = (int)(end - now_ms());
         if (remaining <= 0) return ALOOPER_POLL_TIMEOUT;
     }
+}
+
+/* ---- the main thread's looper (VM contract, see the top of the file) ---- */
+
+static ALooper *g_main_looper;
+
+static void main_looper_wake(void) { ALooper_wake(g_main_looper); }
+
+/* On the main thread, before ActivityThread.main. False when there is no ALooper (the Switch). */
+bool nativeloader_prepare_main_looper(void) {
+    g_main_looper = ALooper_prepare(0);
+    if (g_main_looper) platform_set_wake_hook(main_looper_wake);
+    return g_main_looper != NULL;
+}
+
+/*
+ * The main thread's wait: blocks in the main looper for up to timeout_ms (-1 forever), running fd callbacks,
+ * until a callback ran, a descriptor fired, the timeout passed or the platform woke it. Called without the GIL.
+ * False when there is no main looper; the caller then waits in platform_wait_event.
+ */
+bool nativeloader_poll_main(int timeout_ms) {
+    if (!g_main_looper || tl_looper != g_main_looper) return false;
+    ALooper_pollOnce(timeout_ms, NULL, NULL, NULL);
+    return true;
 }
 
 #endif

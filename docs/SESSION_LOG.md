@@ -826,3 +826,18 @@ what is left in flight.
 - The split merge was checked with synthetic APKs and the real bundle.
   `import` now creates build/corpus/apks itself. Only the OSRS row of the
   generated table was refreshed (the other apps were not re-run).
+- Then worked through the OSRS start-up blockers until the C++ client drew
+  its own screen on the host ("Error connecting to server"). Touched
+  WS15 (UserManager, ActivityManager, ApplicationExitInfo), WS16
+  (java.util.logging, Atomic{Markable,Stamped}Reference, dalvik.system
+  class loaders with findLibrary, ART's java.vm.vendor/java.runtime.name),
+  WS4 (meta-data references resolved after resources load), WS9 (main
+  ALooper under MessageQueue, shim_posix.c, rwlocks, dl_iterate_phdr),
+  WS8 (native-thread eglSwapBuffers) and WS10 (platform_set_wake_hook).
+  Interface changes are in PLAN's log; details in COMPATIBILITY.md.
+- Tests: tests/dex/LoggingTest.java (new) and an AtomicMarkable/Stamped
+  case in UtilTest; all six dex tests and every tests/apps sample with a
+  check script pass on the host (net, sensors and store with their own
+  commands). `make -f Makefile.switch` builds; nothing ran on hardware.
+  Host Mesa (libegl1, libgles2) had to be installed in this container.
+

@@ -51,6 +51,9 @@ bool platform_wait_event(PlatformEvent *ev, int timeout_ms);
 void platform_wake(void);
 /* Pushes an event from any thread. */
 void platform_push_event(const PlatformEvent *ev);
+/* Called (without platform locks held) after every platform_wake and platform_push_event, so a main thread that
+ * blocks somewhere else (the main ALooper) can be woken. NULL removes it. */
+void platform_set_wake_hook(void (*hook)(void));
 
 /* Shows the system keyboard. Result arrives later as PEV_TEXT with a = id. */
 void platform_request_text(int id, const char *initial, const char *hint, int input_type, int max_len);

@@ -19,7 +19,8 @@ public abstract class ClassLoader {
 
     public static synchronized ClassLoader getSystemClassLoader() {
         if (systemLoader == null) {
-            systemLoader = new SystemClassLoader();
+            // A PathClassLoader, as on Android; the framework adds the app's native library paths to it.
+            systemLoader = new dalvik.system.PathClassLoader("", null, null);
         }
         return systemLoader;
     }
@@ -91,16 +92,6 @@ public abstract class ClassLoader {
     private static final class UnsupportedOperationError extends ClassFormatError {
         UnsupportedOperationError(String msg) {
             super(msg);
-        }
-    }
-
-    static final class SystemClassLoader extends ClassLoader {
-        SystemClassLoader() {
-            super(null);
-        }
-
-        public String toString() {
-            return "dalvik.system.PathClassLoader[switchapk]";
         }
     }
 

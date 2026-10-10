@@ -90,10 +90,44 @@ First scan and run (2026-10-10):
   `Date.toInstant`, `Proxy.address`, `ExecutorService.invokeAll` with
   timeout); 78 android.* members that would be stubbed.
 
-Expected order of work: UserManager (and whatever Firebase and Braze init
-need next), GameActivity on our AppCompat path (WS14), the native socket
-and libc++ locale shims (WS9/WS11), GLES3 on the window surface (WS8),
-then TLS and the login redirect for an account session (WS11, WS4).
+Progress (2026-10-10, same build). The host run now reaches the game
+client's own screen: the C++ client renders "Error connecting to server.
+Please check your network connection and try again" with OpenGL ES 3 from
+its native render thread. What it took, in start-up order:
+
+1. `android.os.UserManager` (USER_SERVICE), for Firebase's init provider.
+2. `java.util.logging` (Logger, Level, LogRecord, handlers, LogManager).
+3. `AtomicMarkableReference` (and `AtomicStampedReference`).
+4. Manifest meta-data references resolved to values: Play Services checks
+   `com.google.android.gms.version`, which is `@integer/...`, and was
+   getting the resource id.
+5. `android.app.ActivityManager` (ACTIVITY_SERVICE) and `ApplicationExitInfo`.
+6. `dalvik.system.BaseDexClassLoader.findLibrary`: GameActivity casts the
+   app's class loader and asks it for `liblibs.hal.system.osclient.so`.
+7. A native ALooper on the main thread under the Java MessageQueue:
+   GameActivity's native glue fails with "Unable to retrieve native
+   ALooper" otherwise, and its command pipe callbacks run there.
+8. `java.vm.vendor` = "The Android Project": the client loads
+   `windows/x64/libs.hal.system.osclient` (its desktop build) otherwise,
+   then reports "Failed to load native bootstrap library".
+9. `shim_posix.c`: sockets, DNS, fcntl, syscall, signals (recorded, not
+   installed), locales, UTF-8 multibyte, rwlocks, dl_iterate_phdr and the
+   rest. Unresolved native imports went from 154 to 1 (`__libc_init`,
+   Crashlytics' trampoline executable, never loaded).
+10. `eglSwapBuffers` on a native window from a non-VM thread.
+
+Still logged on the way, none fatal: `FileChannel.lock` (Firebase
+installations' cross-process lock, caught), `javax.net.ssl` missing
+(Crashlytics settings fetch, Firebase), `X500Principal` (measurement),
+`PendingIntent` without FLAG_IMMUTABLE from measurement code targeting S+,
+`onUpdateInternetAvailable` called before the client registered its
+natives (the app catches it), "requires the Google Play Store".
+
+Next: the connection. The client resolves and connects from C (now
+plain host sockets); find out which host and port it wants, whether
+this container can reach it, and whether it needs TLS from Java first
+(WS11). Then input, audio (OpenSL ES), and the Jagex Account login
+(AppAuth through a browser redirect).
 
 ## How gaps are found
 
@@ -139,7 +173,7 @@ First blockers, in the order that unblocks the most apps:
 | Launching an `activity-alias` (the launcher entry is an alias of SplashActivity) | Simple Calculator | run: ClassNotFoundException for the alias name | WS4 |
 | `android.app.ListActivity` | Blockinger (Replica Island references it too) | run: NoClassDefFoundError | WS4 |
 | Native shim: `sincos`/`sincosf`, C++ `operator new`/`delete` (`_Znwm`, `_ZdlPv`, ... for code linked against the system libstdc++), `__cxa_pure_virtual`, `vasprintf`, the `syslog` family, `dl_iterate_phdr`, `pthread_rwlock_*`, wide-char ctype | Mindustry renders black after `sincos` returns 0; Frozen Bubble, Vector Pinball, DroidFish libraries need the rest | run: "native code called sincos"; static scan | WS9 |
-| `android.os.UserManager` is missing (androidx.core UserManagerCompat from FirebaseInitProvider) | Old School RuneScape | run: NoClassDefFoundError in a ContentProvider, before the first activity | WS15 |
+| The game client cannot connect to its server (cause not yet known: network reach from the host, TLS, or the protocol) | Old School RuneScape | run: the client's own "Error connecting to server" screen | WS11 |
 | Simon Tatham's Puzzles quits after its own "missing a required file" check, probably the `libpuzzlesgen.so` helper it expects in nativeLibraryDir (not yet confirmed) | Simon Tatham's Puzzles | run: Toast, then System.exit | WS9 |
 
 Already working on the host: **Pixel Dungeon** and **Replica Island** reach
@@ -173,7 +207,7 @@ Generated 2026-10-09 from 13 apps. Static counts include only members and classe
 | Simon Tatham's Puzzles | 2 | 21/36 | androidx.compose, androidx (other), androidx.appcompat, material, androidx.core, kotlinx.coroutines, androidx.recyclerview, androidx.constraintlayout, androidx.fragment (Kotlin) | 109 | 5 | 91 | arm64, 3 libs, 3 unresolved | exits at start (rc 0) |
 | DroidFish | 2 | 16/28 | androidx (other), material, androidx.core, androidx.appcompat, androidx.recyclerview, androidx.fragment, androidx.constraintlayout, support library | 101 | 8 | 44 | arm64, 3 libs, 61 unresolved | fails at start: NoClassDefFoundError: android.preference.PreferenceManager |
 | Simple Calculator | 3 | 23/34 | androidx.appcompat, material, androidx (other), androidx.compose, androidx.recyclerview, androidx.fragment, kotlinx.coroutines, androidx.core, rxjava (Kotlin) | 126 | 11 | 105 | none | fails at start: ClassNotFoundException: com.simplemobiletools.calculator.activities.SplashActivity.Grey_black |
-| Old School RuneScape (local, 241.3) | 3 | 26/35 | play services, androidx (other), androidx.core, androidx.appcompat, material, firebase, androidx.recyclerview, androidx.fragment, support library, androidx.constraintlayout (Kotlin) | 131 | 12 | 78 | arm64, 6 libs, 154 unresolved | fails at start: NoClassDefFoundError: android.os.UserManager |
+| Old School RuneScape (local, 241.3) | 3 | 26/35 | play services, androidx (other), androidx.core, androidx.appcompat, material, firebase, androidx.recyclerview, androidx.fragment, support library, androidx.constraintlayout (Kotlin) | 121 | 12 | 78 | arm64, 6 libs, 1 unresolved | draws |
 
 ### Most-needed packages (static, by number of apps)
 

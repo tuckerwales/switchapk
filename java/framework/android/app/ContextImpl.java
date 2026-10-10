@@ -374,6 +374,14 @@ public class ContextImpl extends Context {
         }
         if (AUDIO_SERVICE.equals(name)) return AudioManager.getInstance();
         if (CONNECTIVITY_SERVICE.equals(name)) return android.net.ConnectivityManager.from(this);
+        if (ACTIVITY_SERVICE.equals(name)) {
+            if (sActivityManager == null) sActivityManager = new ActivityManager();
+            return sActivityManager;
+        }
+        if (USER_SERVICE.equals(name)) {
+            if (sUserManager == null) sUserManager = new android.os.UserManager();
+            return sUserManager;
+        }
         if (CLIPBOARD_SERVICE.equals(name)) {
             if (sClipboard == null) sClipboard = new ClipboardManager();
             return sClipboard;
@@ -383,6 +391,8 @@ public class ContextImpl extends Context {
 
     private static ClipboardManager sClipboard;
     private static android.os.PowerManager sPowerManager;
+    private static android.os.UserManager sUserManager;
+    private static ActivityManager sActivityManager;
     private static android.location.LocationManager sLocationManager;
     private android.view.LayoutInflater mLayoutInflater;
     private SearchManager mSearchManager;
@@ -408,6 +418,8 @@ public class ContextImpl extends Context {
         if (serviceClass == AudioManager.class) return AUDIO_SERVICE;
         if (serviceClass == android.net.ConnectivityManager.class) return CONNECTIVITY_SERVICE;
         if (serviceClass == ClipboardManager.class) return CLIPBOARD_SERVICE;
+        if (serviceClass == android.os.UserManager.class) return USER_SERVICE;
+        if (serviceClass == ActivityManager.class) return ACTIVITY_SERVICE;
         return null;
     }
 

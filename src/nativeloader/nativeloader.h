@@ -44,6 +44,7 @@ void *shim_lookup(const char *name);
 /* Per-file symbol tables, joined by shim_lookup. */
 const ShimSym *shim_libc_symbols(size_t *n);
 const ShimSym *shim_android_symbols(size_t *n);
+const ShimSym *shim_posix_symbols(size_t *n);
 
 /*
  * Runs VM code from any thread. Native code runs without the GIL, and the app's own threads (the

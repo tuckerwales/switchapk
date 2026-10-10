@@ -347,7 +347,7 @@ static const ShimSym g_syms[] = {
     {"SL_IID_OUTPUTMIX", (void *)&SL_IID_OUTPUTMIX},
     {"SL_IID_ANDROIDSIMPLEBUFFERQUEUE", (void *)&SL_IID_ANDROIDSIMPLEBUFFERQUEUE},
     /* libz */
-    S(zlibVersion), S(inflateInit_), S(inflateInit2_), S(inflate), S(inflateEnd), S(inflateReset),
+    S(zlibVersion), S(inflateInit_), S(inflateInit2_), S(inflate), S(inflateEnd), S(inflateReset), S(inflateReset2), S(zError),
     S(deflateInit_), S(deflateInit2_), S(deflate), S(deflateEnd), S(deflateReset), S(deflateBound), S(crc32),
     S(adler32), S(compress), S(compress2), S(compressBound), S(uncompress),
 };
@@ -378,6 +378,8 @@ static void build_shim(void) {
     const ShimSym *t = shim_libc_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
     t = shim_android_symbols(&n);
+    for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    t = shim_posix_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
 }
 

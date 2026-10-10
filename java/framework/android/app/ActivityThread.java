@@ -626,8 +626,12 @@ public final class ActivityThread {
         sApkPath = apk;
         parseManifest();
         Process.ActivityThreadHook.setProcessName(sPackageName);
+        // As DexPathList: the library directory first, then the uncompressed libraries in the APK.
+        ((dalvik.system.BaseDexClassLoader) ClassLoader.getSystemClassLoader()).addNativePath(java.util.Arrays.asList(
+                sAppInfo.nativeLibraryDir, sApkPath + "!/lib/" + android.os.Build.CPU_ABI));
         sResources = buildResources();
         Resources.setSystem(sResources);
+        resolveMetaDataRefs();
         sContext = new ContextImpl(sPackageName, sAppInfo, sApkPath, sResources);
         String appClass = sAppClass != null ? sAppClass : "android.app.Application";
         Object appObj = newComponent(appClass);
@@ -826,6 +830,45 @@ public final class ActivityThread {
         applyLabel(sAppInfo, parser);
     }
 
+    // android:value references (@integer/..., @string/...) seen while parsing, resolved once resources exist.
+    private static final ArrayList<Object[]> sMetaDataRefs = new ArrayList<Object[]>();
+
+    /**
+     * PackageParser reads android:value through a TypedArray, which follows references: "@integer/x" is stored as the
+     * integer, not its id (Play Services checks com.google.android.gms.version this way).
+     */
+    private static void resolveMetaDataRefs() {
+        android.util.TypedValue v = new android.util.TypedValue();
+        for (Object[] ref : sMetaDataRefs) {
+            Bundle b = (Bundle) ref[0];
+            String key = (String) ref[1];
+            try {
+                sResources.getValue((Integer) ref[2], v, true);
+            } catch (Resources.NotFoundException e) {
+                continue;
+            }
+            b.remove(key);
+            CharSequence str = v.type == android.util.TypedValue.TYPE_STRING ? v.coerceToString() : null;
+            putMetaDataValue(b, key, v.type, v.data, str);
+        }
+        sMetaDataRefs.clear();
+    }
+
+    private static void putMetaDataValue(Bundle b, String key, int type, int data, CharSequence string) {
+        if (type == android.util.TypedValue.TYPE_STRING) {
+            b.putString(key, string != null ? string.toString() : null);
+        } else if (type == android.util.TypedValue.TYPE_INT_BOOLEAN) {
+            b.putBoolean(key, data != 0);
+        } else if (type >= android.util.TypedValue.TYPE_FIRST_INT && type <= android.util.TypedValue.TYPE_LAST_INT) {
+            b.putInt(key, data);
+        } else if (type == android.util.TypedValue.TYPE_FLOAT) {
+            b.putFloat(key, Float.intBitsToFloat(data));
+        } else {
+            Log.w(TAG, "<meta-data> only supports string, integer, float, color, boolean, and resource reference "
+                    + "types: " + key);
+        }
+    }
+
     /** A meta-data element, stored as PackageParser does: resource ids as ints, values by type. */
     private static void readMetaData(android.content.pm.PackageItemInfo owner, XmlResourceParser parser) {
         String key = attrString(parser, android.R.attr.name, "name");
@@ -849,17 +892,13 @@ public final class ActivityThread {
         android.content.res.XmlBlock.Parser p = (android.content.res.XmlBlock.Parser) parser;
         int type = p.getAttributeDataType(valueIndex);
         int data = p.getAttributeData(valueIndex);
-        if (type == android.util.TypedValue.TYPE_STRING) {
-            owner.metaData.putString(key, p.getAttributeValue(valueIndex));
-        } else if (type == android.util.TypedValue.TYPE_INT_BOOLEAN) {
-            owner.metaData.putBoolean(key, data != 0);
-        } else if (type >= android.util.TypedValue.TYPE_FIRST_INT && type <= android.util.TypedValue.TYPE_LAST_INT) {
+        if (type == android.util.TypedValue.TYPE_REFERENCE) {
+            // The id until resolveMetaDataRefs replaces it with the value.
             owner.metaData.putInt(key, data);
-        } else if (type == android.util.TypedValue.TYPE_FLOAT) {
-            owner.metaData.putFloat(key, Float.intBitsToFloat(data));
-        } else if (type == android.util.TypedValue.TYPE_REFERENCE) {
-            owner.metaData.putInt(key, data);
+            sMetaDataRefs.add(new Object[] { owner.metaData, key, data });
+            return;
         }
+        putMetaDataValue(owner.metaData, key, type, data, p.getAttributeValue(valueIndex));
     }
 
     private static void fillComponent(ComponentInfo info, XmlResourceParser parser) {

@@ -33,6 +33,7 @@ public class UtilTest {
 
     public static void main(String[] args) throws Exception {
         immutables();
+        atomicPairs();
         arrays();
         spliterators();
         collections();
@@ -351,5 +352,24 @@ public class UtilTest {
         Locale.setDefault(saved);
         p(Locale.getDefault(Locale.Category.DISPLAY) + " " + new Locale("en", "US").equals(Locale.US) + " "
                 + Locale.forLanguageTag("en-US-u-ca-x").equals(Locale.US) + " " + (Locale.getAvailableLocales().length > 100));
+    }
+
+    static void atomicPairs() {
+        String a = "a", b = "b";
+        java.util.concurrent.atomic.AtomicMarkableReference<String> m =
+                new java.util.concurrent.atomic.AtomicMarkableReference<>(a, false);
+        boolean[] mh = new boolean[1];
+        p(m.getReference() + " " + m.isMarked() + " " + m.compareAndSet(a, b, true, true) + " "
+                + m.compareAndSet(a, b, false, true) + " " + m.get(mh) + " " + mh[0] + " " + m.attemptMark(a, false)
+                + " " + m.attemptMark(b, false) + " " + m.isMarked() + " " + m.weakCompareAndSet(b, b, false, false));
+        m.set(a, true);
+        p(m.getReference() + " " + m.isMarked());
+        java.util.concurrent.atomic.AtomicStampedReference<String> st =
+                new java.util.concurrent.atomic.AtomicStampedReference<>(a, 1);
+        int[] sh = new int[1];
+        p(st.getReference() + " " + st.getStamp() + " " + st.compareAndSet(a, b, 2, 3) + " " + st.compareAndSet(a, b, 1, 3)
+                + " " + st.get(sh) + " " + sh[0] + " " + st.attemptStamp(b, 9) + " " + st.getStamp());
+        st.set(a, 4);
+        p(st.getReference() + " " + st.getStamp());
     }
 }

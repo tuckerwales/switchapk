@@ -61,6 +61,8 @@ int app_run_apk(const char *path, const char *data_dir, void *stack_hi) {
     platform_set_data_root(data_dir, NULL);
     VMThread *t = vm_attach_main_thread(stack_hi);
     if (!vm_boot(t)) return 1;
+    extern bool nativeloader_prepare_main_looper(void);
+    nativeloader_prepare_main_looper(); /* MessageQueue's native looper, as Looper.prepareMainLooper makes */
     ArrayObject *args = vm_alloc_array(t, g_vm.wk.arr_String, 1);
     if (!args) return 1;
     Object *root = (Object *)args;

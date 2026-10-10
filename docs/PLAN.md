@@ -528,6 +528,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-10 (WS9, touches WS10): new `src/nativeloader/vfd.c` (virtual
+  pipes and `vfd_poll`) used by native_looper.c and native_input.c on the
+  Switch, so ALooper, the main looper and AInputQueue exist there; new shim
+  table `shim_newlib_symbols` (shim_newlib.c, joined last) for bionic's
+  file, time and thread ABI on newlib. The host keeps real pipes and poll.
+  ARCHITECTURE 6.7 updated.
+
 - 2026-10-10 (WS9 with WS11): new shim table `shim_bsd_symbols`
   (src/nativeloader/shim_bsd.c, shim_bsd.h), joined last by `shim_lookup`
   and printed by `--shim-symbols`; on the Switch it provides the socket

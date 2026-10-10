@@ -172,6 +172,9 @@ SWITCHAPK_NETWORK=none build/host/switchapk-host --data build/data app.apk
   (`src/nativeloader/shim_bsd.c`) on the host: `make && cc -Isrc
   tests/c/shim_bsd_test.c build/host/src/nativeloader/shim_bsd.o -o
   build/shim_bsd_test && build/shim_bsd_test`.
+- `tests/c/vfd_test.c` and `tests/c/shim_newlib_test.c` check the Switch's
+  virtual pipes and newlib ABI translations the same way (link
+  `build/host/src/nativeloader/vfd.o` or `shim_newlib.o`, add `-pthread`).
 - `tests/c/gfx_test.c` builds a standalone renderer test:
   `cc -Isrc -Ithird_party tests/c/gfx_test.c build/host/src/gfx/*.o build/host/src/core/util.o -lz -lm -lpthread -o gfx_test && ./gfx_test out.png`
 

@@ -863,4 +863,13 @@ what is left in flight.
   detachFd, close, adoptFd, the auto-close streams over it); Firebase's
   datastore no longer fails with "Bad file descriptor" in OSRS.
 - All dex tests pass, tests/apps/store passes; Switch build links.
+- Switch native runtime (not run on hardware): virtual pipes and a poll
+  over them plus libnx sockets (vfd.c), so ALooper, the main looper,
+  AInputQueue and native pipe() work on the console; shim_newlib.c for
+  bionic's arm64 open flags, stat, dirent, clocks, tm, pthread_once, mmap
+  over the heap, common syscall() numbers and libnx random bytes. Host
+  tests tests/c/vfd_test.c and shim_newlib_test.c pass, and the constants
+  are static-asserted against devkitA64. Host samples (native, input, ndk,
+  gles) still pass. OSRS was not re-run after these changes: the session's
+  permission checks refused running it once the TLS experiment was declined.
 

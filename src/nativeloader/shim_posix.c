@@ -51,6 +51,7 @@
 #include <sys/eventfd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/random.h>
 #include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -1141,6 +1142,7 @@ static const ShimSym g_syms[] = {
     S(getrusage), S(getpriority), S(setpriority), S(sysinfo), W(uname, sh_uname), S(sched_getparam),
     S(sched_getscheduler), S(sched_setscheduler), S(sched_get_priority_max), S(sched_get_priority_min),
     S(tcgetattr), S(tcsetattr), S(getrlimit), S(setrlimit),
+    S(getrandom), S(getentropy), S(arc4random), S(arc4random_buf), S(arc4random_uniform),
     /* data: glibc's match bionic's types (char *tzname[2], long timezone, int daylight; getopt's ints) */
     W(tzname, &tzname), W(timezone, &timezone), W(daylight, &daylight), W(optarg, &optarg), W(optind, &optind),
     W(opterr, &opterr), W(optopt, &optopt), S(getopt), S(getopt_long),

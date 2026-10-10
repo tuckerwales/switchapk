@@ -1182,6 +1182,22 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   translations (`sbsd_*`, built on every target) are checked on the host
   by `tests/c/shim_bsd_test.c`. sendmsg, recvmsg and socketpair fail with
   ENOSYS. Not run on hardware.
+- `shim_newlib.c` (Switch): bionic's arm64 file, time and thread ABI on
+  newlib, in a table joined last. open/openat take Linux flags (O_CREAT is
+  0x40 there, 0x200 in newlib); stat/lstat/fstat/fstatat fill bionic's
+  128-byte struct stat; readdir returns bionic's dirent; clock ids are
+  translated (CLOCK_MONOTONIC 1 to 4); localtime/gmtime(_r) fill bionic's
+  56-byte tm with tm_gmtoff and tm_zone; pthread_once works on bionic's
+  4-byte pthread_once_t (newlib's is 8). mmap gives zeroed heap pages, or a
+  private copy of a file read at map time (MAP_FIXED and writable
+  MAP_SHARED file maps fail); mprotect, madvise and msync succeed without
+  effect. `syscall()` answers the common AArch64 numbers: gettid (a
+  per-thread id), futex WAIT/WAKE (hashed condition variables), getrandom
+  (libnx `randomGet`, also behind getrandom, getentropy and arc4random*),
+  the clocks, nanosleep, sched_yield, membarrier, getcpu,
+  sched_getaffinity (three cores); others fail with ENOSYS, logged once.
+  The pure parts are checked on the host (`tests/c/shim_newlib_test.c`)
+  and the newlib constants static-asserted against devkitA64's headers.
 - Native file calls map paths with `shim_map_path`: `platform_map_path`,
   except that a relative path fails as it would under Android's read-only
   working directory "/" (ENOENT, EROFS for writes, one warning) instead of
@@ -1247,20 +1263,25 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
     `nl_vm_enter`/`nl_vm_leave` (nativeloader.h). It attaches the thread
     on first use and takes the GIL; a pthread key detaches the thread
     when it exits.
-  - The Switch has no pipe or poll in newlib, so ALooper_prepare returns
-    NULL there, polls fail with ALOOPER_POLL_ERROR and NativeActivity
-    creates no input queue (a warning is logged). Making it work needs
-    virtual descriptors in the shim.
+  - The Switch has no pipe or poll in newlib: there ALooper, AInputQueue
+    and native `pipe`/`pipe2` use virtual pipes (`vfd.c`: in-process
+    pipes numbered from 0x30000000, above newlib's and libnx's
+    descriptors, 64 KiB each, blocking or not, EOF and EPIPE as on Linux).
+    `vfd_poll` waits on virtual pipes and real descriptors (libnx sockets)
+    together, slicing the wait at 10 ms when both kinds are present;
+    `read`, `write`, `close`, `fcntl`, `ioctl` (FIONREAD, FIONBIO), `poll`
+    and `select` dispatch virtual descriptors. So the main looper,
+    GameActivity's command pipe and android_native_app_glue work there.
 - OpenSL ES (WS7, symbols in this shim): `slCreateEngine` and the
   `SL_IID_*` pointer objects (engine, object, play, volume, buffer
   queue, output mix, Android simple buffer queue). GetInterface matches
   pointer identity or the 16-byte UUID. A player copies each enqueued
   buffer and runs the queue callback on the audio thread after the
   mixer lock is released. AAudio is not implemented.
-- Not yet: AAudio, ASensorManager, ALooper and input on the Switch
-  (no pipe/poll), libc++_shared coverage checks, sendmsg/recvmsg and
-  non-socket descriptor control on the Switch; the socket layer has not
-  run on hardware.
+- Not yet: AAudio, ASensorManager, libc++_shared coverage checks,
+  sendmsg/recvmsg and directory descriptors (openat relative to one) on
+  the Switch. None of the Switch shim layers (sockets, virtual pipes,
+  ALooper, newlib ABI) has run on hardware.
   NativeActivity and native EGL have not been run on hardware.
 
 ### 6.8 System services (WS15)

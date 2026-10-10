@@ -49,6 +49,7 @@ const ShimSym *shim_libc_symbols(size_t *n);
 const ShimSym *shim_android_symbols(size_t *n);
 const ShimSym *shim_posix_symbols(size_t *n);
 const ShimSym *shim_bsd_symbols(size_t *n); /* Switch sockets and errno; empty on the host */
+const ShimSym *shim_newlib_symbols(size_t *n); /* Switch file, time and thread ABI; empty on the host */
 
 /*
  * Runs VM code from any thread. Native code runs without the GIL, and the app's own threads (the

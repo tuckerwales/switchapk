@@ -16,6 +16,7 @@
  */
 #include "nativeloader.h"
 #include "shim_bsd.h"
+#include "vfd.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -348,11 +349,40 @@ static int sh_getsockopt(int fd, int level, int opt, void *val, socklen_t *len) 
     return getsockopt(fd, bl, bo, val, len);
 }
 
+/* ---- descriptors: virtual pipes (vfd.c) beside newlib files and libnx sockets ---- */
+
+static int sh_pipe2(int fds[2], int flags) {
+    return vfd_pipe(fds, (flags & 0x800 /* O_NONBLOCK */) ? VFD_NONBLOCK : 0);
+}
+
+static int sh_pipe(int fds[2]) { return vfd_pipe(fds, 0); }
+
+static ssize_t sh_read(int fd, void *buf, size_t n) { return vfd_is(fd) ? vfd_read(fd, buf, n) : read(fd, buf, n); }
+
+static ssize_t sh_write(int fd, const void *buf, size_t n) {
+    return vfd_is(fd) ? vfd_write(fd, buf, n) : write(fd, buf, n);
+}
+
+static int sh_close(int fd) { return vfd_is(fd) ? vfd_close(fd) : close(fd); }
+
+static int real_poll(VfdPollfd *fds, unsigned long n, int timeout) {
+    return poll((struct pollfd *)fds, (nfds_t)n, timeout);
+}
+
 static int sh_fcntl(int fd, int cmd, ...) {
     va_list ap;
     va_start(ap, cmd);
     long arg = va_arg(ap, long);
     va_end(ap);
+    if (vfd_is(fd)) {
+        if (cmd == F_GETFL) {
+            int f = vfd_get_flags(fd);
+            return f < 0 ? f : (f & VFD_NONBLOCK ? 0x800 : 0);
+        }
+        if (cmd == F_SETFL) return vfd_set_flags(fd, (arg & 0x800) ? VFD_NONBLOCK : 0);
+        if (cmd == F_GETFD || cmd == F_SETFD) return vfd_get_flags(fd) < 0 ? -1 : 0;
+        return fail(EINVAL);
+    }
     if (cmd == F_GETFL) {
         int r = fcntl(fd, F_GETFL, 0);
         return r < 0 ? r : sbsd_oflags_from_newlib(r);
@@ -367,6 +397,16 @@ static int sh_ioctl(int fd, unsigned long req, ...) {
     va_start(ap, req);
     void *arg = va_arg(ap, void *);
     va_end(ap);
+    if (vfd_is(fd)) {
+        if (req == 0x541b /* FIONREAD */) {
+            int n = vfd_readable(fd);
+            if (n < 0) return -1;
+            *(int *)arg = n;
+            return 0;
+        }
+        if (req == 0x5421 /* FIONBIO */) return vfd_set_flags(fd, *(int *)arg ? VFD_NONBLOCK : 0);
+        return fail(ENOTTY);
+    }
     unsigned long b = sbsd_ioctl_to_bsd(req);
     if (!b) return fail(ENOTTY);
     return ioctl(fd, b, arg);
@@ -390,7 +430,7 @@ static int sh_select(int nfds, void *rd, void *wr, void *ex, struct timeval *tv)
     }
     int timeout = tv ? (int)(tv->tv_sec * 1000 + tv->tv_usec / 1000) : -1;
     int r = 0;
-    if (n) r = poll(p, (nfds_t)n, timeout);
+    if (n) r = vfd_poll((VfdPollfd *)p, (unsigned long)n, timeout, real_poll);
     else if (timeout > 0) usleep((useconds_t)timeout * 1000); /* select(0, ...) as a sleep */
     if (r < 0) {
         free(p);
@@ -488,7 +528,9 @@ static const char *sh_inet_ntop(int af, const void *src, char *dst, socklen_t n)
 
 static int sh_inet_pton(int af, const char *src, void *dst) { return inet_pton(sbsd_af_to_bsd(af), src, dst); }
 
-static int sh_poll(struct pollfd *fds, nfds_t n, int timeout) { return poll(fds, n, timeout); }
+static int sh_poll(struct pollfd *fds, nfds_t n, int timeout) {
+    return vfd_poll((VfdPollfd *)fds, (unsigned long)n, timeout, real_poll);
+}
 
 #define S(name) {#name, (void *)name}
 #define W(name, fn) {#name, (void *)fn}
@@ -500,7 +542,8 @@ static const ShimSym g_syms[] = {
     W(recvfrom, sh_recvfrom), W(setsockopt, sh_setsockopt), W(getsockopt, sh_getsockopt), W(fcntl, sh_fcntl),
     W(ioctl, sh_ioctl), W(select, sh_select), W(poll, sh_poll), W(getaddrinfo, sh_getaddrinfo),
     W(freeaddrinfo, sh_freeaddrinfo), W(gethostbyname, sh_gethostbyname), W(inet_ntop, sh_inet_ntop),
-    W(inet_pton, sh_inet_pton), S(htonl), S(htons), S(ntohl), S(ntohs),
+    W(inet_pton, sh_inet_pton), S(htonl), S(htons), S(ntohl), S(ntohs), W(pipe, sh_pipe), W(pipe2, sh_pipe2),
+    W(read, sh_read), W(write, sh_write), W(close, sh_close),
 };
 
 #else

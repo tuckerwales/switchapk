@@ -431,8 +431,9 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   files that use it after porting more AOSP code.
 - `AssetManager.openFd` gives a stored (uncompressed) asset a real
   descriptor, the APK opened read-only with the asset's start offset, as
-  Android does; compressed assets have none and media APIs read them by
-  name. `ParcelFileDescriptor` holds a real descriptor (open, adoptFd,
+  Android does; for a compressed asset it throws FileNotFoundException
+  like Android (raw resources may still be compressed; media APIs read
+  those by name). `ParcelFileDescriptor` holds a real descriptor (open, adoptFd,
   fromFd/dup through `Os.dup`, detachFd).
 
 ### 6.3 Graphics

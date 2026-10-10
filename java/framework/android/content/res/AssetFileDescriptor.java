@@ -10,8 +10,8 @@ import java.io.InputStream;
 /**
  * Describes an asset inside the APK. As on Android, a stored (uncompressed) asset has a real file
  * descriptor: the APK opened read-only, with the start offset of the asset's data, so code that passes
- * (fd, offset, length) along works. Compressed assets have no descriptor (Android refuses openFd for
- * them); media APIs recognise their AssetFileDescriptor and read them through AssetManager.
+ * (fd, offset, length) along works. AssetManager.openFd refuses compressed assets, as Android does; raw
+ * resources (Resources.openRawResourceFd) may still be compressed, and media APIs read those by name.
  */
 public class AssetFileDescriptor implements Closeable, android.os.Parcelable {
     public static final long UNKNOWN_LENGTH = -1;

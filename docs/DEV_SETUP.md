@@ -155,6 +155,11 @@ SWITCHAPK_NETWORK=none build/host/switchapk-host --data build/data app.apk
   lists members we declare that android.jar does not have. Run `make java`
   first.
 
+- `tools/corpus.py all` fetches the real-app corpus, scans it, boots each
+  APK headless and rewrites the generated part of docs/COMPATIBILITY.md;
+  `tools/corpus.py scan --apk any.apk` prints the gaps of any APK
+  (missing classes and members, unresolved native imports, bundled
+  libraries). Needs `make` and the sdk toolchain; GL apps need Mesa.
 - `python3 tools/dexdump.py file.dex` lists classes/methods.
 - `javap -cp build/toolchains/sdk/android.jar -public <class>` shows the
   exact API signatures to match.

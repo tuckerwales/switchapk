@@ -396,6 +396,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 - [ ] WS12 VM performance
 - [ ] WS14 AndroidX compatibility
 - [ ] docs/COMPATIBILITY.md with a tested APK corpus
+  - [x] corpus of 13 F-Droid APKs (`tests/corpus/corpus.json`, pinned),
+    `tools/corpus.py` static gap scan, headless smoke run and generated
+    report (docs/COMPATIBILITY.md)
+  - [ ] corpus runs in CI; per-app scripts that get past the title screen
 
 ## Next steps (in order)
 
@@ -459,6 +463,18 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    `getEnclosingMethod` and `toGenericString`, Character code point
    helpers, and the checked/navigable `Collections` wrappers. Each one
    auto-stubs silently today.
+
+9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`).
+   Pixel Dungeon and Replica Island reach their title screens on the
+   host. First blockers for the rest, by apps unblocked:
+   `android.preference` (4 apps at start, 7 reference it, WS4);
+   `java.runtime.name` unset so libGDX takes the desktop library path
+   (2, WS16); regex `\p{InBlock}` classes (Shattered PD, WS16);
+   `FileChannel.lock/map` (Unciv, WS16); activity-alias launch (Simple
+   Calculator, WS4); `ListActivity` (Blockinger, WS4); shim gaps
+   `sincos`/`sincosf`, C++ `operator new/delete`, `vasprintf`, syslog,
+   `dl_iterate_phdr` (Mindustry renders black, WS9). Re-run the corpus
+   after each fix and update the findings table.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -851,3 +867,7 @@ and update ARCHITECTURE.md in the same commit.
   `z_stream` address in a private long and pass it as an argument, so C
   reads no Java fields. `HttpURLConnectionImpl` adds `Accept-Encoding:
   gzip` and decodes gzip responses. ARCHITECTURE 5.1 and 5.2 updated.
+- 2026-10-09 (WS13): `switchapk-host --shim-symbols` prints the names the
+  native shim provides (`shim_libc_symbols` and `shim_android_symbols`),
+  one per line, and exits. `tools/corpus.py` uses it to find native
+  imports that would bind to logging stubs. ARCHITECTURE 8 updated.

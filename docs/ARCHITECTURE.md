@@ -1153,9 +1153,32 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   vasprintf, memrchr, POSIX basename, sincos, and `dl_iterate_phdr`
   (elf_loader.c: every loaded library with a copy of its program headers,
   for libunwind's `.eh_frame_hdr` lookup). On the Switch the portable
-  parts are the same and the descriptor, socket and name-lookup calls fail
-  with ENOSYS until newlib/libnx translations exist (libnx's BSD socket
-  constants differ).
+  parts are the same; sockets come from `shim_bsd.c` (next item) and the
+  rest of the descriptor calls fail with ENOSYS.
+- `shim_bsd.c` (Switch): libnx implements sockets with FreeBSD's ABI under
+  newlib, bionic code expects Linux's. Its table (`shim_bsd_symbols`,
+  joined last so it replaces earlier entries; empty on the host) wraps
+  socket, connect, bind, listen, accept/accept4, getsockname/getpeername,
+  send/recv/sendto/recvfrom, set/getsockopt, fcntl, ioctl, poll, select,
+  getaddrinfo/freeaddrinfo, gethostbyname and inet_ntop/pton. It converts
+  sockaddrs (BSD's length byte and 8-bit family; AF_INET6 28 vs 10),
+  SOCK_NONBLOCK/CLOEXEC, the SOL_SOCKET/SO_*, IP_*, IPV6_* and TCP_KEEP*
+  numbers (unknown options are ignored on set, ENOPROTOOPT on get), MSG_*
+  flags, O_NONBLOCK/O_APPEND for F_GETFL/F_SETFL, FIONBIO/FIONREAD, and
+  answers bionic's 1024-bit fd_set select with poll. struct addrinfo has
+  bionic's field order already, and EAI_* match. `SO_ERROR` needs no
+  change: Horizon's bsd service reports Linux-numbered errors (libnx's
+  `_convert_errno` table is indexed by them). errno: `__errno` returns a
+  per-thread Linux-numbered copy of newlib's errno, refreshed on each call;
+  whichever side changed since the previous call wins. The BSD-side
+  numbers are `_Static_assert`ed against libnx's headers, and the pure
+  translations (`sbsd_*`, built on every target) are checked on the host
+  by `tests/c/shim_bsd_test.c`. sendmsg, recvmsg and socketpair fail with
+  ENOSYS. Not run on hardware.
+- Native file calls map paths with `shim_map_path`: `platform_map_path`,
+  except that a relative path fails as it would under Android's read-only
+  working directory "/" (ENOENT, EROFS for writes, one warning) instead of
+  reaching the host's working directory.
 - Code memory: mmap/mprotect on the host. On the Switch each mapping is
   page-aligned heap memory (`memalign`) mirrored into the alias region
   (`virtmemFindCodeMemory`) with `svcMapProcessCodeMemory` on
@@ -1228,8 +1251,9 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   buffer and runs the queue callback on the audio thread after the
   mixer lock is released. AAudio is not implemented.
 - Not yet: AAudio, ASensorManager, ALooper and input on the Switch
-  (no pipe/poll), libc++_shared coverage checks, sockets and descriptor
-  control on the Switch.
+  (no pipe/poll), libc++_shared coverage checks, sendmsg/recvmsg and
+  non-socket descriptor control on the Switch; the socket layer has not
+  run on hardware.
   NativeActivity and native EGL have not been run on hardware.
 
 ### 6.8 System services (WS15)

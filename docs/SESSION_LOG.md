@@ -840,4 +840,14 @@ what is left in flight.
   check script pass on the host (net, sensors and store with their own
   commands). `make -f Makefile.switch` builds; nothing ran on hardware.
   Host Mesa (libegl1, libgles2) had to be installed in this container.
+- Switch sockets for native code: `shim_bsd.c` translates bionic's Linux
+  socket ABI to libnx's FreeBSD one (sockaddrs, option numbers, flags,
+  fcntl/ioctl, select through poll, addrinfo) and gives bionic code a
+  Linux-numbered errno. Found by disassembling libnx that Horizon's bsd
+  service reports Linux errno numbers (libnx's `_convert_errno` is indexed
+  by them), so SO_ERROR passes through. Constants are static-asserted
+  against libnx's headers; tests/c/shim_bsd_test.c checks the translations
+  on the host (passes). Builds for the Switch; not run on hardware.
+- Native relative paths fail as under Android's "/" (`shim_map_path`);
+  OSRS's `imgui.ini` no longer lands in the host's working directory.
 

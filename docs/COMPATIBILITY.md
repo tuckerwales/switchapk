@@ -134,14 +134,15 @@ result there and says nothing about switchapk. Next steps:
 
 - Run it on a host with a plain network to see the next stage (the
   config fetch, the world list, the login screen).
-- The Switch: sockets and name lookup are ENOSYS in `shim_posix.c` until
-  newlib/libnx translations exist (BSD socket constants), so the device
-  stops here even with a network (WS9/WS11).
+- The Switch: native sockets and name lookup now go through
+  `shim_bsd.c` (Linux ABI to libnx's FreeBSD one; checked by
+  `tests/c/shim_bsd_test.c` and against libnx's headers at compile time),
+  so the device can try the connection. Not run on hardware yet.
 - Then input, audio (OpenSL ES), and the Jagex Account login (AppAuth
   through a browser redirect).
-- The client writes `imgui.ini` with a relative path; on the host that
-  lands in the working directory (Android's is "/", read-only), so the
-  shim should map relative paths under the app's data dir or fail them.
+- The client opens `imgui.ini` with a relative path. Native relative
+  paths now fail as under Android's read-only "/" (ENOENT/EROFS), so it
+  no longer writes into the host's working directory.
 
 ## How gaps are found
 
@@ -187,7 +188,7 @@ First blockers, in the order that unblocks the most apps:
 | Launching an `activity-alias` (the launcher entry is an alias of SplashActivity) | Simple Calculator | run: ClassNotFoundException for the alias name | WS4 |
 | `android.app.ListActivity` | Blockinger (Replica Island references it too) | run: NoClassDefFoundError | WS4 |
 | Native shim: `sincos`/`sincosf`, C++ `operator new`/`delete` (`_Znwm`, `_ZdlPv`, ... for code linked against the system libstdc++), `__cxa_pure_virtual`, `vasprintf`, the `syslog` family, `dl_iterate_phdr`, `pthread_rwlock_*`, wide-char ctype | Mindustry renders black after `sincos` returns 0; Frozen Bubble, Vector Pinball, DroidFish libraries need the rest | run: "native code called sincos"; static scan | WS9 |
-| No game-server connection: in the sandbox where this ran, TLS is re-terminated and port 43594 blocked (environment); on the Switch, native sockets are ENOSYS | Old School RuneScape | run: the client's own "Error connecting to server" screen; `-v` shows connect to oldschool.config.runescape.com:443 | WS9/WS11 |
+| No game-server connection: in the sandbox where this ran, TLS is re-terminated and port 43594 blocked (environment); the Switch socket layer is new and not run on hardware | Old School RuneScape | run: the client's own "Error connecting to server" screen; `-v` shows connect to oldschool.config.runescape.com:443 | WS9/WS11 |
 | Simon Tatham's Puzzles quits after its own "missing a required file" check, probably the `libpuzzlesgen.so` helper it expects in nativeLibraryDir (not yet confirmed) | Simon Tatham's Puzzles | run: Toast, then System.exit | WS9 |
 
 Already working on the host: **Pixel Dungeon** and **Replica Island** reach

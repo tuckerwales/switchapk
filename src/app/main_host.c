@@ -66,7 +66,8 @@ static void *vm_main(void *arg) {
         else if (!strcmp(a, "--apk-info")) apk_info = true;
         else if (!strcmp(a, "--shim-symbols")) {
             /* For tools/corpus.py: imports missing here (except GL and EGL, from the driver) bind to logging stubs. */
-            const ShimSym *(*tables[])(size_t *) = {shim_libc_symbols, shim_android_symbols, shim_posix_symbols};
+            const ShimSym *(*tables[])(size_t *) = {shim_libc_symbols, shim_android_symbols, shim_posix_symbols,
+                                                     shim_bsd_symbols};
             for (size_t k = 0; k < SA_ARRAY_LEN(tables); k++) {
                 size_t n;
                 const ShimSym *syms = tables[k](&n);

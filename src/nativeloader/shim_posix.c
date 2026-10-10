@@ -66,7 +66,6 @@
 
 #define LOG_TAG "libc"
 
-char *platform_map_path(const char *android_path);
 
 /* Process.myUid(): FIRST_APPLICATION_UID */
 #define APP_UID 10000
@@ -782,29 +781,33 @@ static ssize_t sh_pread64_chk(int fd, void *buf, size_t count, off_t offset, siz
 }
 
 static int sh_rmdir(const char *path) {
-    char *p = platform_map_path(path);
-    int r = rmdir(p ? p : path);
+    char *p = shim_map_path(path, true);
+    if (!p) return -1;
+    int r = rmdir(p);
     free(p);
     return r;
 }
 
 static int sh_chmod(const char *path, unsigned mode) {
-    char *p = platform_map_path(path);
-    int r = chmod(p ? p : path, mode);
+    char *p = shim_map_path(path, true);
+    if (!p) return -1;
+    int r = chmod(p, mode);
     free(p);
     return r;
 }
 
 static int sh_utimes(const char *path, const struct timeval tv[2]) {
-    char *p = platform_map_path(path);
-    int r = utimes(p ? p : path, tv);
+    char *p = shim_map_path(path, true);
+    if (!p) return -1;
+    int r = utimes(p, tv);
     free(p);
     return r;
 }
 
 static int sh_statfs(const char *path, struct statfs *st) {
-    char *p = platform_map_path(path);
-    int r = statfs(p ? p : path, st);
+    char *p = shim_map_path(path, false);
+    if (!p) return -1;
+    int r = statfs(p, st);
     free(p);
     return r;
 }
@@ -817,8 +820,9 @@ static ssize_t sh_readlink(const char *path, char *buf, size_t n) {
         memcpy(buf, exe, len);
         return (ssize_t)len;
     }
-    char *p = platform_map_path(path);
-    ssize_t r = readlink(p ? p : path, buf, n);
+    char *p = shim_map_path(path, false);
+    if (!p) return -1;
+    ssize_t r = readlink(p, buf, n);
     free(p);
     return r;
 }
@@ -970,8 +974,6 @@ static void *sh_enosys_ptr(void) {
     errno = ENOSYS;
     return NULL;
 }
-static int sh_eai_fail(void) { return 4; /* EAI_FAIL */ }
-static void sh_noop(void) {}
 static long sh_syscall(long n) {
     LOGW("syscall(%ld) is not available on the Switch", n);
     return fail(ENOSYS);
@@ -1087,13 +1089,8 @@ static const ShimSym g_syms[] = {
     W(tzname, &tzname), W(timezone, &timezone), W(daylight, &daylight), W(optarg, &optarg), W(optind, &optind),
     W(opterr, &opterr), W(optopt, &optopt), S(getopt), S(getopt_long),
 #else
-    W(syscall, sh_syscall), W(fcntl, sh_enosys), W(ioctl, sh_enosys), W(socket, sh_enosys), W(connect, sh_enosys),
-    W(bind, sh_enosys), W(listen, sh_enosys), W(accept, sh_enosys), W(send, sh_enosys), W(recv, sh_enosys),
-    W(sendto, sh_enosys), W(recvfrom, sh_enosys), W(setsockopt, sh_enosys), W(getsockopt, sh_enosys),
-    W(getsockname, sh_enosys), W(getpeername, sh_enosys), W(shutdown, sh_enosys), W(socketpair, sh_enosys),
-    W(select, sh_enosys), W(poll, sh_enosys), W(getaddrinfo, sh_eai_fail), W(freeaddrinfo, sh_noop),
-    W(gethostbyname, sh_enosys_ptr), W(getservbyname, sh_enosys_ptr), W(inet_ntop, sh_enosys_ptr),
-    W(inet_pton, sh_enosys), W(if_nametoindex, sh_enosys), W(getrusage, sh_enosys), W(sysinfo, sh_enosys),
+    /* sockets, fcntl, ioctl, select, poll and name lookup: shim_bsd.c */
+    W(syscall, sh_syscall), W(socketpair, sh_enosys), W(getservbyname, sh_enosys_ptr), W(if_nametoindex, sh_enosys), W(getrusage, sh_enosys), W(sysinfo, sh_enosys),
     W(uname, sh_enosys), W(tcgetattr, sh_enosys), W(tcsetattr, sh_enosys), W(readlink, sh_enosys),
     W(rmdir, sh_enosys), W(chmod, sh_enosys), W(utimes, sh_enosys), W(mremap, sh_enosys_ptr),
     W(getpriority, sh_enosys), W(setpriority, sh_enosys), S(fsync), S(ftruncate), W(lseek64, lseek),

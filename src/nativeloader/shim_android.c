@@ -381,6 +381,8 @@ static void build_shim(void) {
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
     t = shim_posix_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    t = shim_bsd_symbols(&n); /* last: replaces entries above */
+    for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
 }
 
 void *shim_lookup(const char *name) {

@@ -528,6 +528,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-10 (WS9 with WS11): new shim table `shim_bsd_symbols`
+  (src/nativeloader/shim_bsd.c, shim_bsd.h), joined last by `shim_lookup`
+  and printed by `--shim-symbols`; on the Switch it provides the socket
+  calls and replaces `__errno` with a Linux-numbered errno. Native file
+  calls go through `shim_map_path` (nativeloader.h), which fails relative
+  paths. ARCHITECTURE 6.7 updated.
+
 - 2026-10-10 (WS9 with WS4, WS8, WS10, WS16; for the Old School RuneScape
   corpus run): `platform.h` gains `platform_set_wake_hook(void (*)(void))`,
   implemented by both platforms and called after every `platform_wake` and

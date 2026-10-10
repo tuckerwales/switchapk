@@ -36,6 +36,9 @@ typedef struct {
     void *addr;
 } ShimSym;
 
+/* An Android path for native file calls (relative paths fail as on Android); NULL with errno set. Free it. */
+char *shim_map_path(const char *path, bool write);
+
 /* True for the system libraries the shim provides (libc.so, liblog.so, libEGL.so, ...). */
 bool shim_is_library(const char *soname);
 /* Address of a shim symbol, or NULL. */
@@ -45,6 +48,7 @@ void *shim_lookup(const char *name);
 const ShimSym *shim_libc_symbols(size_t *n);
 const ShimSym *shim_android_symbols(size_t *n);
 const ShimSym *shim_posix_symbols(size_t *n);
+const ShimSym *shim_bsd_symbols(size_t *n); /* Switch sockets and errno; empty on the host */
 
 /*
  * Runs VM code from any thread. Native code runs without the GIL, and the app's own threads (the

@@ -4,7 +4,8 @@
  *
  * Most functions have the same ABI and map directly. Wrappers cover what
  * differs from bionic:
- * - paths: open/fopen/stat/... translate Android paths (platform_map_path);
+ * - paths: open/fopen/stat/... translate Android paths (shim_map_path: platform_map_path, relative paths fail
+ *   as under Android's read-only "/");
  * - sysconf constants, which are numbered differently;
  * - pthread mutexes, condition variables and attributes: bionic's objects
  *   are fixed-size and zero-initialized; the wrappers keep a pointer to a
@@ -42,6 +43,29 @@
 #define LOG_TAG "libc"
 
 char *platform_map_path(const char *android_path);
+
+/*
+ * An Android path to open from native code: platform_map_path, except that a relative path resolves against the
+ * app's working directory, "/", as on Android, where the root is read-only and holds no app files. Such a path fails
+ * with ENOENT, or EROFS for a write, instead of reaching the host's working directory. NULL with errno set on
+ * failure; the caller frees the result.
+ */
+char *shim_map_path(const char *path, bool write) {
+    if (!path) {
+        errno = EFAULT;
+        return NULL;
+    }
+    if (path[0] && path[0] != '/') {
+        static bool warned;
+        if (!warned) {
+            warned = true;
+            LOGW("native code opened the relative path \"%s\"; Android resolves it under \"/\" (read-only)", path);
+        }
+        errno = write ? EROFS : ENOENT;
+        return NULL;
+    }
+    return platform_map_path(path);
+}
 
 /* ---- errno, stack protector, exit hooks ----------------------------------------------------------------- */
 
@@ -218,8 +242,9 @@ static FILE *XF(FILE *f) {
 }
 
 static FILE *sh_fopen(const char *path, const char *mode) {
-    char *host = platform_map_path(path);
-    FILE *f = fopen(host ? host : path, mode);
+    char *host = shim_map_path(path, mode && (strchr(mode, 'w') || strchr(mode, 'a') || strchr(mode, '+')));
+    if (!host) return NULL;
+    FILE *f = fopen(host, mode);
     free(host);
     return f;
 }
@@ -264,14 +289,19 @@ static char *sh_fgets_chk(char *s, int n, FILE *f, size_t blen) {
     return fgets(s, n, XF(f));
 }
 static int sh_remove(const char *path) {
-    char *host = platform_map_path(path);
-    int r = remove(host ? host : path);
+    char *host = shim_map_path(path, true);
+    if (!host) return -1;
+    int r = remove(host);
     free(host);
     return r;
 }
 static int sh_rename(const char *a, const char *b) {
-    char *ha = platform_map_path(a), *hb = platform_map_path(b);
-    int r = rename(ha ? ha : a, hb ? hb : b);
+    char *ha = shim_map_path(a, true), *hb = ha ? shim_map_path(b, true) : NULL;
+    if (!hb) {
+        free(ha);
+        return -1;
+    }
+    int r = rename(ha, hb);
     free(ha);
     free(hb);
     return r;
@@ -287,8 +317,9 @@ static int sh_open(const char *path, int flags, ...) {
         mode = va_arg(ap, int);
         va_end(ap);
     }
-    char *host = platform_map_path(path);
-    int fd = open(host ? host : path, flags, mode);
+    char *host = shim_map_path(path, (flags & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC | O_APPEND)) != 0);
+    if (!host) return -1;
+    int fd = open(host, flags, mode);
     free(host);
     return fd;
 }
@@ -296,43 +327,49 @@ static int sh_open(const char *path, int flags, ...) {
 static int sh_open_2(const char *path, int flags) { return sh_open(path, flags); }
 
 static int sh_access(const char *path, int mode) {
-    char *host = platform_map_path(path);
-    int r = access(host ? host : path, mode);
+    char *host = shim_map_path(path, false);
+    if (!host) return -1;
+    int r = access(host, mode);
     free(host);
     return r;
 }
 
 static int sh_unlink(const char *path) {
-    char *host = platform_map_path(path);
-    int r = unlink(host ? host : path);
+    char *host = shim_map_path(path, true);
+    if (!host) return -1;
+    int r = unlink(host);
     free(host);
     return r;
 }
 
 static int sh_mkdir(const char *path, mode_t mode) {
-    char *host = platform_map_path(path);
-    int r = mkdir(host ? host : path, mode);
+    char *host = shim_map_path(path, true);
+    if (!host) return -1;
+    int r = mkdir(host, mode);
     free(host);
     return r;
 }
 
 static int sh_stat(const char *path, struct stat *st) {
-    char *host = platform_map_path(path);
-    int r = stat(host ? host : path, st);
+    char *host = shim_map_path(path, false);
+    if (!host) return -1;
+    int r = stat(host, st);
     free(host);
     return r;
 }
 
 static int sh_lstat(const char *path, struct stat *st) {
-    char *host = platform_map_path(path);
-    int r = lstat(host ? host : path, st);
+    char *host = shim_map_path(path, false);
+    if (!host) return -1;
+    int r = lstat(host, st);
     free(host);
     return r;
 }
 
 static DIR *sh_opendir(const char *path) {
-    char *host = platform_map_path(path);
-    DIR *d = opendir(host ? host : path);
+    char *host = shim_map_path(path, false);
+    if (!host) return NULL;
+    DIR *d = opendir(host);
     free(host);
     return d;
 }

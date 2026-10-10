@@ -84,6 +84,7 @@ What it took, by the first blocker each fix removed:
 | External storage in Android's layout (`/storage/emulated/0/Android/data/<pkg>/files`) | Simple Calculator (Simple Commons cuts paths at `Android/data`) |
 | PackageManager.queryIntentContentProviders and the API 33 typed-flag overloads | Simple Calculator (EmojiCompat via Glide) |
 | android.bluetooth answering as absent (no adapter), OrientationEventListener (from AOSP) | Frozen Bubble (Bluetooth multiplayer greyed out) |
+| A removed window loses focus while still added (apps call setFlags from onWindowFocusChanged(false)) | Shattered PD |
 | openFd refuses compressed assets like Android (was a descriptor that could not be mapped) | Mindustry (Arc falls back to streams) |
 
 Still open:
@@ -266,7 +267,6 @@ Generated 2026-10-10 from 13 apps. Static counts include only members and classe
 | Signal | Apps |
 |---|---|
 | exception java.io.EOFException | 1 (mindustry) |
-| exception java.lang.IllegalArgumentException: View=DecorView@3507983 not attached to window manager | 1 (shatteredpd) |
 | stub method android.media.AudioManager.unloadSoundEffects()V | 1 (vectorpinball) |
 
 <!-- corpus:end -->

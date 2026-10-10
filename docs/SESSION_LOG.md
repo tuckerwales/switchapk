@@ -859,6 +859,9 @@ what is left in flight.
 - android.bluetooth answers as absent (BluetoothManager with a null
   adapter, classic socket classes) and OrientationEventListener is ported
   from AOSP: Frozen Bubble starts clean with Bluetooth play greyed out.
+- WindowManagerGlobal.removeView takes window focus away before it
+  unregisters the window, so updates from onWindowFocusChanged(false)
+  still reach it (Shattered PD).
 - Simple Calculator now starts with no uncaught or unexpected errors.
   Mindustry's preview error is still open: concurrent and single-threaded
   decoding of the same save match the JDK.

@@ -527,6 +527,8 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
 - Windows: `WindowManagerGlobal` keeps a z-ordered list of `ViewRootImpl`s
   (layer by window type: application 2, sub-windows 3, system 10, input
   method 15, toast 20; newer windows above older ones of the same layer).
+  `removeView` takes window focus away first, while the window is still
+  in the list, then unregisters it and detaches the hierarchy.
   Each `ViewRootImpl` owns an ARGB `Bitmap` of its window size and redraws
   only the union of invalidated rectangles (dirty rects are propagated up
   through `ViewGroup.invalidateChildInParent`, transformed by child

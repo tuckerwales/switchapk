@@ -28,7 +28,7 @@ own:
 ```
 adb shell pm path com.jagex.oldscape.android      # lists base.apk and the splits
 adb pull <each path> build/corpus/in/
-tools/corpus.py import osrs build/corpus/in/*.apk # or one .apks / .xapk bundle
+tools/corpus.py import osrs build/corpus/in/*.apk # or one .apks, .xapk or .apkm bundle
 tools/corpus.py scan osrs && tools/corpus.py run osrs && tools/corpus.py report
 ```
 
@@ -40,6 +40,10 @@ and their manifests, `resources.arsc` and `res/` are dropped (density and
 language splits). Apps nobody has supplied show as "APK not supplied" in
 the table and are skipped by every other command.
 
+APKMirror's `.apkm` works when it is a plain zip (the apkm_version 5 file used here was); an
+encrypted one fails to open. Compare the splits' signing certificate with
+the publisher's before trusting a mirror copy.
+
 These apps update often, so they are not pinned. `fetch` prints the
 versionCode and sha256 it assembled and the table names the version that
 was scanned; quote both when you record findings. A phone gives only
@@ -49,14 +53,47 @@ covers the arm64 libraries.
 
 ### Old School RuneScape (`osrs`)
 
-Tracked since 2026-10-10, not scanned yet: no APK has been supplied in a
-session so far. Package `com.jagex.oldscape.android`, from Play only.
-What we expect it to stress, to be confirmed by the first scan: a large
-native client (native loader and bionic shim coverage, WS9), GLES
-rendering (WS8), sustained networking to the game servers and TLS for
-account login (WS11), and possibly WebView or a browser intent for Jagex
-Account sign-in. Record the first scan's version, blockers and run
-outcome here and in the Findings table.
+Package `com.jagex.oldscape.android`, Play only. Supplied as APKMirror's
+bundle of 241.3 (versionCode 24103008, posted 2026-10-06): base plus
+arm64-v8a and x86_64 splits, so it also runs on the x86-64 host. All three
+APKs carry the same v2/v3 signing certificate, "Jagex Ltd, Cambridge, GB"
+(2017-2067, SHA-256 `074caa82...622605a6`); the certificate was compared,
+the signatures themselves were not verified. Assembled APK sha256
+`c636aec9...2d1816d5870`.
+
+First scan and run (2026-10-10):
+
+- **Shape.** `com.jagex.android.MainActivity` extends AGDK `GameActivity`
+  (`com.google.androidgamesdk`, on AppCompat). The game is the 11 MB C++
+  library `liblibs.hal.system.osclient.so` (NEEDED: libandroid, libEGL,
+  libGLESv3, libOpenSLES, libz, liblog, libdl, libm, libc; no ELF TLS).
+  Around it: Play Services (1151 classes), Firebase with Crashlytics
+  native libraries, Braze, Play Billing, AppAuth for Jagex Account login
+  through a browser redirect, and WebView activities. min/target SDK 26/35.
+- **First blocker (run).** `NoClassDefFoundError: android.os.UserManager`
+  in `FirebaseInitProvider.onCreate` (androidx.core `UserManagerCompat`),
+  before any activity starts. WS15.
+- **Native gaps (static).** The game library imports 122 symbols the shim
+  lacks. The heavy ones: BSD sockets and DNS (`socket`, `connect`,
+  `send`/`recv`, `select`, `poll`, `getaddrinfo`, `setsockopt`,
+  `inet_pton`, ...), since the client talks to the game servers from C
+  (WS9 with WS11); `sigaction`/`sigaltstack`/`signal`; the locale-aware
+  `*_l` and wide-char functions of libc++; `sincos`/`sincosf`,
+  `pthread_rwlock_*`, `dl_iterate_phdr`, `vasprintf`, `syslog`; and
+  process calls (`fork`, `execvp`, `waitpid`, `kill`) that are probably
+  crash-reporting paths. Crashlytics' own libraries add the same names
+  plus `epoll`/`eventfd`.
+- **Java gaps (static).** 131 missing SDK classes, led by `javax.net.ssl`
+  and `java.security.cert` (TLS, WS11), `android.webkit`, `java.time`,
+  `java.lang.invoke`, `android.transition`, `android.icu`, autofill and
+  window insets; 12 java.* members that throw (`FileChannel.lock`/`map`,
+  `Date.toInstant`, `Proxy.address`, `ExecutorService.invokeAll` with
+  timeout); 78 android.* members that would be stubbed.
+
+Expected order of work: UserManager (and whatever Firebase and Braze init
+need next), GameActivity on our AppCompat path (WS14), the native socket
+and libc++ locale shims (WS9/WS11), GLES3 on the window surface (WS8),
+then TLS and the login redirect for an account session (WS11, WS4).
 
 ## How gaps are found
 
@@ -102,6 +139,7 @@ First blockers, in the order that unblocks the most apps:
 | Launching an `activity-alias` (the launcher entry is an alias of SplashActivity) | Simple Calculator | run: ClassNotFoundException for the alias name | WS4 |
 | `android.app.ListActivity` | Blockinger (Replica Island references it too) | run: NoClassDefFoundError | WS4 |
 | Native shim: `sincos`/`sincosf`, C++ `operator new`/`delete` (`_Znwm`, `_ZdlPv`, ... for code linked against the system libstdc++), `__cxa_pure_virtual`, `vasprintf`, the `syslog` family, `dl_iterate_phdr`, `pthread_rwlock_*`, wide-char ctype | Mindustry renders black after `sincos` returns 0; Frozen Bubble, Vector Pinball, DroidFish libraries need the rest | run: "native code called sincos"; static scan | WS9 |
+| `android.os.UserManager` is missing (androidx.core UserManagerCompat from FirebaseInitProvider) | Old School RuneScape | run: NoClassDefFoundError in a ContentProvider, before the first activity | WS15 |
 | Simon Tatham's Puzzles quits after its own "missing a required file" check, probably the `libpuzzlesgen.so` helper it expects in nativeLibraryDir (not yet confirmed) | Simon Tatham's Puzzles | run: Toast, then System.exit | WS9 |
 
 Already working on the host: **Pixel Dungeon** and **Replica Island** reach
@@ -135,7 +173,7 @@ Generated 2026-10-09 from 13 apps. Static counts include only members and classe
 | Simon Tatham's Puzzles | 2 | 21/36 | androidx.compose, androidx (other), androidx.appcompat, material, androidx.core, kotlinx.coroutines, androidx.recyclerview, androidx.constraintlayout, androidx.fragment (Kotlin) | 109 | 5 | 91 | arm64, 3 libs, 3 unresolved | exits at start (rc 0) |
 | DroidFish | 2 | 16/28 | androidx (other), material, androidx.core, androidx.appcompat, androidx.recyclerview, androidx.fragment, androidx.constraintlayout, support library | 101 | 8 | 44 | arm64, 3 libs, 61 unresolved | fails at start: NoClassDefFoundError: android.preference.PreferenceManager |
 | Simple Calculator | 3 | 23/34 | androidx.appcompat, material, androidx (other), androidx.compose, androidx.recyclerview, androidx.fragment, kotlinx.coroutines, androidx.core, rxjava (Kotlin) | 126 | 11 | 105 | none | fails at start: ClassNotFoundException: com.simplemobiletools.calculator.activities.SplashActivity.Grey_black |
-| Old School RuneScape (local) | 3 | | | | | | | APK not supplied |
+| Old School RuneScape (local, 241.3) | 3 | 26/35 | play services, androidx (other), androidx.core, androidx.appcompat, material, firebase, androidx.recyclerview, androidx.fragment, support library, androidx.constraintlayout (Kotlin) | 131 | 12 | 78 | arm64, 6 libs, 154 unresolved | fails at start: NoClassDefFoundError: android.os.UserManager |
 
 ### Most-needed packages (static, by number of apps)
 

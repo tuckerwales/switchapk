@@ -387,7 +387,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] corpus runs in CI; per-app scripts that get past the title screen
   - [x] proprietary apps supplied locally (`"source": "local"`,
     `tools/corpus.py import`, Play split merge); Old School RuneScape added
-  - [ ] first Old School RuneScape scan and smoke run recorded
+  - [x] first Old School RuneScape scan and smoke run recorded (241.3:
+    stops at android.os.UserManager; game library needs native sockets)
 
 ## Next steps (in order)
 

@@ -4,7 +4,7 @@
 Usage:
   tools/corpus.py fetch [id...]     download the pinned APKs of tests/corpus/corpus.json into build/corpus/apks
                                     (entries with "source": "local" are assembled from build/corpus/local/<id>)
-  tools/corpus.py import id file... copy a local app's APK, splits or .apks/.xapk bundle into build/corpus/local/<id>
+  tools/corpus.py import id file... copy a local app's APK, splits or .apks/.xapk/.apkm bundle into build/corpus/local/<id>
   tools/corpus.py scan [id...]      static analysis of each APK against build/java/framework.dex
   tools/corpus.py run [id...]       boot each APK headless with a smoke script, collect log signals
   tools/corpus.py report            aggregate scans and runs into docs/COMPATIBILITY.md
@@ -177,11 +177,11 @@ def local_inputs(app):
     d = os.path.join(LOCAL, app["id"])
     if not os.path.isdir(d):
         return []
-    return sorted(os.path.join(d, n) for n in os.listdir(d) if n.endswith((".apk", ".apks", ".xapk")))
+    return sorted(os.path.join(d, n) for n in os.listdir(d) if n.endswith((".apk", ".apks", ".xapk", ".apkm")))
 
 
 def expand_bundles(paths, tmp):
-    """Unpacks .apks/.xapk bundles (zips of APKs) into tmp; returns the plain APK paths."""
+    """Unpacks .apks/.xapk/.apkm bundles (zips of APKs) into tmp; returns the plain APK paths."""
     out = []
     for p in paths:
         if p.endswith(".apk"):
@@ -207,6 +207,7 @@ def merge_splits(apks, dest):
         die("need exactly one base APK (with classes.dex) among %s, found %d" % (
             ", ".join(os.path.basename(p) for p in apks), len(bases)))
     base = bases[0]
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
     tmp = dest + ".part"
     merged = []
     with zipfile.ZipFile(base) as zb, zipfile.ZipFile(tmp, "w") as out:
@@ -276,8 +277,8 @@ def cmd_import(app, files):
     for n in os.listdir(d):
         os.unlink(os.path.join(d, n))
     for f in files:
-        if not os.path.isfile(f) or not f.endswith((".apk", ".apks", ".xapk")):
-            die("%s: not an .apk, .apks or .xapk file" % f)
+        if not os.path.isfile(f) or not f.endswith((".apk", ".apks", ".xapk", ".apkm")):
+            die("%s: not an .apk, .apks, .xapk or .apkm file" % f)
         with open(f, "rb") as src, open(os.path.join(d, os.path.basename(f)), "wb") as dst:
             dst.write(src.read())
     print("imported %d file(s) into %s" % (len(files), os.path.relpath(d, ROOT)))

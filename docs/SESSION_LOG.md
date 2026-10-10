@@ -817,9 +817,12 @@ what is left in flight.
   `assets/` into the base APK, since the VM loads one zip. Unsupplied
   apps show as "APK not supplied" in the report; supplied ones are
   labelled with the scanned version, as they are not pinned.
-- Old School RuneScape (`com.jagex.oldscape.android`, tier 3) added. No
-  APK was available in this session (Play only, mirrors are blocked by
-  the network policy), so it has not been scanned or run yet.
-- The split merge was checked with synthetic APKs and a bundle. The
-  generated report was not regenerated (no corpus build in this session);
-  the OSRS row was added by hand in the generator's format.
+- Old School RuneScape (`com.jagex.oldscape.android`, tier 3) added. The
+  user supplied APKMirror's 241.3 bundle (.apkm, now accepted by
+  `import`); all splits carry Jagex's signing certificate. First run stops
+  at `android.os.UserManager` in FirebaseInitProvider; the C++ game
+  library (GameActivity) needs 122 shim symbols, sockets and DNS first.
+  Details in COMPATIBILITY.md.
+- The split merge was checked with synthetic APKs and the real bundle.
+  `import` now creates build/corpus/apks itself. Only the OSRS row of the
+  generated table was refreshed (the other apps were not re-run).

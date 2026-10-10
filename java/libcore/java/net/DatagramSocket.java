@@ -287,6 +287,18 @@ public class DatagramSocket implements java.io.Closeable {
     }
 
     public void close() {
+        if (channel != null) {
+            try {
+                channel.close();
+            } catch (java.io.IOException ignored) {
+            }
+            return;
+        }
+        closeInternal$();
+    }
+
+    /** @hide */
+    public void closeInternal$() {
         synchronized (this) {
             if (closed) {
                 return;
@@ -302,7 +314,25 @@ public class DatagramSocket implements java.io.Closeable {
         return closed;
     }
 
+    /** @hide */
+    public void setChannel$(java.nio.channels.DatagramChannel ch) {
+        channel = ch;
+    }
+
+    /** @hide */
+    public int fd$() {
+        return fd;
+    }
+
+    /** @hide Creates the descriptor if there is none yet. */
+    public int prepareFd$(boolean ipv6) throws SocketException {
+        ensureFd(ipv6);
+        return fd;
+    }
+
+    private java.nio.channels.DatagramChannel channel;
+
     public java.nio.channels.DatagramChannel getChannel() {
-        return null;
+        return channel;
     }
 }

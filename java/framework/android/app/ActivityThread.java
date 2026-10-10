@@ -40,6 +40,10 @@ public final class ActivityThread {
     private static final String ANDROID_NS = "http://schemas.android.com/apk/res/android";
 
     static String sPackageName;
+    /** From the manifest element; versionName may be a string resource, resolved when asked. */
+    static int sVersionCode, sVersionCodeMajor, sVersionNameRes;
+    static String sVersionName;
+    static final ArrayList<String> sPermissions = new ArrayList<String>();
     static String sApkPath;
     static String sAppClass;
     static ApplicationInfo sAppInfo;
@@ -144,6 +148,19 @@ public final class ActivityThread {
                 rec.activity.mFinished = true;
                 finishActivity(rec.activity, Activity.RESULT_CANCELED, null);
             }
+        }
+    }
+
+    /** @hide AOSP's hidden accessor: the process is named after the package. */
+    public static String currentProcessName() { return sPackageName; }
+
+    /** @hide */
+    public static String currentPackageName() { return sPackageName; }
+
+    /** ActivityManager.AppTask.finishAndRemoveTask: every activity of the one task. */
+    static void finishAllActivities() {
+        if (!sStack.isEmpty() && sStack.get(sStack.size() - 1).activity != null) {
+            finishAffinity(sStack.get(sStack.size() - 1).activity);
         }
     }
 
@@ -313,8 +330,9 @@ public final class ActivityThread {
     /** New instance, attach, onCreate. False if it finished (or threw away its record) during onCreate. */
     private static boolean createRecord(ActivityRecord rec, Bundle state, Activity.NonConfigurationInstances nci) {
         ActivityInfo info = rec.parsed.info;
-        Object obj = newComponent(info.name);
-        if (!(obj instanceof Activity)) throw new ClassCastException(info.name + " is not an Activity");
+        String cls = info.targetActivity != null ? info.targetActivity : info.name;
+        Object obj = newComponent(cls);
+        if (!(obj instanceof Activity)) throw new ClassCastException(cls + " is not an Activity");
         Activity a = (Activity) obj;
         rec.activity = a;
         rec.started = false;
@@ -553,6 +571,7 @@ public final class ActivityThread {
         int diff = oldConfig.diff(newConfig);
         sResources.updateConfiguration(newConfig, metrics);
         WindowManagerGlobal.getInstance().onDisplayChanged();
+        android.hardware.display.DisplayManager.notifyDisplayChanged();
         if (diff == 0) return;
         Configuration config = new Configuration(sResources.getConfiguration());
         sApplication.onConfigurationChanged(new Configuration(config));
@@ -673,6 +692,7 @@ public final class ActivityThread {
         display.getMetrics(metrics);
         Configuration config = new Configuration();
         config.setToDefaults();
+        config.setLocales(android.os.LocaleList.getDefault());
         config.densityDpi = metrics.densityDpi;
         config.touchscreen = Configuration.TOUCHSCREEN_FINGER;
         config.keyboard = Configuration.KEYBOARD_NOKEYS;
@@ -693,6 +713,7 @@ public final class ActivityThread {
 
     private static void parseManifest() throws Exception {
         sActivities.clear();
+        sPermissions.clear();
         sReceivers.clear();
         sServices.clear();
         sProviders.clear();
@@ -710,6 +731,15 @@ public final class ActivityThread {
                     if ("manifest".equals(name)) {
                         sPackageName = parser.getAttributeValue(null, "package");
                         if (sPackageName == null) sPackageName = parser.getAttributeValue("", "package");
+                        sVersionCode = attrInt(parser, android.R.attr.versionCode, "versionCode", 0);
+                        sVersionCodeMajor = attrInt(parser, android.R.attr.versionCodeMajor, "versionCodeMajor", 0);
+                        int versionNameRes = attrRes(parser, android.R.attr.versionName, "versionName");
+                        sVersionName = versionNameRes != 0 ? null
+                                : attrString(parser, android.R.attr.versionName, "versionName");
+                        sVersionNameRes = versionNameRes;
+                    } else if ("uses-permission".equals(name) || "uses-permission-sdk-23".equals(name)) {
+                        String perm = attrString(parser, android.R.attr.name, "name");
+                        if (perm != null && !sPermissions.contains(perm)) sPermissions.add(perm);
                     } else if ("uses-sdk".equals(name)) {
                         readUsesSdk(parser);
                     } else if ("application".equals(name)) {
@@ -728,6 +758,10 @@ public final class ActivityThread {
                         info.uiOptions = attrInt(parser, android.R.attr.uiOptions, "uiOptions", 0);
                         info.parentActivityName = qualify(sPackageName,
                                 attrString(parser, android.R.attr.parentActivityName, "parentActivityName"));
+                        if ("activity-alias".equals(name)) {
+                            info.targetActivity = qualify(sPackageName,
+                                    attrString(parser, android.R.attr.targetActivity, "targetActivity"));
+                        }
                         activity = new ParsedActivity(info, "receiver".equals(name));
                         filter = null;
                     } else if ("service".equals(name)) {
@@ -784,6 +818,7 @@ public final class ActivityThread {
             try { parser.close(); } catch (Exception ignored) {}
         }
         if (sPackageName == null || sPackageName.isEmpty()) throw new RuntimeException("Manifest has no package");
+        resolveAliases();
         if (sAppInfo.targetSdkVersion == 0) sAppInfo.targetSdkVersion = Math.max(1, sAppInfo.minSdkVersion);
         sAppInfo.packageName = sPackageName;
         sAppInfo.processName = sPackageName;
@@ -800,6 +835,38 @@ public final class ActivityThread {
         sAppInfo.enabled = true;
         sAppInfo.flags |= ApplicationInfo.FLAG_HAS_CODE;
         stamp(sAppInfo);
+    }
+
+    /** An activity-alias runs its target's class with the target's attributes (PackageParser.parseActivityAlias). */
+    private static void resolveAliases() {
+        for (int i = 0; i < sActivities.size(); i++) {
+            ActivityInfo alias = sActivities.get(i).info;
+            if (alias.targetActivity == null) continue;
+            ActivityInfo target = null;
+            for (int j = 0; j < sActivities.size(); j++) {
+                ActivityInfo t = sActivities.get(j).info;
+                if (t.targetActivity == null && alias.targetActivity.equals(t.name)) {
+                    target = t;
+                    break;
+                }
+            }
+            if (target == null) {
+                Log.w(TAG, "activity-alias " + alias.name + " has no target " + alias.targetActivity);
+                continue;
+            }
+            alias.theme = target.theme;
+            alias.screenOrientation = target.screenOrientation;
+            alias.configChanges = target.configChanges;
+            alias.softInputMode = target.softInputMode;
+            alias.launchMode = target.launchMode;
+            alias.uiOptions = target.uiOptions;
+            if (alias.parentActivityName == null) alias.parentActivityName = target.parentActivityName;
+            if (alias.icon == 0) alias.icon = target.icon;
+            if (alias.labelRes == 0 && alias.nonLocalizedLabel == null) {
+                alias.labelRes = target.labelRes;
+                alias.nonLocalizedLabel = target.nonLocalizedLabel;
+            }
+        }
     }
 
     /** android:minSdkVersion / targetSdkVersion; a codename counts as the newest level, as on Android. */
@@ -935,8 +1002,9 @@ public final class ActivityThread {
      */
     static Activity startActivityNow(Activity parent, String id, Intent intent, ActivityInfo info, Bundle state,
             Activity.NonConfigurationInstances nci) {
-        final Object obj = newComponent(info.name);
-        if (!(obj instanceof Activity)) throw new ClassCastException(info.name + " is not an Activity");
+        String cls = info.targetActivity != null ? info.targetActivity : info.name;
+        final Object obj = newComponent(cls);
+        if (!(obj instanceof Activity)) throw new ClassCastException(cls + " is not an Activity");
         final Activity a = (Activity) obj;
         a.attach(sContext.createComponentContext(a), info, intent, sApplication, parent, id, nci,
                 sResources.getConfiguration());

@@ -41,8 +41,26 @@ public abstract class Executable extends AccessibleObject implements Member, Gen
         return parameterTypes.length;
     }
 
+    /** The parsed generic signature, or null when the method or constructor is not generic. */
+    libcore.reflect.GenericSignatureParser genericInfo() {
+        String sig = AnnotationParser.signature(null, AnnotationParser.KIND_METHOD, vmMethod);
+        if (sig == null) {
+            return null;
+        }
+        libcore.reflect.GenericSignatureParser parser =
+                new libcore.reflect.GenericSignatureParser(getDeclaringClass().getClassLoader());
+        parser.parseForMethod((GenericDeclaration) this, sig);
+        return parser;
+    }
+
     public Type[] getGenericParameterTypes() {
-        return getParameterTypes();
+        libcore.reflect.GenericSignatureParser p = genericInfo();
+        return p != null && p.parameterTypes != null ? p.parameterTypes : getParameterTypes();
+    }
+
+    public Type[] getGenericExceptionTypes() {
+        libcore.reflect.GenericSignatureParser p = genericInfo();
+        return p != null && p.exceptionTypes != null ? p.exceptionTypes : getExceptionTypes();
     }
 
     public Class<?>[] getExceptionTypes() {
@@ -54,7 +72,8 @@ public abstract class Executable extends AccessibleObject implements Member, Gen
     }
 
     public TypeVariable<?>[] getTypeParameters() {
-        return new TypeVariable<?>[0];
+        libcore.reflect.GenericSignatureParser p = genericInfo();
+        return p != null ? p.formalTypeParameters.clone() : new TypeVariable<?>[0];
     }
 
     String getSignatureKey() {
@@ -89,9 +108,6 @@ public abstract class Executable extends AccessibleObject implements Member, Gen
         return AnnotationParser.byType(getAnnotations(), annotationClass);
     }
 
-    public Type[] getGenericExceptionTypes() {
-        return getExceptionTypes();
-    }
 
     /* Generic signatures are not read, so this is toString(). */
     public abstract String toGenericString();

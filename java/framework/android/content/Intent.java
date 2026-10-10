@@ -277,8 +277,51 @@ public class Intent implements Parcelable, Cloneable {
         return new Intent(ACTION_VIEW, Uri.parse(uri));
     }
 
-    public static Intent parseIntent(android.content.res.Resources resources, org.xmlpull.v1.XmlPullParser parser, android.util.AttributeSet attrs) {
-        return new Intent();
+    /** AOSP Intent.parseIntent: an <intent> element with <category> and <extra> children. */
+    public static Intent parseIntent(android.content.res.Resources resources, org.xmlpull.v1.XmlPullParser parser,
+            android.util.AttributeSet attrs) throws org.xmlpull.v1.XmlPullParserException, java.io.IOException {
+        Intent intent = new Intent();
+        android.content.res.TypedArray sa = resources.obtainAttributes(attrs, new int[] {
+                android.R.attr.action, android.R.attr.data, android.R.attr.mimeType, android.R.attr.targetPackage,
+                android.R.attr.targetClass, android.R.attr.identifier});
+        intent.setAction(sa.getString(0));
+        String data = sa.getString(1);
+        String mimeType = sa.getString(2);
+        intent.setDataAndType(data != null ? Uri.parse(data) : null, mimeType);
+        intent.setIdentifier(sa.getString(5));
+        String packageName = sa.getString(3);
+        String className = sa.getString(4);
+        if (packageName != null && className != null) {
+            intent.setComponent(new ComponentName(packageName, className));
+        }
+        sa.recycle();
+        int outerDepth = parser.getDepth();
+        int type;
+        while ((type = parser.next()) != org.xmlpull.v1.XmlPullParser.END_DOCUMENT
+                && (type != org.xmlpull.v1.XmlPullParser.END_TAG || parser.getDepth() > outerDepth)) {
+            if (type == org.xmlpull.v1.XmlPullParser.END_TAG || type == org.xmlpull.v1.XmlPullParser.TEXT) {
+                continue;
+            }
+            String nodeName = parser.getName();
+            if ("category".equals(nodeName)) {
+                android.content.res.TypedArray ca = resources.obtainAttributes(attrs, new int[] {android.R.attr.name});
+                String cat = ca.getString(0);
+                ca.recycle();
+                if (cat != null) {
+                    intent.addCategory(cat);
+                }
+                com.android.internal.util.XmlUtils.skipCurrentTag(parser);
+            } else if ("extra".equals(nodeName)) {
+                if (intent.mExtras == null) {
+                    intent.mExtras = new Bundle();
+                }
+                resources.parseBundleExtra("extra", attrs, intent.mExtras);
+                com.android.internal.util.XmlUtils.skipCurrentTag(parser);
+            } else {
+                com.android.internal.util.XmlUtils.skipCurrentTag(parser);
+            }
+        }
+        return intent;
     }
 
     public String getAction() { return mAction; }

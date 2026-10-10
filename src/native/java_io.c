@@ -206,6 +206,16 @@ NATIVE(Os_close) {
     if (fd > 2) close(fd);
 }
 
+NATIVE(Os_dup) {
+    UNUSED_ARGS();
+    int fd = dup(A_INT(0));
+    if (fd < 0) {
+        throw_io(t, "dup", errno);
+        return;
+    }
+    R_INT(fd);
+}
+
 NATIVE(Os_available) {
     UNUSED_ARGS();
     int fd = A_INT(0);
@@ -374,6 +384,7 @@ static const NativeMethodReg g_regs[] = {
     {"Llibcore/io/Os;", "seek", "(IJI)J", Os_seek},
     {"Llibcore/io/Os;", "fsync", "(I)V", Os_fsync},
     {"Llibcore/io/Os;", "ftruncate", "(IJ)V", Os_ftruncate},
+    {"Llibcore/io/Os;", "dup", "(I)I", Os_dup},
     {"Llibcore/io/Os;", "stat", "(Ljava/lang/String;)[J", Os_stat},
     {"Llibcore/io/Os;", "list", "(Ljava/lang/String;)[Ljava/lang/String;", Os_list},
     {"Llibcore/io/Os;", "mkdir", "(Ljava/lang/String;)Z", Os_mkdir},

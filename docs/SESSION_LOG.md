@@ -808,3 +808,66 @@ what is left in flight.
   COMPATIBILITY.md "Findings" and PLAN next steps item 9.
 - `make` and VmTest pass. Nothing was run on hardware.
 
+
+### Session 25 (2026-10-09/10, branch ccr-0c4b5dc0-hmtab0)
+
+- Worked down the corpus first blockers (WS4, WS9, WS11, WS16). 12 of 13
+  corpus apps now reach a drawn screen on the host, up from 2;
+  COMPATIBILITY.md "Findings" lists what each fix unblocked.
+- Framework: android.preference, ListActivity and FragmentBreadCrumbs
+  ported from AOSP with a generated com.android.internal.R
+  (tools/gen_internal_r.py); tests/apps/prefs checks inflation, defaults,
+  dependencies, list and EditText dialogs and persistence over two runs.
+  activity-alias, ActivityManager, DisplayManager, InputManager,
+  MediaScannerConnection, RingtoneManager, real Intent.parseIntent,
+  versionName in PackageInfo, asset and ParcelFileDescriptor descriptors,
+  OverScroller Interpolator constructors, Holo decors via the Toolbar
+  decor, requestFeature after an early getDecorView.
+- Two resource/config bugs with wide reach: bag merging dropped array items
+  that share a key (all arrays from newer aapt2 collapsed to one item), and
+  Configuration.locale was null.
+- libcore: FileChannel (locks, mapping, MappedByteBuffer), regex Unicode
+  blocks/scripts/categories, runtime properties, SAX and
+  javax.xml.parsers, java.util.logging, ServiceLoader, generic
+  signatures, sun.misc.Unsafe, ProcessBuilder (refused), ObjectStreamField,
+  java.nio selectors and socket channels. New JDK-compared dex tests:
+  RegexTest, NioTest, XmlTest, UnsafeTest, LoggingTest, GenericsTest,
+  SelectorTest.
+- VM: dex_proto_desc overflowed a stack buffer on long Kotlin return
+  types; Log messages are written line by line so causes are not cut off;
+  SWITCHAPK_TRACE_THROW=1 logs every throw.
+- Native shim: shim_runtime.c (C++ runtime entry points, locale and wide
+  chars, syslog, semaphores, rwlocks, sincos, vasprintf) and
+  dl_iterate_phdr from the loader.
+- `make`, all tests/dex tests and the sample app checks pass (gles needs
+  host Mesa; it passed on a rerun after a cold-start timeout). `make -f
+  Makefile.switch` builds the NRO without warnings (devkitPro fetched with
+  tools/fetch_toolchains.py devkitpro). Nothing was run on hardware.
+
+### Session 26 (2026-10-10, branch ccr-0c4b5dc0-hmtab0)
+
+- Resources: style bags stopped merging parents after 20 levels, which cut
+  Material3 themes off from the framework theme (no windowNoTitle, so the
+  titled decor was chosen and failed on windowTitleSize). The guard is now
+  128 and only stops cycles.
+- External storage follows Android's layout (`/storage/emulated/0`,
+  `Android/data/<pkg>/files`, `Android/obb/<pkg>`), fixing Simple Commons
+  path parsing. PackageManager gained queryIntentContentProviders,
+  queryContentProviders and the API 33 typed-flag overloads.
+- AssetManager.openFd throws FileNotFoundException for compressed assets,
+  as Android does.
+- android.bluetooth answers as absent (BluetoothManager with a null
+  adapter, classic socket classes) and OrientationEventListener is ported
+  from AOSP: Frozen Bubble starts clean with Bluetooth play greyed out.
+- WindowManagerGlobal.removeView takes window focus away before it
+  unregisters the window, so updates from onWindowFocusChanged(false)
+  still reach it (Shattered PD).
+- AudioManager was missing 177 members: constants, ringer and mode,
+  AudioFocusRequest, AudioDeviceInfo (one built-in speaker), routing and
+  property queries, sound effects (off). 19 niche ones remain stubbed.
+- Simple Calculator now starts with no uncaught or unexpected errors.
+  Mindustry's preview error is still open: concurrent and single-threaded
+  decoding of the same save match the JDK.
+- `make`, all tests/dex tests, the sample app checks (curves passed on a
+  rerun after an animation-timing miss) and the corpus run pass. Nothing
+  was run on hardware.

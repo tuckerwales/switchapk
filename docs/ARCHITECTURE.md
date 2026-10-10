@@ -222,9 +222,12 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
 ## 5. Class library (java/libcore)
 
 Our own implementation of the `java.*` subset Android apps use: lang,
-lang.reflect (+ Proxy), lang.invoke (lambdas), util (+ concurrent, atomic,
-locks, function, stream, regex, zip), io, nio (buffers, charset, basic
-file APIs), text, math, net (sockets, DNS and HTTP/1.1; 5.1), zip and jar (5.2), security (digests).
+lang.reflect (+ Proxy and generic signatures), lang.invoke (lambdas), util
+(+ concurrent, atomic, locks, function, stream, regex, zip, logging,
+ServiceLoader), io, nio (buffers, charset, file channels with locks and
+mapping, socket channels and selectors), text, math, net (sockets, DNS and
+HTTP/1.1; 5.1), zip and jar (5.2), security (digests), org.xml.sax and
+javax.xml.parsers (5.3), and sun.misc.Unsafe (5.4).
 Natives in `src/native`. File paths from Java are translated by
 `platform_map_path()` (src/native/java_io.c):
 
@@ -234,6 +237,11 @@ Natives in `src/native`. File paths from Java are translated by
 | `/sdcard/...`, `/storage/emulated/0/...` | `<data root>/sdcard/...` |
 | `/data/local/tmp/...` | `<data root>/tmp/...` |
 | other absolute paths on Switch | `sdmc:<path>` |
+
+`Environment.getExternalStorageDirectory()` is `/storage/emulated/0`
+(emulated, not removable) and the app's external directories use Android's
+layout on it: `Android/data/<pkg>/files` and `cache`, `Android/obb/<pkg>`,
+`Android/media/<pkg>`, so OBB files go where Android puts them.
 
 Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 `--data` (default `build/data`).
@@ -256,8 +264,21 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   RFC 5952 like Android), `InetSocketAddress`, `Socket` (descriptor
   created on bind or connect once the family is known; options set
   earlier are replayed), `ServerSocket` (SO_REUSEADDR on), and
-  `DatagramSocket`/`DatagramPacket`. `getChannel()` returns null:
-  NIO socket channels and selectors are not implemented.
+  `DatagramSocket`/`DatagramPacket`.
+- java.nio channels (`sun.nio.ch`): `SocketChannel`,
+  `ServerSocketChannel` and `DatagramChannel` wrap the java.net socket
+  that owns the descriptor (reached through hidden `fd$()`,
+  `prepareFd$()`, `markConnected$()`, `accepted$()` and
+  `closeInternal$()` hooks; the socket's `getChannel()` returns the
+  channel and its `close()` closes the channel). Blocking mode uses the
+  waiting natives above; non-blocking mode sets O_NONBLOCK and uses
+  single-call natives (`connectNow`, `finishConnectNow`, `recvNow`,
+  `sendNow`, `acceptNow`, `recvfromNow`, `sendtoNow`) that report "would
+  block" instead of waiting. `PollSelectorImpl` polls the registered
+  descriptors (`Net.poll`, GIL released) in 50 ms slices so `wakeup()`
+  and `close()` from other threads are seen without a wake-up pipe, which
+  newlib lacks. No pipes (`SelectorProvider.openPipe` throws) and no
+  multicast channels.
 - `URL.openConnection()` for http returns `HttpURLConnectionImpl`, an
   HTTP/1.1 client with one socket per request (sends `Connection:
   close`; no pool, cache, cookies or proxy). Like OkHttp it sends
@@ -328,6 +349,43 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - `tests/dex/ZipTest.java` checks all of it against OpenJDK, including
   streams made by Python's zlib and gzip.
 
+### 5.3 XML, logging, reflection extras
+
+- SAX: `org.xml.sax` (with helpers and ext) is AOSP libcore's public
+  domain copy. `javax.xml.parsers.SAXParserFactory` makes
+  `org.apache.harmony.xml.parsers.SAXParserFactoryImpl` (Android's name),
+  whose reader `PullXMLReader` drives the framework pull parser:
+  namespaces and namespace-prefixes features, the lexical-handler property
+  (comments, CDATA), no DTD processing. Lives in java/framework because the
+  pull parser does. No DOM (`DocumentBuilder`) yet.
+- `java.util.logging`: Logger hierarchy by dotted name, Level, Handler,
+  StreamHandler, ConsoleHandler, SimpleFormatter. As on Android the root
+  logger logs at INFO through a handler that writes to `android.util.Log`
+  (found by reflection, since libcore cannot link the framework), with
+  Android's tag rules.
+- Generic signatures: `AnnotationParser.signature(owner, kind, token)`
+  reads the `dalvik.annotation.Signature` system annotation natively
+  (`src/native/java_annotation.c`); `libcore.reflect.GenericSignatureParser`
+  turns it into `ParameterizedType`, `GenericArrayType`, `WildcardType`
+  and `TypeVariable` objects with the JDK's equality and type names. Type
+  variable references resolve lazily along method, class, enclosing
+  method and enclosing class.
+- `ServiceLoader` reads `META-INF/services/<name>` from the APK's Java
+  resources and instantiates providers lazily.
+- `ProcessBuilder` and `Runtime.exec` fail like a refused exec
+  (`error=38, Function not implemented`): there are no processes.
+
+### 5.4 sun.misc.Unsafe
+
+Android's hidden `sun.misc.Unsafe` (libraries and desugared `j$` code
+reflect on `theUnsafe`). Natives in `src/native/java_unsafe.c`: field
+offsets are the VM's byte offsets in the object (class.c packs fields at
+their natural size); arrays keep elements out of line, so array offsets
+start at `ARRAY_BASE_OFFSET` (16) and are rebased onto
+`ArrayObject.data`. Compare-and-swap and volatile accesses are plain
+loads and stores, atomic because Java threads hold the GIL. Off-heap
+`allocateMemory` addresses are malloc'd pointers.
+
 ## 6. Android framework (java/framework)
 
 ### 6.1 Principles
@@ -349,7 +407,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - AssetManager natives (src/android/android_res.c) answer:
   value lookup with reference following (`nGetValue`, fills TypedValue
   fields `type data resourceId assetCookie density string`), flattened style
-  bags with parents merged (`nGetBag` -> `{int[] (attr,type,data)*, String[]}`),
+  bags with parents merged (`nGetBag` -> `{int[] (attr,type,data)*, String[]}`;
+  as in AssetManager2::GetBag, an entry's own items are all kept, since
+  newer aapt2 gives every array item the same key, and only keys inherited
+  from a parent are overridden; parent chains are followed to any depth,
+  with a guard of 128 against cycles, since Material3 themes are about 25
+  styles deep),
   names/identifiers, asset bytes, directory listing, and binary XML
   flattened into arrays (`nOpenXml` -> `{int[] events, int[] attrs, String[] strings}`)
   consumed by `XmlBlock.Parser`. Asset cookies: 1 = framework, 2 = app,
@@ -366,6 +429,19 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   match what apps were compiled against. Internal (non-public) framework
   attributes can be looked up by name with
   `Resources.getIdentifier(name, "attr", "android")`.
+- `com.android.internal.R` is a generated subset (`tools/gen_internal_r.py`)
+  for AOSP code ported as is (android.preference, ListActivity,
+  FragmentBreadCrumbs): its ids are static fields resolved by name through
+  `InternalRes` when the class loads (0 when framework-res lacks one, so
+  they cannot be switch labels), and its styleables are attribute arrays
+  with index constants listed in the script. Rerun the script over the
+  files that use it after porting more AOSP code.
+- `AssetManager.openFd` gives a stored (uncompressed) asset a real
+  descriptor, the APK opened read-only with the asset's start offset, as
+  Android does; for a compressed asset it throws FileNotFoundException
+  like Android (raw resources may still be compressed; media APIs read
+  those by name). `ParcelFileDescriptor` holds a real descriptor (open, adoptFd,
+  fromFd/dup through `Os.dup`, detachFd).
 
 ### 6.3 Graphics
 - `src/gfx` is a stateless renderer: every call receives target pixels,
@@ -451,6 +527,8 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - Windows: `WindowManagerGlobal` keeps a z-ordered list of `ViewRootImpl`s
   (layer by window type: application 2, sub-windows 3, system 10, input
   method 15, toast 20; newer windows above older ones of the same layer).
+  `removeView` takes window focus away first, while the window is still
+  in the list, then unregisters it and detaches the hierarchy.
   Each `ViewRootImpl` owns an ARGB `Bitmap` of its window size and redraws
   only the union of invalidated rectangles (dirty rects are propagated up
   through `ViewGroup.invalidateChildInParent`, transformed by child
@@ -623,8 +701,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   framework "Can't play this video." dialog unless an `OnErrorListener`
   returns true (tests/apps/video). Audio files play through the mixer in
   6.6. `Context.AUDIO_SERVICE` returns an
-  AudioManager that grants focus and never revokes it, and stores a
-  volume index per stream. Subtitle sources are reported unsupported.
+  AudioManager that grants focus (including `AudioFocusRequest`) and never
+  revokes it, and stores a volume index per stream. It lists one output
+  device, the built-in speaker (48 kHz, 256 frames per buffer), no inputs;
+  ringer and mode are stored, music is never active behind the app, and
+  sound effects are off. Subtitle sources are reported unsupported.
 - RemoteViews inflates its layout and runs the action list (reflection
   setters, click and checked PendingIntents, fill-in against a template
   tag on an ancestor, and RemoteCollectionItems as a BaseAdapter).
@@ -1075,6 +1156,17 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   provides` once and returns 0; the load succeeds with a warning listing
   the unresolved names. This trades Android's load failure for partial
   coverage, like framework auto-stubbing.
+- The shim is three tables joined by `shim_lookup`: `shim_libc.c` (libc,
+  libm, pthread wrappers, stdio, fortify), `shim_android.c` (liblog,
+  libandroid, OpenSL ES, EGL/GL) and `shim_runtime.c`: C++ operator
+  new/delete and `__cxa_pure_virtual` for code linked against the system
+  libstdc++, `sincos`, `vasprintf`, syslog (to the switchapk log),
+  semaphores and rwlocks (bionic objects hold a pointer to ours, created
+  on first use for zeroed static initializers), a C.UTF-8 locale with
+  bionic's UTF-8 multibyte functions (independent of the host locale),
+  wide-character calls, and `dl_iterate_phdr`, which walks the libraries
+  the loader mapped (it keeps a copy of each one's program headers) so C++
+  unwinders find `.eh_frame_hdr`.
 - `nativeloader_find_symbol` (JNI binding) searches every loaded library.
   libdl's dlopen/dlsym/dladdr go through the same loader; dlopen of a
   system library name returns a handle whose dlsym searches the shim.
@@ -1220,7 +1312,10 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `TelephonyManager` (TELEPHONY_SERVICE) reports no phone, an absent SIM,
   empty operator strings and null identifiers. `Camera` has no cameras
   (`open()` null, `open(int)` throws) and camera2 `CameraManager`
-  (CAMERA_SERVICE) an empty id list.
+  (CAMERA_SERVICE) an empty id list. `BluetoothManager`
+  (BLUETOOTH_SERVICE) exists but `getAdapter()`, like
+  `BluetoothAdapter.getDefaultAdapter()`, is null, as on a device without
+  Bluetooth; LE and GATT classes are not present.
 - `PackageManager.hasSystemFeature` reports the touch screen
   (multi-touch), gamepad, Wi-Fi, audio output, both screen orientations
   and the accelerometer and gyroscope when the sensor service lists them.

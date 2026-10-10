@@ -30,6 +30,7 @@ import android.view.Display;
 import android.view.WindowManager;
 import android.view.WindowManagerImpl;
 import android.view.inputmethod.InputMethodManager;
+import android.os.Environment;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -198,20 +199,26 @@ public class ContextImpl extends Context {
     @Override public File getNoBackupFilesDir() { return ensure(new File(getDataDir(), "no_backup")); }
     @Override public File getCacheDir() { return ensure(new File(getDataDir(), "cache")); }
     @Override public File getCodeCacheDir() { return ensure(new File(getDataDir(), "code_cache")); }
-    @Override public File getObbDir() { return ensure(new File(getDataDir(), "obb")); }
+    // External app directories use Android's layout on the shared storage volume (mapped to
+    // <data root>/sdcard), so users can drop OBB files where Android puts them.
+    private File externalAppDir(String kind) {
+        return new File(Environment.getExternalStorageDirectory(), "Android/" + kind + "/" + mPackageName);
+    }
+
+    @Override public File getObbDir() { return ensure(externalAppDir("obb")); }
     @Override public File[] getObbDirs() { return new File[] { getObbDir() }; }
 
     @Override
     public File getExternalFilesDir(String type) {
-        File base = ensure(new File(getDataDir(), "external"));
+        File base = ensure(new File(externalAppDir("data"), "files"));
         return type == null ? base : ensure(new File(base, type));
     }
 
     @Override public File[] getExternalFilesDirs(String type) { return new File[] { getExternalFilesDir(type) }; }
-    @Override public File getExternalCacheDir() { return ensure(new File(getDataDir(), "external-cache")); }
+    @Override public File getExternalCacheDir() { return ensure(new File(externalAppDir("data"), "cache")); }
     @Override public File[] getExternalCacheDirs() { return new File[] { getExternalCacheDir() }; }
     @Override
-    public File[] getExternalMediaDirs() { return new File[] { ensure(new File(getDataDir(), "external-media")) }; }
+    public File[] getExternalMediaDirs() { return new File[] { ensure(externalAppDir("media")) }; }
 
     @Override
     public String[] fileList() {
@@ -356,6 +363,9 @@ public class ContextImpl extends Context {
         }
         if (TELEPHONY_SERVICE.equals(name)) return new android.telephony.TelephonyManager();
         if (CAMERA_SERVICE.equals(name)) return new android.hardware.camera2.CameraManager();
+        if (ACTIVITY_SERVICE.equals(name)) return new ActivityManager(getOuterContext());
+        if (INPUT_SERVICE.equals(name)) return android.hardware.input.InputManager.getInstance();
+        if (DISPLAY_SERVICE.equals(name)) return new android.hardware.display.DisplayManager(getOuterContext());
         if (POWER_SERVICE.equals(name)) {
             if (sPowerManager == null) sPowerManager = new android.os.PowerManager();
             return sPowerManager;
@@ -374,6 +384,7 @@ public class ContextImpl extends Context {
         }
         if (AUDIO_SERVICE.equals(name)) return AudioManager.getInstance();
         if (CONNECTIVITY_SERVICE.equals(name)) return android.net.ConnectivityManager.from(this);
+        if (BLUETOOTH_SERVICE.equals(name)) return android.bluetooth.BluetoothManager.create$();
         if (CLIPBOARD_SERVICE.equals(name)) {
             if (sClipboard == null) sClipboard = new ClipboardManager();
             return sClipboard;
@@ -398,6 +409,9 @@ public class ContextImpl extends Context {
         if (serviceClass == android.hardware.SensorManager.class) return SENSOR_SERVICE;
         if (serviceClass == android.os.BatteryManager.class) return BATTERY_SERVICE;
         if (serviceClass == android.os.PowerManager.class) return POWER_SERVICE;
+        if (serviceClass == ActivityManager.class) return ACTIVITY_SERVICE;
+        if (serviceClass == android.hardware.input.InputManager.class) return INPUT_SERVICE;
+        if (serviceClass == android.hardware.display.DisplayManager.class) return DISPLAY_SERVICE;
         if (serviceClass == android.location.LocationManager.class) return LOCATION_SERVICE;
         if (serviceClass == android.telephony.TelephonyManager.class) return TELEPHONY_SERVICE;
         if (serviceClass == android.hardware.camera2.CameraManager.class) return CAMERA_SERVICE;
@@ -408,6 +422,7 @@ public class ContextImpl extends Context {
         if (serviceClass == AudioManager.class) return AUDIO_SERVICE;
         if (serviceClass == android.net.ConnectivityManager.class) return CONNECTIVITY_SERVICE;
         if (serviceClass == ClipboardManager.class) return CLIPBOARD_SERVICE;
+        if (serviceClass == android.bluetooth.BluetoothManager.class) return BLUETOOTH_SERVICE;
         return null;
     }
 

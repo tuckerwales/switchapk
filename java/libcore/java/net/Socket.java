@@ -188,8 +188,43 @@ public class Socket implements java.io.Closeable {
         return bound ? new InetSocketAddress(getLocalAddress(), getLocalPort()) : null;
     }
 
+    private java.nio.channels.SocketChannel channel;
+
     public java.nio.channels.SocketChannel getChannel() {
-        return null;
+        return channel;
+    }
+
+    // ---- hidden hooks for sun.nio.ch (AOSP has getFileDescriptor$() and friends) ----
+
+    /** @hide */
+    public void setChannel$(java.nio.channels.SocketChannel ch) {
+        channel = ch;
+    }
+
+    /** @hide The descriptor, or -1 before bind or connect. */
+    public int fd$() {
+        return fd;
+    }
+
+    /** @hide Creates the descriptor for the address family if there is none yet. */
+    public int prepareFd$(boolean ipv6) throws SocketException {
+        checkOpen();
+        ensureFd(ipv6);
+        return fd;
+    }
+
+    /** @hide A channel finished a non-blocking connect. */
+    public void markConnected$(InetAddress addr, int port) {
+        remoteAddr = addr;
+        remotePort = port;
+        bound = connected = true;
+    }
+
+    /** @hide Wraps a descriptor a channel accepted. */
+    public static Socket accepted$(int fd, InetAddress peer, int port) {
+        Socket s = new Socket();
+        s.accepted(fd, peer, port);
+        return s;
     }
 
     public InputStream getInputStream() throws IOException {
@@ -332,6 +367,15 @@ public class Socket implements java.io.Closeable {
     }
 
     public synchronized void close() throws IOException {
+        if (channel != null) {
+            channel.close(); // closes us through closeInternal$
+            return;
+        }
+        closeInternal$();
+    }
+
+    /** @hide */
+    public void closeInternal$() throws IOException {
         synchronized (lock) {
             if (closed) {
                 return;

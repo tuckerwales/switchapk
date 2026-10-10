@@ -138,6 +138,8 @@ struct SaLib {
     const uint32_t *gnu_hash;
     SaLib **needed;
     int nneeded;
+    Elf64Phdr *phdr; /* copy of the program headers, for dl_iterate_phdr */
+    int phnum;
     uint8_t *stubs; /* unresolved-import stubs */
     size_t stubs_size, stubs_used;
     int refcount;
@@ -148,6 +150,7 @@ struct SaLib {
 static pthread_mutex_t g_lock;
 static pthread_once_t g_lock_once = PTHREAD_ONCE_INIT;
 static SaLib *g_libs;
+static unsigned long long g_adds; /* libraries loaded so far, for dl_phdr_info.dlpi_adds */
 
 static void init_lock(void) {
     pthread_mutexattr_t a;
@@ -647,6 +650,7 @@ static void free_lib(SaLib *lib) {
     if (lib->map) unmap(lib->map, lib->map_size);
     if (lib->stubs) unmap(lib->stubs, lib->stubs_size);
     free(lib->needed);
+    free(lib->phdr);
     free(lib->name);
     free(lib);
 }
@@ -707,6 +711,9 @@ static SaLib *load_image(const char *name, const uint8_t *data, size_t len, char
         return NULL;
     }
     lib->bias = lib->map - lo;
+    lib->phnum = eh->e_phnum;
+    lib->phdr = sa_malloc((size_t)eh->e_phnum * sizeof(Elf64Phdr));
+    memcpy(lib->phdr, ph, (size_t)eh->e_phnum * sizeof(Elf64Phdr));
     for (int i = 0; i < eh->e_phnum; i++)
         if (ph[i].p_type == PT_LOAD) memcpy(lib->bias + ph[i].p_vaddr, data + ph[i].p_offset, ph[i].p_filesz);
 
@@ -746,6 +753,7 @@ static SaLib *load_image(const char *name, const uint8_t *data, size_t len, char
     lib->refcount = 1;
     lib->next = g_libs;
     g_libs = lib;
+    g_adds++;
 
     lib->needed = sa_calloc((size_t)nneeded + 1, sizeof(SaLib *));
     for (const Elf64Dyn *d = dyn; d->d_tag != DT_NULL; d++) {
@@ -877,6 +885,38 @@ int loader_dlclose(void *handle) {
     /* libraries stay loaded (Android rarely unloads either; static destructors are not run) */
     SA_UNUSED(handle);
     return 0;
+}
+
+/* dl_iterate_phdr over the libraries we loaded (unwinders find .eh_frame_hdr this way). Layout matches
+ * bionic's and glibc's struct dl_phdr_info on 64-bit. */
+typedef struct {
+    uint64_t dlpi_addr;
+    const char *dlpi_name;
+    const Elf64Phdr *dlpi_phdr;
+    uint16_t dlpi_phnum;
+    unsigned long long dlpi_adds;
+    unsigned long long dlpi_subs;
+    size_t dlpi_tls_modid;
+    void *dlpi_tls_data;
+} LoaderPhdrInfo;
+
+int loader_iterate_phdr(int (*cb)(void *info, size_t size, void *data), void *data) {
+    lock();
+    int r = 0;
+    for (SaLib *l = g_libs; l && r == 0; l = l->next) {
+        if (!l->phdr) continue;
+        LoaderPhdrInfo info;
+        memset(&info, 0, sizeof info);
+        info.dlpi_addr = (uint64_t)(uintptr_t)l->bias;
+        info.dlpi_name = l->name;
+        info.dlpi_phdr = l->phdr;
+        info.dlpi_phnum = (uint16_t)l->phnum;
+        info.dlpi_adds = g_adds;
+        info.dlpi_subs = 0;
+        r = cb(&info, sizeof info, data);
+    }
+    unlock();
+    return r;
 }
 
 bool loader_dladdr(const void *addr, const char **fname, void **fbase, const char **sname, void **saddr) {

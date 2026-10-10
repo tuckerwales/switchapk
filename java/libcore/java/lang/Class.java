@@ -107,12 +107,31 @@ public final class Class<T> implements java.io.Serializable, GenericDeclaration,
 
     public native Class<? super T> getSuperclass();
 
+    private libcore.reflect.GenericSignatureParser genericInfo() {
+        if (isPrimitive() || isArray()) {
+            return null;
+        }
+        String sig = java.lang.reflect.AnnotationParser.signature(this, java.lang.reflect.AnnotationParser.KIND_CLASS, 0);
+        if (sig == null) {
+            return null;
+        }
+        libcore.reflect.GenericSignatureParser parser = new libcore.reflect.GenericSignatureParser(getClassLoader());
+        parser.parseForClass(this, sig);
+        return parser;
+    }
+
     public Type getGenericSuperclass() {
-        return getSuperclass();
+        Class<? super T> raw = getSuperclass();
+        if (raw == null || isInterface()) {
+            return raw;
+        }
+        libcore.reflect.GenericSignatureParser p = genericInfo();
+        return p != null && p.superclassType != null ? p.superclassType : raw;
     }
 
     public Type[] getGenericInterfaces() {
-        return getInterfaces();
+        libcore.reflect.GenericSignatureParser p = genericInfo();
+        return p != null ? p.interfaceTypes.clone() : getInterfaces();
     }
 
     public native Class<?>[] getInterfaces();
@@ -429,7 +448,8 @@ public final class Class<T> implements java.io.Serializable, GenericDeclaration,
 
     @SuppressWarnings("unchecked")
     public TypeVariable<Class<T>>[] getTypeParameters() {
-        return new TypeVariable[0];
+        libcore.reflect.GenericSignatureParser p = genericInfo();
+        return p != null ? (TypeVariable<Class<T>>[]) p.formalTypeParameters.clone() : new TypeVariable[0];
     }
 
     public Class<?>[] getDeclaredClasses() {

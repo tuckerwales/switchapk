@@ -735,7 +735,8 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         }
     }
 
-    final boolean isResumed() { return mResumed; }
+    /** @hide AOSP has it public (hidden); PreferenceActivity uses it. */
+    public final boolean isResumed() { return mResumed; }
 
     final boolean isStopped() { return mStopped; }
 
@@ -1077,6 +1078,11 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     public void setTurnScreenOn(boolean turnScreenOn) {}
 
     public void setRecentsScreenshotEnabled(boolean enabled) {}
+
+    public void setTaskDescription(ActivityManager.TaskDescription taskDescription) {
+        ActivityManager.sTaskDescription = taskDescription != null
+                ? new ActivityManager.TaskDescription(taskDescription) : null;
+    }
 
     public void reportFullyDrawn() {}
 

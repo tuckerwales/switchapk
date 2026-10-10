@@ -59,7 +59,17 @@ NATIVE(Log_native_println) {
     char *msg = nat_str(A_OBJ(2));
     if (prio < SA_LOG_VERBOSE) prio = SA_LOG_VERBOSE;
     if (prio > SA_LOG_FATAL) prio = SA_LOG_FATAL;
-    sa_log(prio, tag ? tag : "java", "%s", msg ? msg : "");
+    /* One entry per line: sa_log formats into a fixed buffer, and stack traces with long cause
+     * chains would lose their root cause. */
+    char *line = msg ? msg : "";
+    for (;;) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = 0;
+        if (*line || !nl) sa_log(prio, tag ? tag : "java", "%s", line);
+        if (!nl) break;
+        line = nl + 1;
+        if (!*line) break;
+    }
     free(tag);
     free(msg);
 }

@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 23, see SESSION_LOG.md)
+## Current state (end of session 26, see SESSION_LOG.md)
 
 Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 - VM core, libcore, JNI, reflection (including RUNTIME annotations),
@@ -110,6 +110,17 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 Compression: java.util.zip and java.util.jar over zlib natives
 (tests/dex/ZipTest matches OpenJDK), and transparent gzip in
 HttpURLConnection.
+
+Real apps (session 25): 12 of the 13 corpus apps reach a drawn screen on
+the host (docs/COMPATIBILITY.md). On the way in: android.preference and
+ListActivity (AOSP ports, tests/apps/prefs), ActivityManager,
+DisplayManager, InputManager, activity-alias, SAX, java.util.logging,
+ServiceLoader, generic signatures, sun.misc.Unsafe, FileChannel locks and
+mapping, java.nio selectors and socket channels, regex Unicode classes,
+ProcessBuilder (always refused), and the native shim's C++ runtime,
+locale, wide-character, semaphore, rwlock and dl_iterate_phdr entries.
+New JDK-compared tests: RegexTest, NioTest, XmlTest, UnsafeTest,
+LoggingTest, GenericsTest, SelectorTest.
 
 Not yet: GL on the Switch (Mesa linked but not run on hardware), device
 audio output (audren/audout), running a native library on hardware (code
@@ -346,6 +357,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     (tests/apps/input, a glue-style app, on x86-64 and AArch64)
   - [ ] ALooper/input on the Switch (needs virtual descriptors: no
     pipe/poll in newlib), AAudio
+  - [x] shim runtime for corpus libraries: C++ operator new/delete,
+    sincos, C.UTF-8 locale and wide chars, syslog, semaphores, rwlocks,
+    dl_iterate_phdr (Vector Pinball, Frozen Bubble, Mindustry load)
   - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
 
 ### M6
@@ -376,7 +390,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] java.util.zip and java.util.jar (zlib natives; tests/dex/ZipTest
     against OpenJDK); HttpURLConnection asks for gzip and decodes it
     like OkHttp (tests/apps/net)
-  - [ ] connection pooling, CookieManager, proxies; NIO socket channels
+  - [x] NIO selectors and socket, server socket and datagram channels,
+    blocking and non-blocking (tests/dex/SelectorTest against OpenJDK)
+  - [ ] connection pooling, CookieManager, proxies
   - [ ] sockets and nifm on hardware
 - [ ] WS12 VM performance
 - [ ] WS14 AndroidX compatibility
@@ -384,6 +400,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] corpus of 13 F-Droid APKs (`tests/corpus/corpus.json`, pinned),
     `tools/corpus.py` static gap scan, headless smoke run and generated
     report (docs/COMPATIBILITY.md)
+  - [x] first blockers fixed: 12 of 13 apps draw their first screen on
+    the host (session 25; COMPATIBILITY.md "Findings")
   - [ ] corpus runs in CI; per-app scripts that get past the title screen
 
 ## Next steps (in order)
@@ -435,31 +453,28 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    both targets, `javax.net.ssl` and HttpsURLConnection), then a device
    run of tests/apps/net.
 
-8. libcore API gaps. `tools/api_check.py` used to resolve `java.*`
-   classes from the running JDK, so libcore always looked complete.
-   Fixed in session 23: `-p java.lang`, `-p java.util` and so on now
-   list real gaps (about 1,700 members across java.lang, java.util,
-   java.util.concurrent, java.text, java.nio, java.io and java.net).
-   Many are API 34/35 additions (SequencedCollection, Math.clamp) or
-   interface methods the checker does not follow (List inherits from
-   Collection). Real ones that apps hit include `Map.of` with six or
-   more pairs and `Map.ofEntries`, `String.codePoints`, the `Math`
-   exact and floor/ceil variants, `Class.getDeclaredAnnotation`,
-   `getEnclosingMethod` and `toGenericString`, Character code point
-   helpers, and the checked/navigable `Collections` wrappers. Each one
-   auto-stubs silently today.
+8. libcore API gaps. `tools/api_check.py -p java.lang` and so on list
+   about 1,700 members across java.lang, java.util,
+   java.util.concurrent, java.text, java.nio, java.io and java.net. Many
+   are API 34/35 additions (SequencedCollection, Math.clamp) or interface
+   methods the checker does not follow. Real ones that apps hit include
+   `Map.of` with six or more pairs and `Map.ofEntries`, `String.codePoints`,
+   the `Math` exact and floor/ceil variants, `Class.getDeclaredAnnotation`
+   and `toGenericString`, Character code point helpers (the Character
+   tables are approximations outside Latin, Greek, Cyrillic and CJK), and
+   the checked/navigable `Collections` wrappers. Still missing as whole
+   areas: java.time, ResourceBundle, org.w3c.dom and DocumentBuilder,
+   MulticastChannel and pipes, a default serialVersionUID hash.
 
-9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`).
-   Pixel Dungeon and Replica Island reach their title screens on the
-   host. First blockers for the rest, by apps unblocked:
-   `android.preference` (4 apps at start, 7 reference it, WS4);
-   `java.runtime.name` unset so libGDX takes the desktop library path
-   (2, WS16); regex `\p{InBlock}` classes (Shattered PD, WS16);
-   `FileChannel.lock/map` (Unciv, WS16); activity-alias launch (Simple
-   Calculator, WS4); `ListActivity` (Blockinger, WS4); shim gaps
-   `sincos`/`sincosf`, C++ `operator new/delete`, `vasprintf`, syslog,
-   `dl_iterate_phdr` (Mindustry renders black, WS9). Re-run the corpus
-   after each fix and update the findings table.
+9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`). 12 of
+   13 apps draw their first screen. Next, by what each unblocks: drive
+   the apps past the first screen (a per-app smoke script that starts a
+   game), the AppCompat/AndroidX surface the static scan ranks highest
+   (accessibility, android.transition, android.icu, AppOpsManager,
+   window insets; WS14), Mindustry's map preview decode error (zip and
+   DataInputStream ruled out), and ActionBarView for Holo decors (they
+   use the Toolbar decor now). Simon Tatham's Puzzles needs to run a bundled executable,
+   which the console cannot do. Then run the drawing apps on hardware.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -467,6 +482,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    battery level.
 
 ## Known issues and gotchas
+
+- Holo-themed apps get the Toolbar action bar decor: AOSP's
+  `screen_action_bar` is built on ActionBarView, which is not ported.
+  Behaviour matches; the bar is drawn in Toolbar style.
+- `SWITCHAPK_TRACE_THROW=1` logs every Java throw and VM-raised exception
+  with its method and line, caught or not. Use it when an app hides an
+  error behind its own crash screen.
 
 - Docker Hub rate-limits anonymous pulls (HTTP 429) for the devkitPro
   image; the fetch script retries, or install devkitPro with dkp-pacman.
@@ -516,6 +538,27 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-10 (WS4/WS1): external storage is `/storage/emulated/0` and the
+  app's external files, cache, OBB and media directories use Android's
+  `Android/data|obb|media/<pkg>` layout under `<data root>/sdcard` (were
+  under the app's data directory). Style bags follow parents to any depth.
+  ARCHITECTURE 5, 6.2.
+- 2026-10-10 (WS11/WS16): java.net sockets own the descriptor for NIO
+  channels; `Socket`, `ServerSocket` and `DatagramSocket` gained hidden
+  `fd$()`, `setChannel$()` and `closeInternal$()` hooks (`Socket` also
+  `prepareFd$()`, `markConnected$()`, `accepted$()`), and `libcore.io.Net`
+  gained non-blocking natives and `poll`. ARCHITECTURE 5.1.
+- 2026-10-10 (WS9): the shim has a third table, `shim_runtime_symbols()`
+  (src/nativeloader/shim_runtime.c), and the loader exports
+  `loader_iterate_phdr()` for `dl_iterate_phdr`; `--shim-symbols` lists
+  all three tables. ARCHITECTURE 6.7.
+- 2026-10-10 (WS1/WS4): `com.android.internal.R` exists, generated by
+  `tools/gen_internal_r.py` for ported AOSP code. Bag merging keeps an
+  entry's own items with equal keys (array items). ARCHITECTURE 6.2.
+- 2026-10-10 (WS16): `java.lang.reflect.AnnotationParser.signature()` and
+  the `readSignature` native expose generic signatures; `sun.misc.Unsafe`
+  natives read `Field.vmField`. ARCHITECTURE 5.3, 5.4.
 
 - 2026-10-09 (WS8, touches WS9): `sa_egl_native_proc` also returns
   wrappers for `glBindFramebuffer` and `glBindFramebufferOES`, so the

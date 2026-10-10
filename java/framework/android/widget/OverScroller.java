@@ -6,8 +6,8 @@ import android.view.ViewConfiguration;
 
 /**
  * Scroller that can overshoot and spring back (AOSP OverScroller).
- * Constructors that take an Interpolator are omitted: that type is not in this tree yet.
- * The Context constructor uses the viscous-fluid scroll and the flywheel fling.
+ * A null interpolator means the viscous-fluid scroll; the Context constructor uses it and the
+ * flywheel fling.
  */
 public class OverScroller {
     private static final int DEFAULT_DURATION = 250;
@@ -18,11 +18,38 @@ public class OverScroller {
     private final SplineOverScroller mScrollerX;
     private final SplineOverScroller mScrollerY;
     private final boolean mFlywheel;
+    private android.view.animation.Interpolator mInterpolator;
 
     public OverScroller(Context context) {
-        mFlywheel = true;
+        this(context, null);
+    }
+
+    public OverScroller(Context context, android.view.animation.Interpolator interpolator) {
+        this(context, interpolator, true);
+    }
+
+    /** @hide AOSP's own (public in source, hidden from the SDK). */
+    public OverScroller(Context context, android.view.animation.Interpolator interpolator, boolean flywheel) {
+        mInterpolator = interpolator;
+        mFlywheel = flywheel;
         mScrollerX = new SplineOverScroller(context);
         mScrollerY = new SplineOverScroller(context);
+    }
+
+    @Deprecated
+    public OverScroller(Context context, android.view.animation.Interpolator interpolator, float bounceCoefficientX,
+            float bounceCoefficientY) {
+        this(context, interpolator, true);
+    }
+
+    @Deprecated
+    public OverScroller(Context context, android.view.animation.Interpolator interpolator, float bounceCoefficientX,
+            float bounceCoefficientY, boolean flywheel) {
+        this(context, interpolator, flywheel);
+    }
+
+    void setInterpolator(android.view.animation.Interpolator interpolator) {
+        mInterpolator = interpolator;
     }
 
     public final void setFriction(float friction) {
@@ -57,7 +84,8 @@ public class OverScroller {
                 long elapsed = SystemClock.uptimeMillis() - mScrollerX.mStartTime;
                 int duration = mScrollerX.mDuration;
                 if (elapsed < duration) {
-                    float q = FlingMath.viscous(elapsed / (float) duration);
+                    float x = elapsed / (float) duration;
+                    float q = mInterpolator == null ? FlingMath.viscous(x) : mInterpolator.getInterpolation(x);
                     mScrollerX.updateScroll(q);
                     mScrollerY.updateScroll(q);
                 } else {

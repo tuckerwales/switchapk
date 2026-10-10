@@ -40,6 +40,10 @@ public final class ActivityThread {
     private static final String ANDROID_NS = "http://schemas.android.com/apk/res/android";
 
     static String sPackageName;
+    /** From the manifest element; versionName may be a string resource, resolved when asked. */
+    static int sVersionCode, sVersionCodeMajor, sVersionNameRes;
+    static String sVersionName;
+    static final ArrayList<String> sPermissions = new ArrayList<String>();
     static String sApkPath;
     static String sAppClass;
     static ApplicationInfo sAppInfo;
@@ -709,6 +713,7 @@ public final class ActivityThread {
 
     private static void parseManifest() throws Exception {
         sActivities.clear();
+        sPermissions.clear();
         sReceivers.clear();
         sServices.clear();
         sProviders.clear();
@@ -726,6 +731,15 @@ public final class ActivityThread {
                     if ("manifest".equals(name)) {
                         sPackageName = parser.getAttributeValue(null, "package");
                         if (sPackageName == null) sPackageName = parser.getAttributeValue("", "package");
+                        sVersionCode = attrInt(parser, android.R.attr.versionCode, "versionCode", 0);
+                        sVersionCodeMajor = attrInt(parser, android.R.attr.versionCodeMajor, "versionCodeMajor", 0);
+                        int versionNameRes = attrRes(parser, android.R.attr.versionName, "versionName");
+                        sVersionName = versionNameRes != 0 ? null
+                                : attrString(parser, android.R.attr.versionName, "versionName");
+                        sVersionNameRes = versionNameRes;
+                    } else if ("uses-permission".equals(name) || "uses-permission-sdk-23".equals(name)) {
+                        String perm = attrString(parser, android.R.attr.name, "name");
+                        if (perm != null && !sPermissions.contains(perm)) sPermissions.add(perm);
                     } else if ("uses-sdk".equals(name)) {
                         readUsesSdk(parser);
                     } else if ("application".equals(name)) {

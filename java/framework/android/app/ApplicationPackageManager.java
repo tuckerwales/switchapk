@@ -31,6 +31,23 @@ public class ApplicationPackageManager extends PackageManager {
         PackageInfo pi = new PackageInfo();
         pi.packageName = packageName;
         pi.applicationInfo = ActivityThread.sAppInfo;
+        pi.versionCode = ActivityThread.sVersionCode;
+        pi.versionCodeMajor = ActivityThread.sVersionCodeMajor;
+        pi.versionName = ActivityThread.sVersionName;
+        if (pi.versionName == null && ActivityThread.sVersionNameRes != 0) {
+            try {
+                pi.versionName = ActivityThread.sResources.getString(ActivityThread.sVersionNameRes);
+            } catch (RuntimeException ignored) {
+            }
+        }
+        long installed = new java.io.File(ActivityThread.sAppInfo.sourceDir).lastModified();
+        pi.firstInstallTime = installed;
+        pi.lastUpdateTime = installed;
+        if ((flags & GET_PERMISSIONS) != 0 && !ActivityThread.sPermissions.isEmpty()) {
+            pi.requestedPermissions = ActivityThread.sPermissions.toArray(new String[0]);
+            pi.requestedPermissionsFlags = new int[pi.requestedPermissions.length];
+            java.util.Arrays.fill(pi.requestedPermissionsFlags, PackageInfo.REQUESTED_PERMISSION_GRANTED);
+        }
         if ((flags & GET_ACTIVITIES) != 0) pi.activities = activityInfos(false);
         if ((flags & GET_RECEIVERS) != 0) pi.receivers = activityInfos(true);
         if ((flags & GET_SERVICES) != 0) pi.services = serviceInfos();

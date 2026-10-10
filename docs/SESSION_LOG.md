@@ -862,6 +862,9 @@ what is left in flight.
 - WindowManagerGlobal.removeView takes window focus away before it
   unregisters the window, so updates from onWindowFocusChanged(false)
   still reach it (Shattered PD).
+- AudioManager was missing 177 members: constants, ringer and mode,
+  AudioFocusRequest, AudioDeviceInfo (one built-in speaker), routing and
+  property queries, sound effects (off). 19 niche ones remain stubbed.
 - Simple Calculator now starts with no uncaught or unexpected errors.
   Mindustry's preview error is still open: concurrent and single-threaded
   decoding of the same save match the JDK.

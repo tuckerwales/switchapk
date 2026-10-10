@@ -267,6 +267,5 @@ Generated 2026-10-10 from 13 apps. Static counts include only members and classe
 | Signal | Apps |
 |---|---|
 | exception java.io.EOFException | 1 (mindustry) |
-| stub method android.media.AudioManager.unloadSoundEffects()V | 1 (vectorpinball) |
 
 <!-- corpus:end -->

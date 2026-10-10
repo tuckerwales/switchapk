@@ -701,8 +701,11 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   framework "Can't play this video." dialog unless an `OnErrorListener`
   returns true (tests/apps/video). Audio files play through the mixer in
   6.6. `Context.AUDIO_SERVICE` returns an
-  AudioManager that grants focus and never revokes it, and stores a
-  volume index per stream. Subtitle sources are reported unsupported.
+  AudioManager that grants focus (including `AudioFocusRequest`) and never
+  revokes it, and stores a volume index per stream. It lists one output
+  device, the built-in speaker (48 kHz, 256 frames per buffer), no inputs;
+  ringer and mode are stored, music is never active behind the app, and
+  sound effects are off. Subtitle sources are reported unsupported.
 - RemoteViews inflates its layout and runs the action list (reflection
   setters, click and checked PendingIntents, fill-in against a template
   tag on an ancestor, and RemoteCollectionItems as a BaseAdapter).

@@ -76,8 +76,9 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   SurfaceView as an ANativeWindow, and native EGL window surfaces post
   into that queue (tests/apps/native on host Mesa). The OpenSL ES buffer
   queue is in the same shim and shares the WS7 mixer.
-- Switch (WS10): the NRO boots on hardware; launcher with APK labels and
-  icons; the build links Mesa when switch-mesa is installed. CI packages
+- Switch (WS10): the NRO boots on hardware; a home screen with APK icons,
+  recently played order, touch and an icon cache (not yet seen on
+  hardware); the build links Mesa when switch-mesa is installed. CI packages
   the NRO and sample APKs (`.github/workflows/package.yml`).
 - Audio (WS7): one 48 kHz stereo mixer for SoundPool, MediaPlayer,
   AudioTrack, ToneGenerator and the OpenSL ES buffer queue. Decoders are
@@ -283,6 +284,10 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] first boot on hardware (confirmed 2026-10-02)
   - [x] APK labels and icons in the launcher (tests/apps/labeled,
     switchapk-host --apk-info)
+  - [x] home screen redesign: tile carousel, details panel with Play,
+    touch and key repeat, recently played order, icon cache, launch
+    splash, error screen with Try again, generated NRO icon
+    (tests/launcher/check_launcher.sh)
   - [ ] audio (audren/audout), rumble, 1080p docked
 
 ### M4
@@ -532,13 +537,22 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   consumed and nothing was presented for the quiet time since the command
   started.
 - The launcher draws bitmap icons from the APK. Adaptive-icon and vector
-  XML drawables are skipped, and that row shows the label only.
+  XML drawables are skipped, and that tile shows a colored letter instead.
+- The redesigned home screen has only run on the host; check it on
+  hardware (touch, key repeat, clock, frame rate of the software renderer).
 
 ## Interface changes log
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-10 (WS10): the launcher moved out of main_switch.c into
+  `src/app/launcher.c` behind libnx-free `launcher.h` (UiInput, UiStatus),
+  shared with new `switchapk-host --launcher/--splash/--error-screen/
+  --nro-icon` modes. `ApkIdentity` gained `package` and `version`
+  (`--apk-info` prints them). `platform_switch_buttons_held()` added for
+  the Switch driver. Makefile.switch now needs the host binary for the NRO
+  icon. ARCHITECTURE 2 and 7.
 - 2026-10-10 (WS4/WS1): external storage is `/storage/emulated/0` and the
   app's external files, cache, OBB and media directories use Android's
   `Android/data|obb|media/<pkg>` layout under `<data root>/sdcard` (were

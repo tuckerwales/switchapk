@@ -871,3 +871,29 @@ what is left in flight.
 - `make`, all tests/dex tests, the sample app checks (curves passed on a
   rerun after an animation-timing miss) and the corpus run pass. Nothing
   was run on hardware.
+
+### Session 27 (2026-10-10, branch ccr-854a3d8f-8aqeix)
+
+- WS10 home screen rewrite. The launcher moved from main_switch.c into
+  `src/app/launcher.c`, which draws with gfx into a buffer and takes
+  libnx-free input, so the host runs it too (`switchapk-host --launcher`,
+  `--splash`, `--error-screen`, `--nro-icon`).
+- New look: dark gradient background, status bar with clock, Wi-Fi and
+  battery, a carousel of large icon tiles with an accent glow on the
+  selected one, a details panel (label, package, version, size, last
+  played) with a Play button, button hints that also take taps, and a
+  NEW badge on apps never started. APKs without a bitmap icon get a
+  colored tile with their initial.
+- Easier launching: remembers the last app and opens on it after the app
+  ends, sorts by recently played (Y for A to Z), key repeat on hold, L/R
+  and ZL/ZR jumps, swipe to scroll, tap a tile then tap again or Play, X
+  rescans. Labels and icons are cached per APK in
+  `sdmc:/switch/switchapk/launcher/icons`, so the reload after each app
+  does not reopen every APK. A splash with the app icon shows while the VM
+  boots, and the error screen scrolls and offers Try again.
+- The NRO shows the project logo in hbmenu: cropped and scaled from
+  `docs/assets/logo.jpg` by the host build at build time and encoded by
+  `tools/ppm_to_jpeg.py` (no new binary committed).
+- `make`, `make -f Makefile.switch` (no warnings), VmTest,
+  tests/launcher/check_launcher.sh and tests/apps/labeled/check_info.sh
+  pass. Nothing was run on hardware.

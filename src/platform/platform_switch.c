@@ -572,6 +572,9 @@ u64 platform_switch_buttons_down(void) {
     return padGetButtonsDown(&g_pad);
 }
 
+/* Buttons held as of the last platform_switch_buttons_down (key repeat in the launcher). */
+u64 platform_switch_buttons_held(void) { return padGetButtons(&g_pad); }
+
 bool platform_init(int argc, char **argv) {
     SA_UNUSED(argc);
     SA_UNUSED(argv);

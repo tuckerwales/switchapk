@@ -483,6 +483,27 @@ NATIVE(System_logNative) {
     free(s);
 }
 
+/* static void libcore.io.Logcat.println(int priority, String tag, String msg) */
+NATIVE(Logcat_println) {
+    UNUSED_ARGS();
+    char *tag = nat_str(A_OBJ(1));
+    char *msg = nat_str(A_OBJ(2));
+    int prio = A_INT(0);
+    if (prio < SA_LOG_VERBOSE) prio = SA_LOG_VERBOSE;
+    if (prio > SA_LOG_FATAL) prio = SA_LOG_FATAL;
+    /* One log line per message line, as logcat shows multi-line messages. */
+    char *line = msg ? msg : "null";
+    while (line) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = 0;
+        if (*line || nl) sa_log(prio, tag ? tag : "?", "%s", line);
+        line = nl ? nl + 1 : NULL;
+        if (line && !*line) break;
+    }
+    free(tag);
+    free(msg);
+}
+
 NATIVE(Runtime_availableProcessors) {
     UNUSED_ARGS();
     R_INT(3);
@@ -827,6 +848,7 @@ static const NativeMethodReg g_regs[] = {
     {"Ljava/lang/System;", "nativeExit", "(I)V", System_nativeExit},
     {"Ljava/lang/System;", "gc", "()V", System_gc},
     {"Ljava/lang/System;", "logNative", "(ILjava/lang/String;)V", System_logNative},
+    {"Llibcore/io/Logcat;", "println", "(ILjava/lang/String;Ljava/lang/String;)V", Logcat_println},
     {"Ljava/lang/Runtime;", "availableProcessors", "()I", Runtime_availableProcessors},
     {"Ljava/lang/Runtime;", "freeMemory", "()J", Runtime_freeMemory},
     {"Ljava/lang/Runtime;", "totalMemory", "()J", Runtime_totalMemory},

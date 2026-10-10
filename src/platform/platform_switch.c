@@ -514,6 +514,12 @@ static bool g_rumble_on;
 static HidVibrationDeviceHandle g_rumble_dev[2];
 static u32 g_rumble_style;
 
+/* libnx's randomGet is a ChaCha20 generator seeded from the kernel's entropy (svcGetInfo RandomEntropy). */
+bool platform_random_bytes(void *buf, size_t len) {
+    randomGet(buf, len);
+    return true;
+}
+
 void platform_vibrate(int ms, int amplitude) {
     pthread_mutex_lock(&g_motion_lock);
     g_rumble_until = ms > 0 ? (int64_t)sa_time_ns() + (int64_t)ms * 1000000 : 0;

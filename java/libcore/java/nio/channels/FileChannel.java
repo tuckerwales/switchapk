@@ -2,12 +2,15 @@ package java.nio.channels;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+import java.util.ArrayList;
 import libcore.io.Os;
 
-public class FileChannel implements Channel {
+public class FileChannel extends java.nio.channels.spi.AbstractInterruptibleChannel
+        implements SeekableByteChannel, GatheringByteChannel, ScatteringByteChannel {
     private final int fd;
     private final boolean readable, writable;
-    private boolean open = true;
+    private final ArrayList<FileLock> locks = new ArrayList<FileLock>();
 
     FileChannel(int fd, boolean readable, boolean writable) {
         this.fd = fd;
@@ -19,12 +22,10 @@ public class FileChannel implements Channel {
         return new FileChannel(fd, readable, writable);
     }
 
-    public boolean isOpen() {
-        return open;
-    }
-
-    public void close() throws IOException {
-        open = false;
+    protected void implCloseChannel() throws IOException {
+        synchronized (locks) {
+            locks.clear();
+        }
     }
 
     public int read(ByteBuffer dst) throws IOException {
@@ -41,6 +42,62 @@ public class FileChannel implements Channel {
         src.get(tmp);
         Os.write(fd, tmp, 0, tmp.length);
         return tmp.length;
+    }
+
+    public final long read(ByteBuffer[] dsts) throws IOException {
+        return read(dsts, 0, dsts.length);
+    }
+
+    public long read(ByteBuffer[] dsts, int offset, int length) throws IOException {
+        long total = 0;
+        for (int i = offset; i < offset + length; i++) {
+            if (!dsts[i].hasRemaining()) continue;
+            int n = read(dsts[i]);
+            if (n < 0) return total == 0 ? -1 : total;
+            total += n;
+            if (dsts[i].hasRemaining()) break;
+        }
+        return total;
+    }
+
+    public final long write(ByteBuffer[] srcs) throws IOException {
+        return write(srcs, 0, srcs.length);
+    }
+
+    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+        long total = 0;
+        for (int i = offset; i < offset + length; i++) {
+            total += write(srcs[i]);
+        }
+        return total;
+    }
+
+    /** Reads at an absolute file position without moving the channel position. */
+    public int read(ByteBuffer dst, long position) throws IOException {
+        if (position < 0) throw new IllegalArgumentException("Negative position");
+        synchronized (this) {
+            long saved = position();
+            try {
+                position(position);
+                return read(dst);
+            } finally {
+                position(saved);
+            }
+        }
+    }
+
+    /** Writes at an absolute file position without moving the channel position. */
+    public int write(ByteBuffer src, long position) throws IOException {
+        if (position < 0) throw new IllegalArgumentException("Negative position");
+        synchronized (this) {
+            long saved = position();
+            try {
+                position(position);
+                return write(src);
+            } finally {
+                position(saved);
+            }
+        }
     }
 
     public long position() throws IOException {
@@ -108,14 +165,67 @@ public class FileChannel implements Channel {
         return total;
     }
 
-    public ByteBuffer map(MapMode mode, long position, long size) throws IOException {
-        long saved = position();
-        position(position);
-        ByteBuffer b = ByteBuffer.allocate((int) size);
-        read(b);
-        b.flip();
-        position(saved);
+    public MappedByteBuffer map(MapMode mode, long position, long size) throws IOException {
+        if (size > Integer.MAX_VALUE) throw new IllegalArgumentException("Size exceeds Integer.MAX_VALUE");
+        MappedByteBuffer b = (MappedByteBuffer) ByteBuffer.allocate((int) size);
+        while (b.hasRemaining()) {
+            if (read(b, position + b.position()) <= 0) break;
+        }
+        b.clear();
+        if (mode == MapMode.READ_WRITE) MappedByteBuffer.attachToFile(b, this, position);
         return b;
+    }
+
+    // switchapk runs one app per process, so locks only need to be tracked, not
+    // enforced against other processes. Overlapping locks from the same process
+    // throw, as on Android.
+    public final FileLock lock() throws IOException {
+        return lock(0L, Long.MAX_VALUE, false);
+    }
+
+    public FileLock lock(long position, long size, boolean shared) throws IOException {
+        FileLock lock = tryLock(position, size, shared);
+        if (lock == null) throw new OverlappingFileLockException();
+        return lock;
+    }
+
+    public final FileLock tryLock() throws IOException {
+        return tryLock(0L, Long.MAX_VALUE, false);
+    }
+
+    public FileLock tryLock(long position, long size, boolean shared) throws IOException {
+        if (!isOpen()) throw new ClosedChannelException();
+        if (shared && !readable) throw new NonReadableChannelException();
+        if (!shared && !writable) throw new NonWritableChannelException();
+        synchronized (locks) {
+            for (FileLock l : locks) {
+                if (l.overlaps(position, size)) throw new OverlappingFileLockException();
+            }
+            FileLock lock = new Lock(this, position, size, shared);
+            locks.add(lock);
+            return lock;
+        }
+    }
+
+    private static final class Lock extends FileLock {
+        private boolean valid = true;
+
+        Lock(FileChannel channel, long position, long size, boolean shared) {
+            super(channel, position, size, shared);
+        }
+
+        public boolean isValid() {
+            synchronized (channel().locks) {
+                return valid && channel().isOpen();
+            }
+        }
+
+        public void release() throws IOException {
+            synchronized (channel().locks) {
+                valid = false;
+                channel().locks.remove(this);
+            }
+        }
     }
 
     public static class MapMode {

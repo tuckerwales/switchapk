@@ -629,6 +629,7 @@ public final class ActivityThread {
         sResources = buildResources();
         Resources.setSystem(sResources);
         sContext = new ContextImpl(sPackageName, sAppInfo, sApkPath, sResources);
+        android.security.keystore.AndroidKeyStoreProvider.install(sContext.getDataDir());
         String appClass = sAppClass != null ? sAppClass : "android.app.Application";
         Object appObj = newComponent(appClass);
         if (!(appObj instanceof Application)) throw new ClassCastException(appClass + " is not an Application");

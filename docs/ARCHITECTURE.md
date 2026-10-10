@@ -328,6 +328,68 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - `tests/dex/ZipTest.java` checks all of it against OpenJDK, including
   streams made by Python's zlib and gzip.
 
+### 5.3 Crypto (WS17)
+
+- The JCA provider architecture as in the JDK. `Provider` extends
+  `Properties`: services come from legacy entries (`Cipher.AES` = class
+  name, `Alg.Alias.Cipher.X`, `Cipher.AES SupportedModes` attributes),
+  which is how BouncyCastle registers, or from `Provider.Service` objects
+  added with `putService`. Map mutators drop the cached services.
+  `Security` keeps the ordered provider list; `libcore.crypto.Services`
+  is the lookup the engines share. Engines: MessageDigest, SecureRandom,
+  KeyStore, KeyFactory, KeyPairGenerator, Signature, AlgorithmParameters,
+  Cipher, Mac, KeyGenerator, SecretKeyFactory, KeyAgreement. `Cipher`
+  resolves "ALG/MODE/PAD" through the four JDK lookups (full name,
+  ALG/MODE, ALG//PAD, ALG with setMode/setPadding) and, without an
+  explicit provider, picks the first candidate whose `init` accepts the
+  key (the JDK's delayed provider selection), so keystore keys and
+  ordinary keys can share one transformation.
+- `libcore.crypto.BuiltinProvider` is first in the list and is named
+  `AndroidOpenSSL` because apps name Conscrypt's provider. Pure Java:
+  MD5, SHA-1, SHA-224/256/384/512 and SHA-512/224, /256 (streaming,
+  `BlockDigest`); HMAC over each; AES (FIPS 197 T-tables, not constant
+  time) in ECB, CBC, CTR and GCM (Shoup 4-bit GHASH) with NoPadding or
+  PKCS5/PKCS7; PBKDF2WithHmacSHA1/224/256/384/512 (UTF-8 passwords,
+  `...And8bit` too); AES and Hmac KeyGenerators (Android's
+  BouncyCastle defaults: AES 192, Hmac the digest size); AES and GCM
+  AlgorithmParameters (DER). Its services are built directly, without
+  reflection. Behaviour follows the JDK where apps can see it: random IV
+  when encrypting without parameters, "Parameters missing" when
+  decrypting, GCM decryption returns nothing until the tag checks out
+  (AEADBadTagException), GCM refuses to encrypt twice with one key and
+  IV.
+- `SecureRandom` (`NativePrng`) reads OS entropy on every call through
+  the static native `NativePrng.nativeRandomBytes(byte[], int, int)`
+  (`src/native/java_security.c`, GIL held) over
+  `platform_random_bytes`. setSeed adds nothing; SHA1PRNG and DEFAULT
+  are aliases.
+- Keys a provider must not export implement `libcore.crypto.KeyMaterial`
+  (`keyMaterial()`, `checkUse(operation, mode, padding, digest)`). The
+  built-in ciphers and MACs take raw bytes from it after `checkUse`, so
+  AndroidKeyStore keys work with `Cipher.getInstance("AES/GCM/NoPadding")`
+  as on Android while their `getEncoded()` and `getFormat()` stay null.
+- AndroidKeyStore (`android.security.keystore`, framework):
+  `ActivityThread.boot` calls `AndroidKeyStoreProvider.install(dataDir)`,
+  which appends the provider (last, as on Android). KeyStore
+  "AndroidKeyStore", KeyGenerator AES and HmacSHA1..512 (they need a
+  `KeyGenParameterSpec`), SecretKeyFactory for `KeyInfo`, and import of
+  secret keys with `setEntry(..., KeyProtection)`. Each alias is a
+  properties file `data/<pkg>/keystore/<hex alias>.key` written by
+  rename: authorizations and the key bytes in Base64. Software only (the
+  Switch gives homebrew no keystore), so files are the protection, and
+  `KeyInfo` reports SECURITY_LEVEL_SOFTWARE. Purposes, block modes,
+  paddings and validity dates are enforced; user authentication cannot
+  be asked for and is treated as given. Key pairs and trusted
+  certificates are not supported yet.
+- Not there yet: RSA, EC, DSA, DH, X25519/Ed25519 (KeyFactory,
+  KeyPairGenerator, Signature, KeyAgreement), ChaCha20, 3DES,
+  certificates and CertificateFactory (with TLS, WS11). The specs and
+  interfaces for them exist, so third-party providers (BouncyCastle)
+  can supply the algorithms.
+- `tests/dex/CryptoTest.java` checks the provider against OpenJDK with
+  published vectors; `tests/apps/keystore` checks the keystore across
+  two runs.
+
 ## 6. Android framework (java/framework)
 
 ### 6.1 Principles
@@ -1236,6 +1298,11 @@ Single C interface implemented once per target:
 - events: `platform_wait_event(ev, timeout_ms)`, `platform_wake()`,
   `platform_push_event(ev)` (thread-safe)
 - text: `platform_request_text(id, initial, hint, input_type, max_len)`
+- entropy (WS17): `platform_random_bytes(buf, len)` fills `buf` with
+  cryptographically secure bytes and returns false if it cannot.
+  Headless uses getrandom(2) (`/dev/urandom` before Linux 3.17); the
+  Switch uses libnx `randomGet` (ChaCha20 seeded from the kernel's
+  entropy). Used by SecureRandom and by the Switch SQLite VFS.
 - audio: `platform_audio_start(rate, cb, user)`, `platform_audio_stop()`
 - network: `platform_network_state(PlatformNetwork*)` fills `connected`,
   `transport` (`PLATFORM_NET_NONE/WIFI/ETHERNET`) and `signal` (Wi-Fi

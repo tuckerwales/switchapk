@@ -5819,6 +5819,28 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
 
     public boolean isVisibleToUserForAutofill(int virtualId) { return false; }
 
+    private static final AtomicInteger sNextAutofillViewId = new AtomicInteger(1);
+    private android.view.autofill.AutofillId mAutofillId;
+
+    public final android.view.autofill.AutofillId getAutofillId() {
+        if (mAutofillId == null) {
+            mAutofillId = new android.view.autofill.AutofillId(sNextAutofillViewId.getAndIncrement());
+        }
+        return mAutofillId;
+    }
+
+    public void setAutofillId(android.view.autofill.AutofillId id) {
+        if (id != null && id.isVirtualInt()) throw new IllegalStateException("Cannot set to virtual id");
+        if (isAttachedToWindow()) throw new IllegalStateException("Cannot set autofill id when attached");
+        mAutofillId = id;
+    }
+
+    public android.view.autofill.AutofillValue getAutofillValue() { return null; }
+
+    public void autofill(android.view.autofill.AutofillValue value) {}
+
+    public void autofill(SparseArray<android.view.autofill.AutofillValue> values) {}
+
     // ---------------------------------------------------------------- nested scrolling
 
     private ViewParent mNestedScrollingParent;

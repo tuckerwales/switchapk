@@ -843,3 +843,22 @@ what is left in flight.
   host Mesa; it passed on a rerun after a cold-start timeout). `make -f
   Makefile.switch` builds the NRO without warnings (devkitPro fetched with
   tools/fetch_toolchains.py devkitpro). Nothing was run on hardware.
+
+### Session 26 (2026-10-10, branch ccr-0c4b5dc0-hmtab0)
+
+- Resources: style bags stopped merging parents after 20 levels, which cut
+  Material3 themes off from the framework theme (no windowNoTitle, so the
+  titled decor was chosen and failed on windowTitleSize). The guard is now
+  128 and only stops cycles.
+- External storage follows Android's layout (`/storage/emulated/0`,
+  `Android/data/<pkg>/files`, `Android/obb/<pkg>`), fixing Simple Commons
+  path parsing. PackageManager gained queryIntentContentProviders,
+  queryContentProviders and the API 33 typed-flag overloads.
+- AssetManager.openFd throws FileNotFoundException for compressed assets,
+  as Android does.
+- Simple Calculator now starts with no uncaught or unexpected errors.
+  Mindustry's preview error is still open: concurrent and single-threaded
+  decoding of the same save match the JDK.
+- `make`, all tests/dex tests, the sample app checks (curves passed on a
+  rerun after an animation-timing miss) and the corpus run pass. Nothing
+  was run on hardware.

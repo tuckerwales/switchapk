@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 25, see SESSION_LOG.md)
+## Current state (end of session 26, see SESSION_LOG.md)
 
 Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 - VM core, libcore, JNI, reflection (including RUNTIME annotations),
@@ -471,8 +471,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    the apps past the first screen (a per-app smoke script that starts a
    game), the AppCompat/AndroidX surface the static scan ranks highest
    (accessibility, android.transition, android.icu, AppOpsManager,
-   window insets; WS14), Mindustry's map preview decode error (suspect
-   java.util.zip or DataInputStream), android.bluetooth answering as
+   window insets; WS14), Mindustry's map preview decode error (zip and
+   DataInputStream ruled out), android.bluetooth answering as
    absent (WS15), and ActionBarView for Holo decors (they use the Toolbar
    decor now). Simon Tatham's Puzzles needs to run a bundled executable,
    which the console cannot do. Then run the drawing apps on hardware.
@@ -540,6 +540,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-10 (WS4/WS1): external storage is `/storage/emulated/0` and the
+  app's external files, cache, OBB and media directories use Android's
+  `Android/data|obb|media/<pkg>` layout under `<data root>/sdcard` (were
+  under the app's data directory). Style bags follow parents to any depth.
+  ARCHITECTURE 5, 6.2.
 - 2026-10-10 (WS11/WS16): java.net sockets own the descriptor for NIO
   channels; `Socket`, `ServerSocket` and `DatagramSocket` gained hidden
   `fd$()`, `setChannel$()` and `closeInternal$()` hooks (`Socket` also

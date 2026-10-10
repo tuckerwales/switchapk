@@ -30,6 +30,7 @@ import android.view.Display;
 import android.view.WindowManager;
 import android.view.WindowManagerImpl;
 import android.view.inputmethod.InputMethodManager;
+import android.os.Environment;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -198,20 +199,26 @@ public class ContextImpl extends Context {
     @Override public File getNoBackupFilesDir() { return ensure(new File(getDataDir(), "no_backup")); }
     @Override public File getCacheDir() { return ensure(new File(getDataDir(), "cache")); }
     @Override public File getCodeCacheDir() { return ensure(new File(getDataDir(), "code_cache")); }
-    @Override public File getObbDir() { return ensure(new File(getDataDir(), "obb")); }
+    // External app directories use Android's layout on the shared storage volume (mapped to
+    // <data root>/sdcard), so users can drop OBB files where Android puts them.
+    private File externalAppDir(String kind) {
+        return new File(Environment.getExternalStorageDirectory(), "Android/" + kind + "/" + mPackageName);
+    }
+
+    @Override public File getObbDir() { return ensure(externalAppDir("obb")); }
     @Override public File[] getObbDirs() { return new File[] { getObbDir() }; }
 
     @Override
     public File getExternalFilesDir(String type) {
-        File base = ensure(new File(getDataDir(), "external"));
+        File base = ensure(new File(externalAppDir("data"), "files"));
         return type == null ? base : ensure(new File(base, type));
     }
 
     @Override public File[] getExternalFilesDirs(String type) { return new File[] { getExternalFilesDir(type) }; }
-    @Override public File getExternalCacheDir() { return ensure(new File(getDataDir(), "external-cache")); }
+    @Override public File getExternalCacheDir() { return ensure(new File(externalAppDir("data"), "cache")); }
     @Override public File[] getExternalCacheDirs() { return new File[] { getExternalCacheDir() }; }
     @Override
-    public File[] getExternalMediaDirs() { return new File[] { ensure(new File(getDataDir(), "external-media")) }; }
+    public File[] getExternalMediaDirs() { return new File[] { ensure(externalAppDir("media")) }; }
 
     @Override
     public String[] fileList() {

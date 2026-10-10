@@ -238,6 +238,11 @@ Natives in `src/native`. File paths from Java are translated by
 | `/data/local/tmp/...` | `<data root>/tmp/...` |
 | other absolute paths on Switch | `sdmc:<path>` |
 
+`Environment.getExternalStorageDirectory()` is `/storage/emulated/0`
+(emulated, not removable) and the app's external directories use Android's
+layout on it: `Android/data/<pkg>/files` and `cache`, `Android/obb/<pkg>`,
+`Android/media/<pkg>`, so OBB files go where Android puts them.
+
 Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 `--data` (default `build/data`).
 
@@ -405,7 +410,9 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   bags with parents merged (`nGetBag` -> `{int[] (attr,type,data)*, String[]}`;
   as in AssetManager2::GetBag, an entry's own items are all kept, since
   newer aapt2 gives every array item the same key, and only keys inherited
-  from a parent are overridden),
+  from a parent are overridden; parent chains are followed to any depth,
+  with a guard of 128 against cycles, since Material3 themes are about 25
+  styles deep),
   names/identifiers, asset bytes, directory listing, and binary XML
   flattened into arrays (`nOpenXml` -> `{int[] events, int[] attrs, String[] strings}`)
   consumed by `XmlBlock.Parser`. Asset cookies: 1 = framework, 2 = app,

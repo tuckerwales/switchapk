@@ -80,14 +80,17 @@ What it took, by the first blocker each fix removed:
 | dex_proto_desc stack overflow on a long Kotlin return type | Unciv (VM abort) |
 | Native shim: C++ new/delete, sincos, locale and wide chars, syslog, semaphores, rwlocks, dl_iterate_phdr | Vector Pinball, Frozen Bubble, Mindustry |
 | java.nio Selector and socket channels | Mindustry (network client at startup) |
+| Style parent chains deeper than 20 were cut off, so Material3 themes lost the framework theme (no windowNoTitle, so the titled decor failed to inflate) | Simple Calculator (and any Material3 app) |
+| External storage in Android's layout (`/storage/emulated/0/Android/data/<pkg>/files`) | Simple Calculator (Simple Commons cuts paths at `Android/data`) |
+| PackageManager.queryIntentContentProviders and the API 33 typed-flag overloads | Simple Calculator (EmojiCompat via Glide) |
+| openFd refuses compressed assets like Android (was a descriptor that could not be mapped) | Mindustry (Arc falls back to streams) |
 
 Still open:
 
 | Gap | Apps | Evidence |
 |---|---|---|
 | Simon Tatham's Puzzles runs `libpuzzlesgen.so` as an executable and quits when it cannot ("missing a required file") | Simon Tatham's Puzzles | run: Toast, then exit; there are no processes on the console |
-| Mindustry's map previews fail decoding a save chunk (`Pixmap.setRaw` with index -1024 after a short read) | Mindustry | run, caught by the app; suspect java.util.zip or DataInputStream |
-| Simple Calculator logs a layout_height inflation error and a substring error on start (caught) | Simple Calculator | run |
+| Mindustry's map previews fail decoding a save chunk (EOFException in `ShortChunkSaveVersion.readMap`; was `Pixmap.setRaw` index -1024) | Mindustry | run, caught by the app; the same save decodes like the JDK through InflaterInputStream and DataInputStream, single and 8 threads, so the cause is in what the app does around it |
 | android.bluetooth is missing (caught at start) | Frozen Bubble | run |
 | AppCompat/AndroidX surface: accessibility, android.transition, android.icu, AppOpsManager, window insets | Andor's Trail, DroidFish, Simple Calculator, Simon Tatham's Puzzles, Unciv | static scan, 80 to 190 SDK classes each |
 
@@ -262,12 +265,9 @@ Generated 2026-10-10 from 13 apps. Static counts include only members and classe
 
 | Signal | Apps |
 |---|---|
-| exception java.lang.IllegalArgumentException: View=DecorView@55f76778 not attached to window manager | 1 (shatteredpd) |
-| exception java.lang.IndexOutOfBoundsException: index=-1024 out of bounds (limit=262144, nb=4) | 1 (mindustry) |
+| exception java.io.EOFException | 1 (mindustry) |
+| exception java.lang.IllegalArgumentException: View=DecorView@3507983 not attached to window manager | 1 (shatteredpd) |
 | exception java.lang.NoClassDefFoundError: android.bluetooth.BluetoothAdapter | 1 (frozenbubble) |
-| exception java.lang.StringIndexOutOfBoundsException: begin 0, end -1, length 52 | 1 (calculator) |
-| exception java.lang.UnsupportedOperationException: Binary XML file line #32: You must supply a layout_height attribute. | 1 (calculator) |
-| stub method android.content.pm.PackageManager.queryIntentContentProviders(Landroid/content/Intent;I)Ljava/util/List; | 1 (calculator) |
 | stub method android.media.AudioManager.unloadSoundEffects()V | 1 (vectorpinball) |
 
 <!-- corpus:end -->

@@ -33,7 +33,7 @@ public class Environment {
     public static File getDataDirectory() { return new File("/data"); }
     public static File getStorageDirectory() { return new File("/storage"); }
     public static File getDownloadCacheDirectory() { return new File("/cache"); }
-    public static File getExternalStorageDirectory() { return new File("/sdcard"); }
+    public static File getExternalStorageDirectory() { return new File("/storage/emulated/0"); }
 
     public static File getExternalStoragePublicDirectory(String type) {
         File f = new File(getExternalStorageDirectory(), type);
@@ -43,10 +43,10 @@ public class Environment {
     public static String getExternalStorageState() { return MEDIA_MOUNTED; }
     public static String getExternalStorageState(File path) { return MEDIA_MOUNTED; }
     public static String getStorageState(File path) { return MEDIA_MOUNTED; }
-    public static boolean isExternalStorageRemovable() { return true; }
-    public static boolean isExternalStorageRemovable(File path) { return true; }
-    public static boolean isExternalStorageEmulated() { return false; }
-    public static boolean isExternalStorageEmulated(File path) { return false; }
+    public static boolean isExternalStorageRemovable() { return false; }
+    public static boolean isExternalStorageRemovable(File path) { return false; }
+    public static boolean isExternalStorageEmulated() { return true; }
+    public static boolean isExternalStorageEmulated(File path) { return true; }
     public static boolean isExternalStorageLegacy() { return true; }
     public static boolean isExternalStorageLegacy(File path) { return true; }
     public static boolean isExternalStorageManager() { return true; }

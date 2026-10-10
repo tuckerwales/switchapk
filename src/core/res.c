@@ -789,8 +789,12 @@ bool arsc_get_value(ResTable *t, uint32_t id, ResValue *out) {
     return !(out->type == RV_REFERENCE && out->data == id);
 }
 
+/* AssetManager2 has no depth limit: Material3 themes chain about 25 styles down to the
+ * framework theme. The guard only stops parent cycles. */
+#define BAG_MAX_DEPTH 128
+
 static void bag_merge(ResTable *t, uint32_t id, ResBag *out, int depth) {
-    if (depth > 20) return;
+    if (depth > BAG_MAX_DEPTH) return;
     const ResEntryDef *e = arsc_get_entry(t, id);
     if (!e || !e->complex) return;
     if (e->parent) bag_merge(t, e->parent, out, depth + 1);

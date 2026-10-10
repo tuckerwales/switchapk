@@ -192,6 +192,19 @@ public class ApplicationPackageManager extends PackageManager {
     }
 
     @Override
+    public List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags) {
+        // Provider intent filters are not parsed; the providers apps look up this way (font and
+        // emoji providers) come from other packages, which are absent here.
+        return new ArrayList<ResolveInfo>();
+    }
+
+    @Override
+    public List<ProviderInfo> queryContentProviders(String processName, int uid, int flags) {
+        // Every provider runs in the one app process.
+        return new ArrayList<ProviderInfo>(ActivityThread.sProviders);
+    }
+
+    @Override
     public Intent getLaunchIntentForPackage(String packageName) {
         if (!ours(packageName)) return null;
         for (int i = 0; i < ActivityThread.sActivities.size(); i++) {

@@ -356,6 +356,8 @@ public class ContextImpl extends Context {
         }
         if (TELEPHONY_SERVICE.equals(name)) return new android.telephony.TelephonyManager();
         if (CAMERA_SERVICE.equals(name)) return new android.hardware.camera2.CameraManager();
+        if (ACTIVITY_SERVICE.equals(name)) return new ActivityManager(getOuterContext());
+        if (DISPLAY_SERVICE.equals(name)) return new android.hardware.display.DisplayManager(getOuterContext());
         if (POWER_SERVICE.equals(name)) {
             if (sPowerManager == null) sPowerManager = new android.os.PowerManager();
             return sPowerManager;
@@ -398,6 +400,8 @@ public class ContextImpl extends Context {
         if (serviceClass == android.hardware.SensorManager.class) return SENSOR_SERVICE;
         if (serviceClass == android.os.BatteryManager.class) return BATTERY_SERVICE;
         if (serviceClass == android.os.PowerManager.class) return POWER_SERVICE;
+        if (serviceClass == ActivityManager.class) return ACTIVITY_SERVICE;
+        if (serviceClass == android.hardware.display.DisplayManager.class) return DISPLAY_SERVICE;
         if (serviceClass == android.location.LocationManager.class) return LOCATION_SERVICE;
         if (serviceClass == android.telephony.TelephonyManager.class) return TELEPHONY_SERVICE;
         if (serviceClass == android.hardware.camera2.CameraManager.class) return CAMERA_SERVICE;

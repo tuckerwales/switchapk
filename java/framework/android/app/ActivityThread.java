@@ -147,6 +147,19 @@ public final class ActivityThread {
         }
     }
 
+    /** @hide AOSP's hidden accessor: the process is named after the package. */
+    public static String currentProcessName() { return sPackageName; }
+
+    /** @hide */
+    public static String currentPackageName() { return sPackageName; }
+
+    /** ActivityManager.AppTask.finishAndRemoveTask: every activity of the one task. */
+    static void finishAllActivities() {
+        if (!sStack.isEmpty() && sStack.get(sStack.size() - 1).activity != null) {
+            finishAffinity(sStack.get(sStack.size() - 1).activity);
+        }
+    }
+
     /** Activity.finishAffinity: this activity and everything below it (one task, one affinity). */
     static void finishAffinity(Activity activity) {
         final ActivityRecord rec = findRecord(activity);
@@ -554,6 +567,7 @@ public final class ActivityThread {
         int diff = oldConfig.diff(newConfig);
         sResources.updateConfiguration(newConfig, metrics);
         WindowManagerGlobal.getInstance().onDisplayChanged();
+        android.hardware.display.DisplayManager.notifyDisplayChanged();
         if (diff == 0) return;
         Configuration config = new Configuration(sResources.getConfiguration());
         sApplication.onConfigurationChanged(new Configuration(config));

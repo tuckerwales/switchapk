@@ -703,6 +703,11 @@ public class PhoneWindow extends Window {
                 final int attr = com.android.internal.util.InternalRes.attr("windowActionBarFullscreenDecorLayout");
                 layoutResource = attr != 0 && context.getTheme().resolveAttribute(attr, res, true) && res.resourceId != 0
                         ? res.resourceId : internalId(context, "screen_action_bar", "layout");
+                // Holo decors (screen_action_bar) are built on ActionBarView, which is not ported:
+                // they get the Toolbar decor, which WindowDecorActionBar drives the same way.
+                if (layoutResource == internalId(context, "screen_action_bar", "layout")) {
+                    layoutResource = internalId(context, "screen_toolbar", "layout");
+                }
                 layoutName = "action bar decor";
             } else {
                 layoutResource = internalId(context, "screen_title", "layout");

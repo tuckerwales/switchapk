@@ -1079,6 +1079,11 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void setRecentsScreenshotEnabled(boolean enabled) {}
 
+    public void setTaskDescription(ActivityManager.TaskDescription taskDescription) {
+        ActivityManager.sTaskDescription = taskDescription != null
+                ? new ActivityManager.TaskDescription(taskDescription) : null;
+    }
+
     public void reportFullyDrawn() {}
 
     public void postponeEnterTransition() {}

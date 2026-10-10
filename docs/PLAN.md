@@ -385,6 +385,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     `tools/corpus.py` static gap scan, headless smoke run and generated
     report (docs/COMPATIBILITY.md)
   - [ ] corpus runs in CI; per-app scripts that get past the title screen
+  - [x] proprietary apps supplied locally (`"source": "local"`,
+    `tools/corpus.py import`, Play split merge); Old School RuneScape added
+  - [ ] first Old School RuneScape scan and smoke run recorded
 
 ## Next steps (in order)
 

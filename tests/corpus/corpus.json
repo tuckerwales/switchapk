@@ -1,5 +1,5 @@
 {
-  "comment": "Open-source APK corpus for compatibility tracking. APKs are fetched into build/corpus by tools/corpus.py, never committed. Versions are pinned so results stay comparable; bump version_code and sha256 together. repo is the F-Droid repo (repo or archive).",
+  "comment": "Open-source APK corpus for compatibility tracking. APKs are fetched into build/corpus by tools/corpus.py, never committed. Versions are pinned so results stay comparable; bump version_code and sha256 together. repo is the F-Droid repo (repo or archive). Entries with source local are proprietary: nothing is downloaded, the owner supplies the APK (or Play splits) with tools/corpus.py import, version_code and sha256 are left unpinned and the report names the build that was scanned.",
   "apps": [
     {"id": "pixeldungeon", "name": "Pixel Dungeon", "package": "com.watabou.pixeldungeon", "version_code": 74, "repo": "archive",
      "sha256": "feb57642dc027e68a1630e32580b0f87f14382d6086f94a2096aee691c957842", "tier": 0,
@@ -39,6 +39,8 @@
      "why": "AppCompat and Material UI with a native chess engine."},
     {"id": "calculator", "name": "Simple Calculator", "package": "com.simplemobiletools.calculator", "version_code": 61, "repo": "archive",
      "sha256": "13788d61eb7e6651e2eb87b655eea9019c723da2e0c8af6e6e17945b75a51800", "tier": 3,
-     "why": "Kotlin, AndroidX and Material components; typical modern utility app."}
+     "why": "Kotlin, AndroidX and Material components; typical modern utility app."},
+    {"id": "osrs", "name": "Old School RuneScape", "package": "com.jagex.oldscape.android", "source": "local", "tier": 3,
+     "why": "Commercial MMO and the first proprietary target: a large native client on GLES, live networking and account login. Play-only, so the APK is supplied locally (base plus config.arm64_v8a split)."}
   ]
 }

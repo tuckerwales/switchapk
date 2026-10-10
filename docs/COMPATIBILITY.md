@@ -2,8 +2,9 @@
 
 How switchapk does on real, open-source APKs, and what it lacks for them.
 The corpus is listed in `tests/corpus/corpus.json` (F-Droid builds, pinned by
-version code and sha256). APKs are fetched into `build/corpus` and never
-committed.
+version code and sha256, plus proprietary apps whose APK each developer
+supplies; see "Proprietary apps" below). APKs are fetched into
+`build/corpus` and never committed.
 
 ## Running it
 
@@ -17,6 +18,45 @@ tools/corpus.py scan --apk any.apk      # any APK, summary only
 
 GL apps need host Mesa (see DEV_SETUP.md), or they stop at "OpenGL ES
 unavailable".
+
+## Proprietary apps
+
+Entries with `"source": "local"` are commercial apps that cannot be
+downloaded by the tool or committed. Bring your own copy, from a device you
+own:
+
+```
+adb shell pm path com.jagex.oldscape.android      # lists base.apk and the splits
+adb pull <each path> build/corpus/in/
+tools/corpus.py import osrs build/corpus/in/*.apk # or one .apks / .xapk bundle
+tools/corpus.py scan osrs && tools/corpus.py run osrs && tools/corpus.py report
+```
+
+`import` copies the files into `build/corpus/local/<id>/`; `fetch` (and
+`all`) then assembles one APK from them, because Play installs are split
+and the VM loads a single zip. The base APK (the one with `classes.dex`)
+is kept whole; `lib/` and `assets/` entries of the other splits are added,
+and their manifests, `resources.arsc` and `res/` are dropped (density and
+language splits). Apps nobody has supplied show as "APK not supplied" in
+the table and are skipped by every other command.
+
+These apps update often, so they are not pinned. `fetch` prints the
+versionCode and sha256 it assembled and the table names the version that
+was scanned; quote both when you record findings. A phone gives only
+arm64-v8a libraries, so the smoke run needs an AArch64 Linux host (WS9
+loads there) or the console; on an x86-64 host the static scan still
+covers the arm64 libraries.
+
+### Old School RuneScape (`osrs`)
+
+Tracked since 2026-10-10, not scanned yet: no APK has been supplied in a
+session so far. Package `com.jagex.oldscape.android`, from Play only.
+What we expect it to stress, to be confirmed by the first scan: a large
+native client (native loader and bionic shim coverage, WS9), GLES
+rendering (WS8), sustained networking to the game servers and TLS for
+account login (WS11), and possibly WebView or a browser intent for Jagex
+Account sign-in. Record the first scan's version, blockers and run
+outcome here and in the Findings table.
 
 ## How gaps are found
 
@@ -95,6 +135,7 @@ Generated 2026-10-09 from 13 apps. Static counts include only members and classe
 | Simon Tatham's Puzzles | 2 | 21/36 | androidx.compose, androidx (other), androidx.appcompat, material, androidx.core, kotlinx.coroutines, androidx.recyclerview, androidx.constraintlayout, androidx.fragment (Kotlin) | 109 | 5 | 91 | arm64, 3 libs, 3 unresolved | exits at start (rc 0) |
 | DroidFish | 2 | 16/28 | androidx (other), material, androidx.core, androidx.appcompat, androidx.recyclerview, androidx.fragment, androidx.constraintlayout, support library | 101 | 8 | 44 | arm64, 3 libs, 61 unresolved | fails at start: NoClassDefFoundError: android.preference.PreferenceManager |
 | Simple Calculator | 3 | 23/34 | androidx.appcompat, material, androidx (other), androidx.compose, androidx.recyclerview, androidx.fragment, kotlinx.coroutines, androidx.core, rxjava (Kotlin) | 126 | 11 | 105 | none | fails at start: ClassNotFoundException: com.simplemobiletools.calculator.activities.SplashActivity.Grey_black |
+| Old School RuneScape (local) | 3 | | | | | | | APK not supplied |
 
 ### Most-needed packages (static, by number of apps)
 

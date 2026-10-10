@@ -3,6 +3,8 @@
 
 Usage:
   tools/corpus.py fetch [id...]     download the pinned APKs of tests/corpus/corpus.json into build/corpus/apks
+                                    (entries with "source": "local" are assembled from build/corpus/local/<id>)
+  tools/corpus.py import id file... copy a local app's APK, splits or .apks/.xapk bundle into build/corpus/local/<id>
   tools/corpus.py scan [id...]      static analysis of each APK against build/java/framework.dex
   tools/corpus.py run [id...]       boot each APK headless with a smoke script, collect log signals
   tools/corpus.py report            aggregate scans and runs into docs/COMPATIBILITY.md
@@ -41,6 +43,7 @@ ANDROID_JAR = os.path.join(ROOT, "build/toolchains/sdk/android.jar")
 AAPT2 = os.path.join(ROOT, "build/toolchains/sdk/aapt2")
 HOST = os.path.join(ROOT, "build/host/switchapk-host")
 REPORT = os.path.join(ROOT, "docs/COMPATIBILITY.md")
+LOCAL = os.path.join(OUT, "local")
 FDROID = "https://f-droid.org/%s/%s_%d.apk"
 
 # Packages the VM auto-stubs (src/vm/class.c stub_allowed).
@@ -107,7 +110,13 @@ def select(apps, ids):
     return [known[i] for i in ids]
 
 
+def is_local(app):
+    return app.get("source") == "local"
+
+
 def apk_path(app):
+    if is_local(app):
+        return os.path.join(OUT, "apks", "%s_local.apk" % app["package"])
     return os.path.join(OUT, "apks", "%s_%d.apk" % (app["package"], app["version_code"]))
 
 
@@ -124,6 +133,9 @@ def sha256(path):
 def cmd_fetch(apps):
     os.makedirs(os.path.join(OUT, "apks"), exist_ok=True)
     for app in apps:
+        if is_local(app):
+            fetch_local(app)
+            continue
         path = apk_path(app)
         if not os.path.exists(path):
             # F-Droid moves old versions from repo to archive once newer ones ship.
@@ -153,6 +165,123 @@ def cmd_fetch(apps):
             die("%s: sha256 %s does not match the pinned %s" % (app["id"], digest, want))
         if not want:
             print("%s: sha256 %s (not pinned yet)" % (app["id"], digest))
+
+
+# Proprietary apps cannot be downloaded or committed: their owner supplies the APK (adb pull from a
+# device they own, or a bundle export). Play installs are split: base.apk holds the dex and manifest,
+# config.<abi>.apk the native libraries. The VM loads one zip, so the splits' lib/ and assets/ are
+# merged into a copy of the base (density and language splits only add resources the base already
+# has at default density, so their res/ and resources.arsc are dropped).
+
+def local_inputs(app):
+    d = os.path.join(LOCAL, app["id"])
+    if not os.path.isdir(d):
+        return []
+    return sorted(os.path.join(d, n) for n in os.listdir(d) if n.endswith((".apk", ".apks", ".xapk")))
+
+
+def expand_bundles(paths, tmp):
+    """Unpacks .apks/.xapk bundles (zips of APKs) into tmp; returns the plain APK paths."""
+    out = []
+    for p in paths:
+        if p.endswith(".apk"):
+            out.append(p)
+            continue
+        with zipfile.ZipFile(p) as z:
+            for n in z.namelist():
+                if n.endswith(".apk"):
+                    dst = os.path.join(tmp, "%d_%s" % (len(out), os.path.basename(n)))
+                    with z.open(n) as src, open(dst, "wb") as f:
+                        f.write(src.read())
+                    out.append(dst)
+    return out
+
+
+def merge_splits(apks, dest):
+    bases = []
+    for p in apks:
+        with zipfile.ZipFile(p) as z:
+            if "classes.dex" in z.namelist():
+                bases.append(p)
+    if len(bases) != 1:
+        die("need exactly one base APK (with classes.dex) among %s, found %d" % (
+            ", ".join(os.path.basename(p) for p in apks), len(bases)))
+    base = bases[0]
+    tmp = dest + ".part"
+    merged = []
+    with zipfile.ZipFile(base) as zb, zipfile.ZipFile(tmp, "w") as out:
+        names = set()
+        for info in zb.infolist():
+            if info.filename.startswith("META-INF/"):
+                continue
+            out.writestr(info, zb.read(info))
+            names.add(info.filename)
+        for p in apks:
+            if p == base:
+                continue
+            with zipfile.ZipFile(p) as zs:
+                for info in zs.infolist():
+                    n = info.filename
+                    if not n.startswith(("lib/", "assets/")) or n in names:
+                        continue
+                    out.writestr(info, zs.read(info))
+                    names.add(n)
+            merged.append(os.path.basename(p))
+    os.replace(tmp, dest)
+    return os.path.basename(base), merged
+
+
+def badging_version(path):
+    if not os.path.exists(AAPT2):
+        return None, None
+    out = subprocess.run([AAPT2, "dump", "badging", path], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                         text=True).stdout
+    m = re.search(r"package: name='([^']*)' versionCode='(\d+)'", out)
+    return (m.group(1), int(m.group(2))) if m else (None, None)
+
+
+def fetch_local(app):
+    path = apk_path(app)
+    inputs = local_inputs(app)
+    if not inputs:
+        if os.path.exists(path):
+            return
+        print("skip %s: proprietary, supply the APK yourself: tools/corpus.py import %s base.apk "
+              "[split_config.arm64_v8a.apk ...]" % (app["id"], app["id"]))
+        return
+    if os.path.exists(path) and os.path.getmtime(path) >= max(os.path.getmtime(p) for p in inputs):
+        return
+    tmp = os.path.join(OUT, "work", app["id"], "bundle")
+    os.makedirs(tmp, exist_ok=True)
+    for n in os.listdir(tmp):
+        os.unlink(os.path.join(tmp, n))
+    base, merged = merge_splits(expand_bundles(inputs, tmp), path)
+    pkg, vc = badging_version(path)
+    if pkg and pkg != app["package"]:
+        os.unlink(path)
+        die("%s: %s is package %s, expected %s" % (app["id"], base, pkg, app["package"]))
+    print("%s: assembled from %s%s; versionCode %s, sha256 %s" % (
+        app["id"], base, (" + " + ", ".join(merged)) if merged else "", vc, sha256(path)))
+    if app.get("version_code") and vc and vc != app["version_code"]:
+        print("%s: note: corpus.json pins versionCode %d, this is %d" % (app["id"], app["version_code"], vc))
+
+
+def cmd_import(app, files):
+    if not is_local(app):
+        die("%s is fetched from F-Droid, not imported" % app["id"])
+    if not files:
+        die("usage: tools/corpus.py import %s base.apk [split.apk ...] | bundle.apks" % app["id"])
+    d = os.path.join(LOCAL, app["id"])
+    os.makedirs(d, exist_ok=True)
+    for n in os.listdir(d):
+        os.unlink(os.path.join(d, n))
+    for f in files:
+        if not os.path.isfile(f) or not f.endswith((".apk", ".apks", ".xapk")):
+            die("%s: not an .apk, .apks or .xapk file" % f)
+        with open(f, "rb") as src, open(os.path.join(d, os.path.basename(f)), "wb") as dst:
+            dst.write(src.read())
+    print("imported %d file(s) into %s" % (len(files), os.path.relpath(d, ROOT)))
+    fetch_local(app)
 
 
 # ---- dex -------------------------------------------------------------------------------------------------
@@ -522,6 +651,8 @@ def manifest(path):
     for line in out.splitlines():
         if line.startswith("package:"):
             info["version_name"] = (re.search(r"versionName='([^']*)'", line) or [None, None])[1]
+            vc = re.search(r"versionCode='(\d+)'", line)
+            info["version_code"] = int(vc.group(1)) if vc else None
         elif line.startswith(("sdkVersion:", "minSdkVersion:")):
             info["min_sdk"] = int(line.split("'")[1])
         elif line.startswith("targetSdkVersion:"):
@@ -941,8 +1072,14 @@ def cmd_report(apps, top):
         s = load_json("scan", app["id"])
         r = load_json("run", app["id"])
         if not s:
+            if is_local(app):
+                rows.append("| %s (local) | %d | | | | | | | APK not supplied |" % (app["name"], app["tier"]))
             continue
         m = s["manifest"]
+        name = app["name"]
+        if is_local(app):
+            # Local apps are not pinned, so say which build the numbers are for.
+            name += " (local, %s)" % (m.get("version_name") or m.get("version_code") or "?")
         # A handful of classes (annotations, one shim) is not a bundled library.
         libs = ", ".join(k for k, n in s["libraries"].items() if k != "kotlin" and n >= 5) or "framework only"
         if "kotlin" in s["libraries"]:
@@ -951,7 +1088,7 @@ def cmd_report(apps, top):
         throw_n = sum(x["severity"] == "throws" and x["sdk"] for x in s["missing_members"])
         cls_n = sum(c["sdk"] for c in s["missing_classes"])
         rows.append("| %s | %d | %s/%s | %s | %d | %d | %d | %s | %s |" % (
-            app["name"], app["tier"], m.get("min_sdk", "?"), m.get("target_sdk", "?"), libs, cls_n, throw_n,
+            md_escape(name), app["tier"], m.get("min_sdk", "?"), m.get("target_sdk", "?"), libs, cls_n, throw_n,
             stub_n, native_cell(s["natives"]), md_escape(short_outcome(r["outcome"])) if r else "not run"))
         for c in s["missing_classes"]:
             if c["sdk"]:
@@ -1064,6 +1201,11 @@ def main(argv):
         else:
             ids.append(rest[i])
             i += 1
+    if cmd == "import":
+        if not ids:
+            die("usage: tools/corpus.py import id file...")
+        cmd_import(select(load_corpus(), ids[:1])[0], ids[1:])
+        return
     apps = select(load_corpus(), ids)
     if cmd == "fetch":
         cmd_fetch(apps)

@@ -160,6 +160,9 @@ SWITCHAPK_NETWORK=none build/host/switchapk-host --data build/data app.apk
   `tools/corpus.py scan --apk any.apk` prints the gaps of any APK
   (missing classes and members, unresolved native imports, bundled
   libraries). Needs `make` and the sdk toolchain; GL apps need Mesa.
+  Proprietary corpus apps (Old School RuneScape) take your own APK or
+  Play splits via `tools/corpus.py import <id> files...` (see
+  docs/COMPATIBILITY.md "Proprietary apps").
 - `python3 tools/dexdump.py file.dex` lists classes/methods.
 - `javap -cp build/toolchains/sdk/android.jar -public <class>` shows the
   exact API signatures to match.

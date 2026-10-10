@@ -808,3 +808,18 @@ what is left in flight.
   COMPATIBILITY.md "Findings" and PLAN next steps item 9.
 - `make` and VmTest pass. Nothing was run on hardware.
 
+### Session 25 (2026-10-10, branch ccr-d683819b-nm914p)
+
+- WS13: the corpus tracks proprietary apps. A `"source": "local"` entry
+  is never downloaded; `tools/corpus.py import <id> files...` takes the
+  owner's APK, Play splits or an .apks/.xapk bundle into
+  `build/corpus/local/<id>`, and `fetch` merges the splits' `lib/` and
+  `assets/` into the base APK, since the VM loads one zip. Unsupplied
+  apps show as "APK not supplied" in the report; supplied ones are
+  labelled with the scanned version, as they are not pinned.
+- Old School RuneScape (`com.jagex.oldscape.android`, tier 3) added. No
+  APK was available in this session (Play only, mirrors are blocked by
+  the network policy), so it has not been scanned or run yet.
+- The split merge was checked with synthetic APKs and a bundle. The
+  generated report was not regenerated (no corpus build in this session);
+  the OSRS row was added by hand in the generator's format.

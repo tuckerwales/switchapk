@@ -1340,7 +1340,9 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   `switchapk-host --apk-info` (`tests/apps/labeled/check_info.sh`), without
   booting the VM.
 - Real-world APKs: `tests/corpus/corpus.json` pins open-source F-Droid
-  APKs (fetched into `build/corpus`, never committed). `tools/corpus.py`
+  APKs (fetched into `build/corpus`, never committed) and lists
+  proprietary ones (`"source": "local"`) whose APK or Play splits the
+  developer imports; splits are merged into one zip. `tools/corpus.py`
   scans each APK's bytecode references against framework.dex and
   android.jar (missing classes, java.* members that throw, android.*
   members that auto-stub), checks native imports against the shim

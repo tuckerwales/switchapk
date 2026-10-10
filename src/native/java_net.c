@@ -535,6 +535,252 @@ NATIVE(Net_close) {
     close(fd);
 }
 
+/* ---- non-blocking calls for java.nio channels: one system call, never waits ---------------------------- */
+
+static bool would_block(int err) { return err == EAGAIN || err == EWOULDBLOCK || err == EINTR; }
+
+/* static void setNonBlocking(int fd, boolean on) */
+NATIVE(Net_setNonBlocking) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) {
+        throw_errno(t, "fcntl", errno);
+        return;
+    }
+    flags = A_BOOL(1) ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
+    if (fcntl(fd, F_SETFL, flags) < 0) throw_errno(t, "fcntl", errno);
+}
+
+/*
+ * static int poll(int[] fds, int[] events, int[] revents, int n, int timeoutMs)
+ * events: 1 readable, 2 writable. revents adds 4 for error or hang-up and 8 for a bad descriptor.
+ * Waits at most timeoutMs (0: just look), GIL released. Returns the number of ready descriptors.
+ */
+NATIVE(Net_poll) {
+    UNUSED_ARGS();
+    ArrayObject *fds = A_ARR(0), *ev = A_ARR(1), *rev = A_ARR(2);
+    int n = A_INT(3), timeout = A_INT(4);
+    if (!fds || !ev || !rev || n < 0 || n > fds->length || n > ev->length || n > rev->length) {
+        vm_throw_new(t, "Ljava/lang/IllegalArgumentException;", "poll arrays");
+        return;
+    }
+    struct pollfd *p = n ? sa_calloc((size_t)n, sizeof *p) : NULL;
+    for (int i = 0; i < n; i++) {
+        int e = ARRAY_DATA(ev, int32_t)[i];
+        p[i].fd = ARRAY_DATA(fds, int32_t)[i];
+        p[i].events = (short)(((e & 1) ? POLLIN : 0) | ((e & 2) ? POLLOUT : 0));
+    }
+    int r;
+    VM_BLOCKING_BEGIN(t);
+    if (n == 0) {
+        if (timeout > 0) {
+            struct timespec ts = {timeout / 1000, (long)(timeout % 1000) * 1000000L};
+            nanosleep(&ts, NULL);
+        }
+        r = 0;
+    } else {
+        do {
+            r = poll(p, (nfds_t)n, timeout);
+        } while (r < 0 && errno == EINTR);
+    }
+    VM_BLOCKING_END(t);
+    if (r < 0) {
+        int err = errno;
+        free(p);
+        throw_errno(t, "poll", err);
+        return;
+    }
+    for (int i = 0; i < n; i++) {
+        short re = p[i].revents;
+        int o = ((re & POLLIN) ? 1 : 0) | ((re & POLLOUT) ? 2 : 0) | ((re & (POLLERR | POLLHUP)) ? 4 : 0)
+            | ((re & POLLNVAL) ? 8 : 0);
+        ARRAY_DATA(rev, int32_t)[i] = o;
+    }
+    free(p);
+    R_INT(r);
+}
+
+/* static boolean connectNow(int fd, byte[] addr, int port): true if connected, false if in progress */
+NATIVE(Net_connectNow) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    struct sockaddr_storage ss;
+    socklen_t sl = to_sockaddr(A_ARR(1), A_INT(2), AF_INET, &ss);
+    int rc = connect(fd, (struct sockaddr *)&ss, sl);
+    if (rc == 0) {
+        R_BOOL(true);
+        return;
+    }
+    if (errno == EINPROGRESS || errno == EINTR || errno == EALREADY) {
+        R_BOOL(false);
+        return;
+    }
+    throw_errno(t, "connect", errno);
+}
+
+/* static boolean finishConnectNow(int fd): true once connected, false while in progress */
+NATIVE(Net_finishConnectNow) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    struct pollfd p = {.fd = fd, .events = POLLOUT};
+    int r = poll(&p, 1, 0);
+    if (r == 0) {
+        R_BOOL(false);
+        return;
+    }
+    int err = 0;
+    socklen_t el = sizeof err;
+    if (r < 0) err = errno;
+    else if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) < 0) err = errno;
+    if (err) {
+        throw_errno(t, "connect", err);
+        return;
+    }
+    R_BOOL(true);
+}
+
+/* static int recvNow(int fd, byte[] b, int off, int len): bytes read, 0 if it would block, -1 at end */
+NATIVE(Net_recvNow) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    ArrayObject *b = A_ARR(1);
+    int32_t off = A_INT(2), len = A_INT(3);
+    if (!check_range(t, b, off, len)) return;
+    if (len == 0) {
+        R_INT(0);
+        return;
+    }
+    ssize_t n = recv(fd, ARRAY_DATA(b, uint8_t) + off, (size_t)len, MSG_DONTWAIT);
+    if (n < 0) {
+        if (would_block(errno)) {
+            R_INT(0);
+            return;
+        }
+        if (errno == ECONNRESET) {
+            vm_throw_new(t, "Ljava/net/SocketException;", "Connection reset");
+            return;
+        }
+        throw_errno(t, "recv", errno);
+        return;
+    }
+    R_INT(n == 0 ? -1 : (int32_t)n);
+}
+
+/* static int sendNow(int fd, byte[] b, int off, int len): bytes written, 0 if it would block */
+NATIVE(Net_sendNow) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    ArrayObject *b = A_ARR(1);
+    int32_t off = A_INT(2), len = A_INT(3);
+    if (!check_range(t, b, off, len)) return;
+    ssize_t n = send(fd, ARRAY_DATA(b, uint8_t) + off, (size_t)len, MSG_NOSIGNAL | MSG_DONTWAIT);
+    if (n < 0) {
+        if (would_block(errno)) {
+            R_INT(0);
+            return;
+        }
+        if (errno == EPIPE) vm_throw_new(t, "Ljava/io/IOException;", "Broken pipe");
+        else throw_errno(t, "send", errno);
+        return;
+    }
+    R_INT((int32_t)n);
+}
+
+/* static int acceptNow(int fd, byte[] peer, int[] info): the new (blocking) descriptor, or -1 */
+NATIVE(Net_acceptNow) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    struct sockaddr_storage ss;
+    socklen_t sl = sizeof ss;
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (!(flags & O_NONBLOCK)) fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    int c = accept(fd, (struct sockaddr *)&ss, &sl);
+    int err = errno;
+    if (!(flags & O_NONBLOCK)) fcntl(fd, F_SETFL, flags);
+    if (c < 0) {
+        if (would_block(err) || err == ECONNABORTED) {
+            R_INT(-1);
+            return;
+        }
+        throw_errno(t, "accept", err);
+        return;
+    }
+    int cflags = fcntl(c, F_GETFL, 0);
+    if (cflags & O_NONBLOCK) fcntl(c, F_SETFL, cflags & ~O_NONBLOCK);
+#ifdef FD_CLOEXEC
+    fcntl(c, F_SETFD, FD_CLOEXEC);
+#endif
+    from_sockaddr(&ss, A_ARR(1), A_ARR(2));
+    R_INT(c);
+}
+
+/* static int recvfromNow(int fd, byte[] b, int off, int len, byte[] peer, int[] info): length, or -1 */
+NATIVE(Net_recvfromNow) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    ArrayObject *b = A_ARR(1);
+    int32_t off = A_INT(2), len = A_INT(3);
+    if (!check_range(t, b, off, len)) return;
+    struct sockaddr_storage ss;
+    socklen_t sl = sizeof ss;
+    ssize_t n = recvfrom(fd, ARRAY_DATA(b, uint8_t) + off, (size_t)len, MSG_DONTWAIT, (struct sockaddr *)&ss, &sl);
+    if (n < 0) {
+        if (would_block(errno)) {
+            R_INT(-1);
+            return;
+        }
+        throw_errno(t, "recvfrom", errno);
+        return;
+    }
+    from_sockaddr(&ss, A_ARR(4), A_ARR(5));
+    R_INT((int32_t)n);
+}
+
+/* static int sendtoNow(int fd, byte[] b, int off, int len, byte[] addr, int port): bytes sent, 0 if it would block;
+ * addr null sends to the connected peer */
+NATIVE(Net_sendtoNow) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    ArrayObject *b = A_ARR(1);
+    int32_t off = A_INT(2), len = A_INT(3);
+    if (!check_range(t, b, off, len)) return;
+    ssize_t n;
+    if (A_ARR(4)) {
+        struct sockaddr_storage ss;
+        socklen_t sl = to_sockaddr(A_ARR(4), A_INT(5), AF_INET, &ss);
+        n = sendto(fd, ARRAY_DATA(b, uint8_t) + off, (size_t)len, MSG_NOSIGNAL | MSG_DONTWAIT,
+                   (struct sockaddr *)&ss, sl);
+    } else {
+        n = send(fd, ARRAY_DATA(b, uint8_t) + off, (size_t)len, MSG_NOSIGNAL | MSG_DONTWAIT);
+    }
+    if (n < 0) {
+        if (would_block(errno)) {
+            R_INT(0);
+            return;
+        }
+        throw_errno(t, "sendto", errno);
+        return;
+    }
+    R_INT((int32_t)n);
+}
+
+/* static void connectDatagram(int fd, byte[] addr, int port): addr null dissolves the association */
+NATIVE(Net_connectDatagram) {
+    UNUSED_ARGS();
+    int fd = A_INT(0);
+    struct sockaddr_storage ss;
+    socklen_t sl;
+    if (A_ARR(1)) {
+        sl = to_sockaddr(A_ARR(1), A_INT(2), AF_INET, &ss);
+    } else {
+        memset(&ss, 0, sizeof ss);
+        ss.ss_family = AF_UNSPEC;
+        sl = sizeof(struct sockaddr_in);
+    }
+    if (connect(fd, (struct sockaddr *)&ss, sl) < 0 && A_ARR(1)) throw_errno(t, "connect", errno);
+}
+
 static const NativeMethodReg g_regs[] = {
     {"Llibcore/io/Net;", "getaddrinfo", "(Ljava/lang/String;)[B", Net_getaddrinfo},
     {"Llibcore/io/Net;", "getnameinfo", "([B)Ljava/lang/String;", Net_getnameinfo},
@@ -554,6 +800,16 @@ static const NativeMethodReg g_regs[] = {
     {"Llibcore/io/Net;", "available", "(I)I", Net_available},
     {"Llibcore/io/Net;", "shutdown", "(II)V", Net_shutdown},
     {"Llibcore/io/Net;", "close", "(I)V", Net_close},
+    {"Llibcore/io/Net;", "setNonBlocking", "(IZ)V", Net_setNonBlocking},
+    {"Llibcore/io/Net;", "poll", "([I[I[III)I", Net_poll},
+    {"Llibcore/io/Net;", "connectNow", "(I[BI)Z", Net_connectNow},
+    {"Llibcore/io/Net;", "finishConnectNow", "(I)Z", Net_finishConnectNow},
+    {"Llibcore/io/Net;", "recvNow", "(I[BII)I", Net_recvNow},
+    {"Llibcore/io/Net;", "sendNow", "(I[BII)I", Net_sendNow},
+    {"Llibcore/io/Net;", "acceptNow", "(I[B[I)I", Net_acceptNow},
+    {"Llibcore/io/Net;", "recvfromNow", "(I[BII[B[I)I", Net_recvfromNow},
+    {"Llibcore/io/Net;", "sendtoNow", "(I[BII[BI)I", Net_sendtoNow},
+    {"Llibcore/io/Net;", "connectDatagram", "(I[BI)V", Net_connectDatagram},
 };
 
 void natives_java_net_register(void) { vm_register_natives(g_regs, SA_ARRAY_LEN(g_regs)); }

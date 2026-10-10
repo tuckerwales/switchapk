@@ -340,7 +340,56 @@ NATIVE(AnnotationParser_readDefault) {
     R_OBJ(v);
 }
 
+/* The system annotation dalvik.annotation.Signature of a class (kind 0), field (1) or method (2):
+ * its value array of string pieces, joined. NULL when the member is not generic. */
+static char *read_signature(Class *c, const uint8_t *set) {
+    if (!set) return NULL;
+    DexFile *d = c->dex;
+    uint32_t n = sa_rd32(set);
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t off = sa_rd32(set + 4 + i * 4);
+        if (!off || off >= d->size || d->base[off] != 2) continue;
+        const uint8_t *q = d->base + off + 1;
+        if (strcmp(dex_type_desc(d, dex_uleb128(&q)), "Ldalvik/annotation/Signature;") != 0) continue;
+        uint32_t ne = dex_uleb128(&q);
+        for (uint32_t e = 0; e < ne; e++) {
+            const char *ename = dex_string(d, dex_uleb128(&q));
+            DexEncodedValue v;
+            dex_read_encoded_value(&q, &v);
+            if (strcmp(ename, "value") != 0 || v.type != DEV_ARRAY) continue;
+            const uint8_t *ap = v.array;
+            uint32_t count = dex_uleb128(&ap);
+            SaBuf b = {0};
+            for (uint32_t k = 0; k < count; k++) {
+                DexEncodedValue item;
+                dex_read_encoded_value(&ap, &item);
+                if (item.type == DEV_STRING) sa_buf_puts(&b, dex_string(d, item.u.idx));
+            }
+            char *out = sa_strdup(sa_buf_cstr(&b));
+            sa_buf_free(&b);
+            return out;
+        }
+    }
+    return NULL;
+}
+
+NATIVE(AnnotationParser_readSignature) {
+    Object *owner = A_OBJ(0);
+    int kind = A_INT(1);
+    int64_t token = A_LONG(2);
+    Class *c = NULL;
+    Class *mirror = (kind == 0 && owner) ? vm_class_from_mirror(owner) : NULL;
+    const uint8_t *set = set_for(kind, mirror, token, &c);
+    if (!c || !c->dex) return;
+    char *sig = read_signature(c, set);
+    if (!sig) return;
+    R_OBJ(vm_new_string_utf8(t, sig));
+    free(sig);
+}
+
 static const NativeMethodReg g_ann_regs[] = {
+    {"Ljava/lang/reflect/AnnotationParser;", "readSignature", "(Ljava/lang/Class;IJ)Ljava/lang/String;",
+     AnnotationParser_readSignature},
     {"Ljava/lang/reflect/AnnotationParser;", "readNative", "(Ljava/lang/Class;IJ)[Ljava/lang/Object;",
      AnnotationParser_readNative},
     {"Ljava/lang/reflect/AnnotationParser;", "readDefaultNative", "(J)Ljava/lang/Object;",

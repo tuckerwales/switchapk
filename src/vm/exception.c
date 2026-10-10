@@ -141,6 +141,27 @@ Object *vm_new_instance(VMThread *t, const char *cls, const char *ctor_desc, ...
 
 void vm_throw(VMThread *t, Object *exc) { t->exception = exc; }
 
+/* Debugging aid (SWITCHAPK_TRACE_THROW=1): logs every Java throw and every exception the VM raises,
+ * caught or not, with where it happened. For apps that swallow errors into their own crash screens. */
+void vm_trace_throw(VMThread *t, Object *exc, Method *m, uint32_t pc) {
+    static int enabled = -1;
+    if (enabled < 0) enabled = getenv("SWITCHAPK_TRACE_THROW") != NULL;
+    if (!enabled || !exc) return;
+    Object *msg = vm_get_ref(exc, g_vm.wf.Throwable_detailMessage);
+    char *text = msg ? vm_string_to_utf8(msg) : NULL;
+    char where[512] = "";
+    if (m) {
+        vm_method_pretty(m, where, sizeof where);
+        int line = m->has_code ? dex_line_for_pc(m->dex, &m->code, pc) : -1;
+        size_t n = strlen(where);
+        snprintf(where + n, sizeof where - n, " (pc %u, line %d)", pc, line);
+    }
+    sa_log(SA_LOG_WARN, "throw", "%s%s%s at %s", exc->clazz->name, text ? ": " : "", text ? text : "",
+           m ? where : "native");
+    free(text);
+    SA_UNUSED(t);
+}
+
 void vm_throw_new(VMThread *t, const char *cls_desc, const char *fmt, ...) {
     char msg[1024];
     bool has_msg = fmt != NULL;
@@ -173,6 +194,8 @@ void vm_throw_new(VMThread *t, const char *cls_desc, const char *fmt, ...) {
         }
     }
     t->exception = e;
+    Frame *top = t->frame;
+    vm_trace_throw(t, e, top ? top->method : NULL, top ? top->pc : 0);
 }
 
 void vm_throw_npe(VMThread *t, const char *what) {

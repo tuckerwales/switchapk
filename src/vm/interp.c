@@ -522,7 +522,10 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
             Object *e = RL(AA);
             EXPORT_PC();
             if (!e) vm_throw_npe(t, "throw with null exception");
-            else t->exception = e;
+            else {
+                t->exception = e;
+                vm_trace_throw(t, e, m, pc);
+            }
             goto handle_exception;
         }
         case 0x28: /* goto */

@@ -472,9 +472,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    game), the AppCompat/AndroidX surface the static scan ranks highest
    (accessibility, android.transition, android.icu, AppOpsManager,
    window insets; WS14), Mindustry's map preview decode error (zip and
-   DataInputStream ruled out), android.bluetooth answering as
-   absent (WS15), and ActionBarView for Holo decors (they use the Toolbar
-   decor now). Simon Tatham's Puzzles needs to run a bundled executable,
+   DataInputStream ruled out), and ActionBarView for Holo decors (they
+   use the Toolbar decor now). Simon Tatham's Puzzles needs to run a bundled executable,
    which the console cannot do. Then run the drawing apps on hardware.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware

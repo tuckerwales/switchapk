@@ -83,6 +83,7 @@ What it took, by the first blocker each fix removed:
 | Style parent chains deeper than 20 were cut off, so Material3 themes lost the framework theme (no windowNoTitle, so the titled decor failed to inflate) | Simple Calculator (and any Material3 app) |
 | External storage in Android's layout (`/storage/emulated/0/Android/data/<pkg>/files`) | Simple Calculator (Simple Commons cuts paths at `Android/data`) |
 | PackageManager.queryIntentContentProviders and the API 33 typed-flag overloads | Simple Calculator (EmojiCompat via Glide) |
+| android.bluetooth answering as absent (no adapter), OrientationEventListener (from AOSP) | Frozen Bubble (Bluetooth multiplayer greyed out) |
 | openFd refuses compressed assets like Android (was a descriptor that could not be mapped) | Mindustry (Arc falls back to streams) |
 
 Still open:
@@ -91,7 +92,6 @@ Still open:
 |---|---|---|
 | Simon Tatham's Puzzles runs `libpuzzlesgen.so` as an executable and quits when it cannot ("missing a required file") | Simon Tatham's Puzzles | run: Toast, then exit; there are no processes on the console |
 | Mindustry's map previews fail decoding a save chunk (EOFException in `ShortChunkSaveVersion.readMap`; was `Pixmap.setRaw` index -1024) | Mindustry | run, caught by the app; the same save decodes like the JDK through InflaterInputStream and DataInputStream, single and 8 threads, so the cause is in what the app does around it |
-| android.bluetooth is missing (caught at start) | Frozen Bubble | run |
 | AppCompat/AndroidX surface: accessibility, android.transition, android.icu, AppOpsManager, window insets | Andor's Trail, DroidFish, Simple Calculator, Simon Tatham's Puzzles, Unciv | static scan, 80 to 190 SDK classes each |
 
 `SWITCHAPK_TRACE_THROW=1` makes the host log every throw with its location,
@@ -267,7 +267,6 @@ Generated 2026-10-10 from 13 apps. Static counts include only members and classe
 |---|---|
 | exception java.io.EOFException | 1 (mindustry) |
 | exception java.lang.IllegalArgumentException: View=DecorView@3507983 not attached to window manager | 1 (shatteredpd) |
-| exception java.lang.NoClassDefFoundError: android.bluetooth.BluetoothAdapter | 1 (frozenbubble) |
 | stub method android.media.AudioManager.unloadSoundEffects()V | 1 (vectorpinball) |
 
 <!-- corpus:end -->

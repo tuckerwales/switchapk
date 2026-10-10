@@ -856,6 +856,9 @@ what is left in flight.
   queryContentProviders and the API 33 typed-flag overloads.
 - AssetManager.openFd throws FileNotFoundException for compressed assets,
   as Android does.
+- android.bluetooth answers as absent (BluetoothManager with a null
+  adapter, classic socket classes) and OrientationEventListener is ported
+  from AOSP: Frozen Bubble starts clean with Bluetooth play greyed out.
 - Simple Calculator now starts with no uncaught or unexpected errors.
   Mindustry's preview error is still open: concurrent and single-threaded
   decoding of the same save match the JDK.

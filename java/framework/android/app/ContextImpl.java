@@ -384,6 +384,7 @@ public class ContextImpl extends Context {
         }
         if (AUDIO_SERVICE.equals(name)) return AudioManager.getInstance();
         if (CONNECTIVITY_SERVICE.equals(name)) return android.net.ConnectivityManager.from(this);
+        if (BLUETOOTH_SERVICE.equals(name)) return android.bluetooth.BluetoothManager.create$();
         if (CLIPBOARD_SERVICE.equals(name)) {
             if (sClipboard == null) sClipboard = new ClipboardManager();
             return sClipboard;
@@ -421,6 +422,7 @@ public class ContextImpl extends Context {
         if (serviceClass == AudioManager.class) return AUDIO_SERVICE;
         if (serviceClass == android.net.ConnectivityManager.class) return CONNECTIVITY_SERVICE;
         if (serviceClass == ClipboardManager.class) return CLIPBOARD_SERVICE;
+        if (serviceClass == android.bluetooth.BluetoothManager.class) return BLUETOOTH_SERVICE;
         return null;
     }
 

@@ -1307,7 +1307,10 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   `TelephonyManager` (TELEPHONY_SERVICE) reports no phone, an absent SIM,
   empty operator strings and null identifiers. `Camera` has no cameras
   (`open()` null, `open(int)` throws) and camera2 `CameraManager`
-  (CAMERA_SERVICE) an empty id list.
+  (CAMERA_SERVICE) an empty id list. `BluetoothManager`
+  (BLUETOOTH_SERVICE) exists but `getAdapter()`, like
+  `BluetoothAdapter.getDefaultAdapter()`, is null, as on a device without
+  Bluetooth; LE and GATT classes are not present.
 - `PackageManager.hasSystemFeature` reports the touch screen
   (multi-touch), gamepad, Wi-Fi, audio output, both screen orientations
   and the accelerometer and gyroscope when the sensor service lists them.

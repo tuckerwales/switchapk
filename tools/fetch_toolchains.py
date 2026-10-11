@@ -12,6 +12,8 @@ Layout produced:
   build/toolchains/sdk/aapt2
   build/toolchains/sdk/android.jar
   build/toolchains/framework-res.apk
+  build/toolchains/fonts/DroidSansMono.ttf
+  build/toolchains/cacerts/<hash>.0   (Android's system CA set)
   build/toolchains/devkitpro/opt/devkitpro/{devkitA64,libnx,portlibs,tools}
   third_party/sqlite/sqlite3.{c,h}
 
@@ -40,6 +42,11 @@ PLATFORM_URL = "https://dl.google.com/android/repository/platform-35_r02.zip"
 MONO_FONT_URL = ("https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r1/"
                  "data/fonts/DroidSansMono.ttf?format=TEXT")
 MONO_FONT_SHA256 = "db19a1fdaba41cc4a2fec0330e5c15e71c6dd68a3ef074f4f28268828b45c862"
+# Android's system CA certificates (/system/etc/security/cacerts), pinned to a release tag. Gitiles
+# archives are not byte-stable, so the hash covers the extracted files (sorted "name\0data" pairs).
+CACERTS_URL = ("https://android.googlesource.com/platform/system/ca-certificates/+archive/refs/tags/"
+               "android-15.0.0_r1/files.tar.gz")
+CACERTS_SHA256 = "e4bfad7e943cc6e9fed56c4206f46d21a1dbf61fa9887b520aa454154817b800"
 SQLITE_URL = "https://www.sqlite.org/2024/sqlite-amalgamation-3460100.zip"
 DKP_IMAGE = "devkitpro/devkita64"
 DKP_TAG = "latest"
@@ -120,6 +127,7 @@ def fetch_sdk():
         log("framework-res.apk")
         subprocess.check_call([sys.executable, os.path.join(ROOT, "tools", "make_framework_res.py"), jar, fwres])
     fetch_fonts()
+    fetch_cacerts()
     log("sdk ready in " + sdk)
 
 
@@ -136,6 +144,35 @@ def fetch_fonts():
     os.makedirs(os.path.dirname(font), exist_ok=True)
     with open(font, "wb") as f:
         f.write(data)
+
+
+def cacerts_digest(files):
+    import hashlib
+    h = hashlib.sha256()
+    for name in sorted(files):
+        h.update(name.encode() + b"\0" + files[name])
+    return h.hexdigest()
+
+
+def fetch_cacerts():
+    dst = os.path.join(OUT, "cacerts")
+    if os.path.isdir(dst) and os.listdir(dst):
+        return
+    log("Android CA certificates")
+    files = {}
+    with tarfile.open(fileobj=io.BytesIO(fetch(CACERTS_URL)), mode="r:gz") as tf:
+        for m in tf.getmembers():
+            name = os.path.basename(m.name)
+            if m.isfile() and name.endswith(".0") and name == m.name.lstrip("./"):
+                files[name] = tf.extractfile(m).read()
+    if cacerts_digest(files) != CACERTS_SHA256:
+        raise SystemExit("cacerts: unexpected sha256")
+    tmp = dst + ".part"
+    os.makedirs(tmp, exist_ok=True)
+    for name, data in files.items():
+        with open(os.path.join(tmp, name), "wb") as f:
+            f.write(data)
+    os.rename(tmp, dst)
 
 
 def fetch_sqlite():

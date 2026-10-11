@@ -100,7 +100,7 @@ public class KeyStore {
 
     public static final String getDefaultType() {
         String t = Security.getProperty("keystore.type");
-        return t != null ? t : "PKCS12";
+        return t != null ? t : "BKS";
     }
 
     public final Provider getProvider() {

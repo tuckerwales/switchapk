@@ -5,7 +5,8 @@ BUILD ?= build/host
 CFLAGS ?= -O2 -g
 CFLAGS += -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Isrc -Ithird_party \
           -fno-strict-aliasing -fwrapv -pthread
-LDLIBS += -lz -lm -lpthread -ldl
+# TLS (WS11): mbedtls 2.28, the version the Switch portlibs ship (Debian/Ubuntu: libmbedtls-dev)
+LDLIBS += -lmbedtls -lmbedx509 -lmbedcrypto -lz -lm -lpthread -ldl
 
 SRCS := $(filter-out src/app/main_switch.c src/platform/platform_switch.c, \
           $(wildcard src/core/*.c src/vm/*.c src/native/*.c src/nativeloader/*.c src/android/*.c src/gfx/*.c \

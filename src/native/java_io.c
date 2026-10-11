@@ -51,6 +51,13 @@ char *platform_map_path(const char *p) {
     if (starts_with(p, "/data/local/tmp")) return sa_sprintf("%s/tmp%s", g_data_root, p + 15);
     /* /data/app/<pkg>/lib/<abi>: the app's nativeLibraryDir, where its libraries are extracted at start */
     if (starts_with(p, "/data/app/")) return sa_sprintf("%s/app/%s", g_data_root, p + 10);
+    /* Android's system CA certificates: romfs on the Switch, build/toolchains/cacerts (fetch_toolchains) on the host */
+    if (starts_with(p, "/system/etc/security/cacerts") && (p[28] == 0 || p[28] == '/'))
+#ifdef __SWITCH__
+        return sa_sprintf("romfs:/cacerts%s", p + 28);
+#else
+        return sa_sprintf("build/toolchains/cacerts%s", p + 28);
+#endif
 #ifdef __SWITCH__
     if (p[0] == '/') return sa_sprintf("sdmc:%s", p);
 #endif

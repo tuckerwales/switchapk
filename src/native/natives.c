@@ -15,5 +15,6 @@ void vm_natives_init(void) {
     natives_java_zip_register();
     natives_java_security_register();
     natives_java_math_register();
+    natives_java_ssl_register();
     natives_android_register();
 }

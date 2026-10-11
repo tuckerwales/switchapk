@@ -7,38 +7,79 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Properties;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
 /**
- * The logger registry. The root logger has level INFO and one ConsoleHandler, which prints to System.err (logcat on
- * Android). Configuration comes only from readConfiguration(InputStream): ".level", "<logger>.level" and
- * "<logger>.useParentHandlers". There is no JMX (getLoggingMXBean is absent).
+ * Loggers by name, with parents found along the dotted name. As on Android, the root logger logs at
+ * INFO through a handler that writes to android.util.Log (logcat, here the switchapk log).
  */
 public class LogManager {
     public static final String LOGGING_MXBEAN_NAME = "java.util.logging:type=Logging";
 
-    private static final LogManager sManager = new LogManager();
+    private static final LogManager MANAGER = new LogManager();
 
-    private final HashMap<String, Logger> mLoggers = new HashMap<String, Logger>();
-    private final ArrayList<Runnable> mListeners = new ArrayList<Runnable>();
-    private Properties mProps = new Properties();
-    private final Logger mRoot;
+    private final HashMap<String, Logger> loggers = new HashMap<String, Logger>();
+    private final Properties props = new Properties();
+    private final ArrayList<Runnable> listeners = new ArrayList<Runnable>();
+    final Logger rootLogger;
 
     protected LogManager() {
-        mRoot = new Logger("", null);
-        mRoot.setLevel(Level.INFO);
-        mRoot.addHandler(new ConsoleHandler());
-        mLoggers.put("", mRoot);
-        if (sManager == null) {
-            addLogger(Logger.global);
-        }
+        rootLogger = new Logger("", null);
+        rootLogger.setLevel(Level.INFO);
+        rootLogger.addHandler(new AndroidLogHandler());
+        loggers.put("", rootLogger);
     }
 
-    public static LogManager getLogManager() { return sManager; }
+    public static LogManager getLogManager() {
+        return MANAGER;
+    }
+
+    public synchronized boolean addLogger(Logger logger) {
+        String name = logger.getName();
+        if (name == null) {
+            throw new NullPointerException();
+        }
+        if (loggers.containsKey(name)) {
+            return false;
+        }
+        loggers.put(name, logger);
+        String levelProp = props.getProperty(name + ".level");
+        if (levelProp != null) {
+            try {
+                logger.setLevel(Level.parse(levelProp.trim()));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        logger.setParentInternal(findParent(name));
+        // Loggers below the new one now hang from it.
+        for (Logger other : loggers.values()) {
+            String n = other.getName();
+            if (other != logger && n != null && n.startsWith(name + ".")) {
+                Logger p = findParent(n);
+                if (p == logger) {
+                    other.setParentInternal(logger);
+                }
+            }
+        }
+        return true;
+    }
+
+    private Logger findParent(String name) {
+        if (name.isEmpty()) {
+            return null;
+        }
+        int dot = name.lastIndexOf('.');
+        while (dot > 0) {
+            Logger p = loggers.get(name.substring(0, dot));
+            if (p != null) {
+                return p;
+            }
+            dot = name.lastIndexOf('.', dot - 1);
+        }
+        return rootLogger;
+    }
 
     synchronized Logger demandLogger(String name) {
-        Logger l = mLoggers.get(name);
+        Logger l = loggers.get(name);
         if (l == null) {
             l = new Logger(name, null);
             addLogger(l);
@@ -46,153 +87,164 @@ public class LogManager {
         return l;
     }
 
-    public synchronized boolean addLogger(Logger logger) {
-        String name = logger.getName();
-        if (name == null) throw new NullPointerException();
-        if (mLoggers.containsKey(name)) return false;
-        mLoggers.put(name, logger);
-        // Parent: the nearest registered ancestor by name.
-        Logger parent = mRoot;
-        String n = name;
-        int dot;
-        while ((dot = n.lastIndexOf('.')) > 0) {
-            n = n.substring(0, dot);
-            Logger p = mLoggers.get(n);
-            if (p != null) {
-                parent = p;
-                break;
-            }
-        }
-        if (logger != mRoot) logger.setParentInternal(parent);
-        // Descendants whose parent is above the new logger now hang under it.
-        String prefix = name + ".";
-        for (Logger child : mLoggers.values()) {
-            String cn = child.getName();
-            if (child == logger || !cn.startsWith(prefix)) continue;
-            Logger cp = child.getParent();
-            String cpn = cp == null ? "" : cp.getName();
-            if (cp == null || cpn.length() < name.length()) child.setParentInternal(logger);
-        }
-        String level = mProps.getProperty(name + ".level");
-        if (level != null) {
-            try {
-                logger.setLevel(Level.parse(level.trim()));
-            } catch (IllegalArgumentException e) {
-                // bad value: ignored, as in OpenJDK
-            }
-        }
-        return true;
+    public synchronized Logger getLogger(String name) {
+        return loggers.get(name);
     }
-
-    public synchronized Logger getLogger(String name) { return mLoggers.get(name); }
 
     public synchronized Enumeration<String> getLoggerNames() {
-        return Collections.enumeration(new ArrayList<String>(mLoggers.keySet()));
+        return Collections.enumeration(new ArrayList<String>(loggers.keySet()));
     }
 
-    /** Back to the defaults (there is no logging.properties): root at INFO with one ConsoleHandler. */
     public void readConfiguration() throws IOException, SecurityException {
-        reset();
-        mRoot.addHandler(new ConsoleHandler());
-        runListeners();
-    }
-
-    private void runListeners() {
-        ArrayList<Runnable> listeners;
-        synchronized (this) {
-            listeners = new ArrayList<Runnable>(mListeners);
-        }
-        for (Runnable r : listeners) r.run();
     }
 
     public void reset() throws SecurityException {
+        ArrayList<Logger> all;
         synchronized (this) {
-            mProps = new Properties();
-            for (Logger l : mLoggers.values()) {
-                for (Handler h : l.getHandlers()) {
-                    l.removeHandler(h);
-                    try {
-                        h.close();
-                    } catch (Exception e) {
-                        // ignored, as in OpenJDK
-                    }
+            props.clear();
+            all = new ArrayList<Logger>(loggers.values());
+        }
+        for (Logger l : all) {
+            for (Handler h : l.getHandlers()) {
+                l.removeHandler(h);
+                try {
+                    h.close();
+                } catch (Exception ignored) {
                 }
-                l.setLevel(l == mRoot ? Level.INFO : null);
             }
+            l.setLevel(l == rootLogger ? Level.INFO : null);
         }
     }
 
     public void readConfiguration(InputStream ins) throws IOException, SecurityException {
         Properties p = new Properties();
         p.load(ins);
-        reset();
+        ArrayList<Runnable> copy;
         synchronized (this) {
-            mProps = p;
-            for (Logger l : mLoggers.values()) applyProperties(l);
-            String handlers = p.getProperty("handlers");
-            if (handlers != null) {
-                for (String cls : handlers.split("[\\s,]+")) {
-                    if (cls.isEmpty()) continue;
+            props.clear();
+            props.putAll(p);
+            for (Logger l : loggers.values()) {
+                String levelProp = props.getProperty((l.getName().isEmpty() ? "" : l.getName()) + ".level");
+                if (levelProp != null) {
                     try {
-                        mRoot.addHandler((Handler) Class.forName(cls).newInstance());
-                    } catch (Exception e) {
-                        System.err.println("Can't load log handler \"" + cls + "\"");
-                        System.err.println("" + e);
+                        l.setLevel(Level.parse(levelProp.trim()));
+                    } catch (IllegalArgumentException ignored) {
                     }
                 }
             }
+            copy = new ArrayList<Runnable>(listeners);
         }
-        runListeners();
-    }
-
-    private void applyProperties(Logger l) {
-        String prefix = l.getName().isEmpty() ? "" : l.getName();
-        String level = mProps.getProperty(prefix + ".level");
-        if (level != null) {
-            try {
-                l.setLevel(Level.parse(level.trim()));
-            } catch (IllegalArgumentException e) {
-                // ignored
-            }
+        for (Runnable r : copy) {
+            r.run();
         }
-        String up = mProps.getProperty(prefix + ".useParentHandlers");
-        if (up != null) l.setUseParentHandlers(Boolean.parseBoolean(up.trim()));
     }
 
-    public void updateConfiguration(Function<String, BiFunction<String, String, String>> mapper) throws IOException {
-        // No logging.properties file: nothing to merge.
+    public synchronized String getProperty(String name) {
+        return props.getProperty(name);
     }
 
-    public void updateConfiguration(InputStream ins, Function<String, BiFunction<String, String, String>> mapper)
-            throws IOException {
-        Properties next = new Properties();
-        next.load(ins);
+    public void checkAccess() throws SecurityException {
+    }
+
+    public LogManager addConfigurationListener(Runnable listener) {
+        listener.getClass();
         synchronized (this) {
-            java.util.HashSet<String> keys = new java.util.HashSet<String>(mProps.stringPropertyNames());
-            keys.addAll(next.stringPropertyNames());
-            Properties merged = new Properties();
-            for (String k : keys) {
-                String v = mapper == null ? next.getProperty(k)
-                        : mapper.apply(k).apply(mProps.getProperty(k), next.getProperty(k));
-                if (v != null) merged.setProperty(k, v);
-            }
-            mProps = merged;
-            for (Logger l : mLoggers.values()) applyProperties(l);
+            listeners.add(listener);
         }
-        runListeners();
-    }
-
-    public synchronized String getProperty(String name) { return mProps.getProperty(name); }
-    public void checkAccess() throws SecurityException {}
-
-    public synchronized LogManager addConfigurationListener(Runnable listener) {
-        if (listener == null) throw new NullPointerException();
-        mListeners.add(listener);
         return this;
     }
 
-    public synchronized void removeConfigurationListener(Runnable listener) {
-        if (listener == null) throw new NullPointerException();
-        mListeners.remove(listener);
+    public void removeConfigurationListener(Runnable listener) {
+        synchronized (this) {
+            listeners.remove(listener);
+        }
+    }
+
+    /** Android's AndroidHandler: logcat priorities and tags from the logger name. */
+    static final class AndroidLogHandler extends Handler {
+        private static java.lang.reflect.Method println;
+        private static boolean looked;
+
+        AndroidLogHandler() {
+            setFormatter(new Formatter() {
+                public String format(LogRecord r) {
+                    Throwable thrown = r.getThrown();
+                    String msg = formatMessage(r);
+                    if (thrown == null) {
+                        return msg;
+                    }
+                    java.io.StringWriter sw = new java.io.StringWriter();
+                    java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+                    pw.println(msg);
+                    thrown.printStackTrace(pw);
+                    pw.flush();
+                    return sw.toString();
+                }
+            });
+        }
+
+        static String tagOf(String loggerName) {
+            if (loggerName == null) {
+                return "null";
+            }
+            int length = loggerName.length();
+            if (length <= 23) {
+                return loggerName;
+            }
+            int lastPeriod = loggerName.lastIndexOf('.');
+            return length - (lastPeriod + 1) <= 23 ? loggerName.substring(lastPeriod + 1)
+                    : loggerName.substring(loggerName.length() - 23);
+        }
+
+        static int priorityOf(Level level) {
+            int value = level.intValue();
+            if (value >= 1000) {
+                return 6;
+            } else if (value >= 900) {
+                return 5;
+            } else if (value >= 800) {
+                return 4;
+            }
+            return 3;
+        }
+
+        public void publish(LogRecord record) {
+            if (!isLoggable(record)) {
+                return;
+            }
+            String message;
+            try {
+                message = getFormatter().format(record);
+            } catch (RuntimeException e) {
+                reportError(null, e, ErrorManager.FORMAT_FAILURE);
+                return;
+            }
+            String tag = tagOf(record.getLoggerName());
+            int priority = priorityOf(record.getLevel());
+            synchronized (AndroidLogHandler.class) {
+                if (!looked) {
+                    looked = true;
+                    try {
+                        println = Class.forName("android.util.Log").getMethod("println", int.class, String.class,
+                                String.class);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+            if (println != null) {
+                try {
+                    println.invoke(null, priority, tag, message);
+                    return;
+                } catch (Exception ignored) {
+                }
+            }
+            System.err.println(tag + ": " + message);
+        }
+
+        public void flush() {
+        }
+
+        public void close() {
+        }
     }
 }

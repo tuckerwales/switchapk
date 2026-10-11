@@ -1,42 +1,53 @@
 package java.nio;
 
-/** framework-internal: the MappedByteBuffer FileChannel.map returns (public so java.nio.channels can make one). */
-public final class HeapMappedByteBuffer extends MappedByteBuffer {
-    private HeapMappedByteBuffer(int mark, int pos, int lim, int cap, byte[] hb, int offset, int fd, long filePos,
-            int mapBase, int mapLength, boolean writeBack) {
-        super(mark, pos, lim, cap, hb, offset, fd, filePos, mapBase, mapLength, writeBack);
+final class HeapMappedByteBuffer extends MappedByteBuffer {
+    /* Shared by a mapping and its slices and duplicates. */
+    static final class Region {
+        final byte[] data;
+        final long filePosition;
+        final NIOAccess.WriteBack sink;
+
+        Region(byte[] data, long filePosition, NIOAccess.WriteBack sink) {
+            this.data = data;
+            this.filePosition = filePosition;
+            this.sink = sink;
+        }
     }
 
-    /** A map of bytes read from the file at filePos; writeBack makes force() write them back. */
-    public static MappedByteBuffer create(byte[] contents, int fd, long filePos, boolean readOnly, boolean writeBack) {
-        HeapMappedByteBuffer b = new HeapMappedByteBuffer(-1, 0, contents.length, contents.length, contents, 0, fd,
-                filePos, 0, contents.length, writeBack);
-        b.readOnly = readOnly;
-        b.direct = true;
-        return b;
+    private final Region region;
+
+    HeapMappedByteBuffer(Region region, int mark, int pos, int lim, int cap, int offset, boolean readOnly) {
+        super(mark, pos, lim, cap, region.data, offset);
+        this.region = region;
+        this.readOnly = readOnly;
     }
 
-    private HeapMappedByteBuffer copy(int mark, int pos, int lim, int cap, int offset) {
-        HeapMappedByteBuffer b = new HeapMappedByteBuffer(mark, pos, lim, cap, hb(), offset, fd, filePos, mapBase,
-                mapLength, writeBack);
-        b.readOnly = readOnly;
-        b.direct = direct;
+    void writeBack(int index, int length) {
+        if (region.sink != null && length > 0) {
+            region.sink.write(region.data, byteOffset + index, length, region.filePosition + byteOffset + index);
+        }
+    }
+
+    public MappedByteBuffer slice() {
+        return new HeapMappedByteBuffer(region, -1, 0, remaining(), remaining(), byteOffset + position(), readOnly);
+    }
+
+    public MappedByteBuffer slice(int index, int length) {
+        checkIndex(index, length);
+        return new HeapMappedByteBuffer(region, -1, 0, length, length, byteOffset + index, readOnly);
+    }
+
+    public MappedByteBuffer duplicate() {
+        HeapMappedByteBuffer b = new HeapMappedByteBuffer(region, markValue(), position(), limit(), capacity(),
+                byteOffset, readOnly);
         b.bigEndian = bigEndian;
         return b;
     }
 
-    public MappedByteBuffer slice() { return copy(-1, 0, remaining(), remaining(), byteOffset + position()); }
-
-    public MappedByteBuffer slice(int index, int length) {
-        if (index < 0 || length < 0 || index > limit() - length) throw new IndexOutOfBoundsException();
-        return copy(-1, 0, length, length, byteOffset + index);
-    }
-
-    public MappedByteBuffer duplicate() { return copy(markValue(), position(), limit(), capacity(), byteOffset); }
-
     public ByteBuffer asReadOnlyBuffer() {
-        HeapMappedByteBuffer b = copy(markValue(), position(), limit(), capacity(), byteOffset);
-        b.readOnly = true;
+        HeapMappedByteBuffer b = new HeapMappedByteBuffer(region, markValue(), position(), limit(), capacity(),
+                byteOffset, true);
+        b.bigEndian = bigEndian;
         return b;
     }
 

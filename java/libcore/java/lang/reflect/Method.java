@@ -9,7 +9,8 @@ public final class Method extends Executable {
     }
 
     public Type getGenericReturnType() {
-        return GenericSignatures.returnType(this);
+        libcore.reflect.GenericSignatureParser p = genericInfo();
+        return p != null && p.returnType != null ? p.returnType : returnType;
     }
 
     public boolean isDefault() {

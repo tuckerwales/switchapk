@@ -5,6 +5,9 @@ import libcore.io.Os;
 public class RandomAccessFile implements DataOutput, DataInput, Closeable {
     private final FileDescriptor fd;
     private boolean closed;
+    private final String path;
+    private final boolean rw;
+    private java.nio.channels.FileChannel channel;
 
     public RandomAccessFile(String name, String mode) throws FileNotFoundException {
         this(new File(name), mode);
@@ -20,18 +23,21 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
             throw new IllegalArgumentException("Invalid mode: " + mode);
         }
         fd = new FileDescriptor(Os.open(file.getPath(), flags, 0666));
+        path = file.getPath();
+        rw = flags != Os.O_RDONLY;
     }
 
     public final FileDescriptor getFD() throws IOException {
         return fd;
     }
 
-    private java.nio.channels.FileChannel channel;
-
-    /** The same channel on every call, as in the JDK (its locks belong to it). */
-    public synchronized java.nio.channels.FileChannel getChannel() {
-        if (channel == null) channel = java.nio.channels.FileChannel.forFd(fd.fd, true, true);
-        return channel;
+    public java.nio.channels.FileChannel getChannel() {
+        synchronized (this) {
+            if (channel == null) {
+                channel = sun.nio.ch.FileChannelImpl.open(fd.fd, path, this, true, rw, false);
+            }
+            return channel;
+        }
     }
 
     public int read() throws IOException {
@@ -108,10 +114,12 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
     }
 
     public void close() throws IOException {
-        if (channel != null) channel.close();
         if (!closed) {
             closed = true;
             Os.close(fd.fd);
+            if (channel != null) {
+                channel.close();
+            }
         }
     }
 

@@ -147,7 +147,7 @@ uint32_t dex_type_list_size(const DexFile *d, uint32_t off) { return off ? sa_rd
 
 uint32_t dex_type_list_item(const DexFile *d, uint32_t off, uint32_t i) { return sa_rd16(d->base + off + 4 + i * 2); }
 
-/* Descriptors longer than dex_proto_desc's stack buffer (Kotlin metadata has some) are built on the heap. */
+/* Long descriptors (Kotlin reflection has return types of 100+ characters) are built on the heap. */
 static const char *proto_desc_heap(DexFile *d, const DexProtoId *p, uint32_t cnt) {
     SaBuf b = {0};
     sa_buf_putc(&b, '(');
@@ -169,14 +169,14 @@ const char *dex_proto_desc(DexFile *d, uint32_t proto_idx) {
     for (uint32_t i = 0; i < cnt; i++) {
         const char *t = dex_type_desc(d, dex_type_list_item(d, p.params_off, i));
         size_t tl = strlen(t);
-        if (n + tl + 2 >= sizeof buf) return proto_desc_heap(d, &p, cnt);
+        if (n + tl + 2 > sizeof buf) return proto_desc_heap(d, &p, cnt);
         memcpy(buf + n, t, tl);
         n += tl;
     }
-    buf[n++] = ')';
     const char *rt = dex_type_desc(d, p.return_type_idx);
     size_t rl = strlen(rt);
-    if (n + rl + 1 > sizeof buf) return proto_desc_heap(d, &p, cnt);
+    if (n + 1 + rl + 1 > sizeof buf) return proto_desc_heap(d, &p, cnt);
+    buf[n++] = ')';
     memcpy(buf + n, rt, rl);
     n += rl;
     buf[n] = 0;

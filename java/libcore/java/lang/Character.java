@@ -252,7 +252,7 @@ public final class Character implements java.io.Serializable, Comparable<Charact
         }
         return ch == 0xaa || ch == 0xb5 || ch == 0xba || (ch >= 0xdf && ch <= 0xff && ch != 0xf7)
                 || (ch >= 0x100 && ch < 0x250 && toUpperCase(ch) != ch)
-                || (ch >= 0x3b1 && ch <= 0x3c9) || (ch >= 0x430 && ch <= 0x45f);
+                || (ch >= 0x3b1 && ch <= 0x3c9) || (ch >= 0x430 && ch <= 0x45f) || (ch >= 0xff41 && ch <= 0xff5a);
     }
 
     public static boolean isUpperCase(char ch) {
@@ -267,7 +267,7 @@ public final class Character implements java.io.Serializable, Comparable<Charact
             return false;
         }
         return (ch >= 0xc0 && ch <= 0xde && ch != 0xd7) || (ch >= 0x100 && ch < 0x250 && toLowerCase(ch) != ch)
-                || (ch >= 0x391 && ch <= 0x3a9) || (ch >= 0x400 && ch <= 0x42f);
+                || (ch >= 0x391 && ch <= 0x3a9) || (ch >= 0x400 && ch <= 0x42f) || (ch >= 0xff21 && ch <= 0xff3a);
     }
 
     public static boolean isTitleCase(char ch) {
@@ -337,19 +337,19 @@ public final class Character implements java.io.Serializable, Comparable<Charact
     }
 
     public static boolean isJavaIdentifierStart(char ch) {
-        return isLetter(ch) || ch == '_' || ch == '$';
+        return isJavaIdentifierStart((int) ch);
     }
 
     public static boolean isJavaIdentifierStart(int ch) {
-        return isLetter(ch) || ch == '_' || ch == '$';
+        return isLetter(ch) || ch == '_' || getType(ch) == CURRENCY_SYMBOL || getType(ch) == CONNECTOR_PUNCTUATION;
     }
 
     public static boolean isJavaIdentifierPart(char ch) {
-        return isLetterOrDigit(ch) || ch == '_' || ch == '$';
+        return isJavaIdentifierPart((int) ch);
     }
 
     public static boolean isJavaIdentifierPart(int ch) {
-        return isLetterOrDigit(ch) || ch == '_' || ch == '$';
+        return isJavaIdentifierStart(ch) || isDigit(ch) || isIdentifierIgnorable(ch);
     }
 
     public static boolean isUnicodeIdentifierStart(char ch) {

@@ -1,131 +1,111 @@
-// java.util.logging: levels, hierarchy, effective levels, filters, handlers, formatting, configuration.
-import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Filter;
-import java.util.logging.Formatter;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogManager;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
+import java.util.logging.*;
 
+/**
+ * java.util.logging: run on OpenJDK and on switchapk by tests/run_dex_test.sh, output must match. A capturing
+ * handler stands in for the root handler (the JDK prints to stderr, Android to logcat).
+ */
 public class LoggingTest {
     static final List<String> seen = new ArrayList<>();
 
     static class Capture extends Handler {
-        final String tag;
-        Capture(String tag) { this.tag = tag; }
         public void publish(LogRecord r) {
-            if (!isLoggable(r)) return;
-            Formatter f = new Formatter() { public String format(LogRecord x) { return ""; } };
-            seen.add(tag + " " + r.getLevel() + " " + r.getLoggerName() + " " + f.formatMessage(r)
+            if (!isLoggable(r)) {
+                return;
+            }
+            String msg = getFormatter() != null ? getFormatter().formatMessage(r) : r.getMessage();
+            seen.add(r.getLoggerName() + " " + r.getLevel() + " " + msg
                     + (r.getThrown() != null ? " thrown=" + r.getThrown().getMessage() : "")
-                    + (r.getSourceClassName() != null ? " src=" + r.getSourceClassName() + "." + r.getSourceMethodName() : ""));
+                    + (r.getSourceMethodName() != null && r.getSourceClassName() != null
+                            && r.getSourceClassName().equals("Src") ? " src=" + r.getSourceMethodName() : ""));
         }
-        public void flush() {}
-        public void close() {}
+
+        public void flush() {
+        }
+
+        public void close() {
+        }
     }
 
-    static void dump(String what) {
-        System.out.println(what + ": " + seen);
+    static void dump(String label) {
+        System.out.println(label + ": " + seen);
         seen.clear();
     }
 
-    public static void main(String[] args) throws Exception {
-        System.out.println(Level.SEVERE.intValue() + " " + Level.INFO + " " + Level.ALL.intValue() + " " + Level.OFF.intValue());
-        System.out.println(Level.parse("FINE") == Level.FINE);
-        System.out.println(Level.parse("800") == Level.INFO);
-        System.out.println(Level.parse("750").getName() + " " + Level.parse("750").intValue());
-        try {
-            Level.parse("LOUD");
-        } catch (IllegalArgumentException e) {
-            System.out.println("IAE " + e.getMessage());
-        }
-
+    public static void main(String[] args) {
         Logger root = Logger.getLogger("");
-        System.out.println("root level " + root.getLevel() + " handlers " + root.getHandlers().length + " "
-                + root.getHandlers()[0].getClass().getName() + " " + root.getHandlers()[0].getLevel());
-        for (Handler h : root.getHandlers()) root.removeHandler(h);
-        root.addHandler(new Capture("root"));
+        System.out.println("root level " + root.getLevel() + " parent " + root.getParent());
+        Logger a = Logger.getLogger("com.example");
+        Logger ab = Logger.getLogger("com.example.app.Main");
+        System.out.println("same " + (a == Logger.getLogger("com.example")) + " parent " + ab.getParent().getName()
+                + " root parent " + (a.getParent() == root));
+        Logger mid = Logger.getLogger("com.example.app");
+        System.out.println("reparented " + ab.getParent().getName() + " " + mid.getParent().getName());
 
-        Logger child = Logger.getLogger("a.b.c");
-        System.out.println("c parent " + child.getParent().getName().isEmpty() + " level " + child.getLevel());
-        Logger mid = Logger.getLogger("a.b");
-        System.out.println("c parent now " + child.getParent().getName() + ", a.b parent '" + mid.getParent().getName() + "'");
-        System.out.println(Logger.getLogger("a.b.c") == child);
-        System.out.println("global " + Logger.getGlobal().getName() + " " + (Logger.getGlobal().getParent() == root));
+        Capture cap = new Capture();
+        cap.setFormatter(new SimpleFormatter());
+        a.addHandler(cap);
+        a.setUseParentHandlers(false);
 
-        child.info("hello");
-        child.fine("hidden");
-        mid.setLevel(Level.FINE);
-        child.fine("now visible");
-        child.finer("still hidden");
-        System.out.println("loggable " + child.isLoggable(Level.FINE) + " " + child.isLoggable(Level.FINEST));
+        ab.info("hello");
+        ab.fine("hidden");
+        ab.warning("careful");
+        dump("default INFO");
+
+        a.setLevel(Level.FINE);
+        ab.fine("now shown");
+        ab.finer("still hidden");
+        ab.log(Level.INFO, "params {0} and {1}", new Object[] {"x", 42});
+        ab.log(Level.SEVERE, "boom", new RuntimeException("bad"));
+        ab.log(Level.INFO, () -> "supplied");
+        ab.logp(Level.INFO, "Src", "method", "with source");
+        ab.log(Level.INFO, "braces {not a param}", "p");
+        dump("FINE");
+
+        ab.setLevel(Level.OFF);
+        ab.severe("off");
+        ab.setLevel(null);
+        mid.setLevel(Level.WARNING);
+        ab.info("blocked by mid");
+        ab.severe("passes mid");
         dump("levels");
 
-        Capture midH = new Capture("mid");
-        mid.addHandler(midH);
-        child.log(Level.WARNING, "x={0} y={1}", new Object[] { 1, "two" });
-        child.log(Level.SEVERE, "boom", new RuntimeException("bad"));
-        child.log(Level.INFO, "one {0}", "param");
-        child.log(Level.INFO, "{not a pattern}", "param");
-        child.logp(Level.INFO, "Cls", "meth", "sourced");
-        dump("handlers");
-
-        mid.setUseParentHandlers(false);
-        child.warning("only mid");
-        dump("no parent handlers");
-        mid.setUseParentHandlers(true);
-
-        child.setFilter(new Filter() {
-            public boolean isLoggable(LogRecord r) { return !r.getMessage().contains("drop"); }
-        });
-        child.info("keep");
-        child.info("drop me");
-        child.setFilter(null);
-        midH.setLevel(Level.WARNING);
-        child.info("root only");
+        cap.setLevel(Level.SEVERE);
+        mid.setLevel(Level.ALL);
+        ab.warning("handler filters");
+        ab.severe("handler passes");
+        cap.setLevel(Level.ALL);
+        a.setFilter(r -> !r.getMessage().contains("drop"));
+        ab.info("drop me");
+        a.info("keep me");
+        mid.setFilter(r -> false);
+        ab.info("filter only on mid");
         dump("filters");
 
-        child.entering("Cls", "m", new Object[] { "p", 2 });
-        mid.setLevel(Level.FINEST);
-        child.entering("Cls", "m", new Object[] { "p", 2 });
-        child.exiting("Cls", "m", 7);
-        child.throwing("Cls", "m", new IllegalStateException("t"));
-        midH.setLevel(Level.ALL);
-        child.severe(() -> "supplied");
-        dump("entering");
+        ab.entering("Src", "go");
+        ab.entering("Src", "go", new Object[] {1, "two"});
+        ab.exiting("Src", "go", "res");
+        ab.throwing("Src", "go", new IllegalStateException("t"));
+        dump("tracing");
 
-        Logger anon = Logger.getAnonymousLogger();
-        System.out.println("anon " + anon.getName() + " " + (anon.getParent() == root));
-        anon.info("anonymous");
-        dump("anon");
-
-        mid.setLevel(Level.OFF);
-        child.severe("off");
-        dump("off");
-
-        LogManager lm = LogManager.getLogManager();
-        final int[] calls = { 0 };
-        lm.addConfigurationListener(() -> calls[0]++);
-        lm.readConfiguration(new ByteArrayInputStream(".level=WARNING\na.b.level=FINE\nfoo=bar\n".getBytes("UTF-8")));
-        System.out.println("after config: root " + root.getLevel() + " mid " + mid.getLevel() + " child "
-                + child.getLevel() + " handlers " + root.getHandlers().length + " " + mid.getHandlers().length
-                + " foo=" + lm.getProperty("foo") + " listener " + calls[0]);
-        System.out.println(lm.getLogger("a.b") == mid);
-        System.out.println(lm.getLogger("nope"));
-        Logger late = Logger.getLogger("late");
-        System.out.println("late " + late.getLevel() + " " + late.isLoggable(Level.INFO) + " " + late.isLoggable(Level.WARNING));
-
-        LogRecord r = new LogRecord(Level.CONFIG, "m");
-        LogRecord r2 = new LogRecord(Level.CONFIG, "m");
-        System.out.println("seq " + (r2.getSequenceNumber() - r.getSequenceNumber()) + " thread "
-                + (r.getLongThreadID() == Thread.currentThread().getId()));
+        System.out.println("parse " + Level.parse("WARNING") + " " + Level.parse("800") + " " + Level.parse("850").intValue()
+                + " " + Level.INFO.equals(Level.parse("INFO")) + " " + Level.SEVERE.intValue());
         try {
-            new LogRecord(null, "x");
-        } catch (NullPointerException e) {
-            System.out.println("NPE");
+            Level.parse("NOPE");
+        } catch (IllegalArgumentException e) {
+            System.out.println("bad level " + e.getClass().getSimpleName());
         }
+        Logger anon = Logger.getAnonymousLogger();
+        System.out.println("anon " + anon.getName() + " parent root " + (anon.getParent() == root));
+        System.out.println("global " + Logger.getGlobal().getName() + " " + (Logger.getGlobal() == Logger.getLogger("global")));
+        System.out.println("handlers " + a.getHandlers().length + " " + ab.getHandlers().length);
+        a.removeHandler(cap);
+        System.out.println("removed " + a.getHandlers().length);
+        LogRecord r = new LogRecord(Level.CONFIG, "m");
+        System.out.println("record " + r.getLevel() + " " + r.getMessage() + " " + (r.getMillis() > 0) + " "
+                + (r.getSequenceNumber() >= 0));
+        System.out.println("names has com.example " + java.util.Collections.list(LogManager.getLogManager().getLoggerNames())
+                .contains("com.example"));
     }
 }

@@ -10,40 +10,59 @@ public abstract class Handler {
     private volatile ErrorManager errorManager = new ErrorManager();
     private volatile String encoding;
 
-    protected Handler() {}
+    protected Handler() {
+    }
 
     public abstract void publish(LogRecord record);
+
     public abstract void flush();
+
     public abstract void close() throws SecurityException;
 
     public synchronized void setFormatter(Formatter newFormatter) throws SecurityException {
-        if (newFormatter == null) throw new NullPointerException();
+        newFormatter.getClass();
         formatter = newFormatter;
     }
 
-    public Formatter getFormatter() { return formatter; }
+    public Formatter getFormatter() {
+        return formatter;
+    }
 
     public synchronized void setEncoding(String encoding) throws SecurityException, UnsupportedEncodingException {
         if (encoding != null) {
             try {
-                if (!Charset.isSupported(encoding)) throw new UnsupportedEncodingException(encoding);
-            } catch (IllegalArgumentException e) {
+                if (!Charset.isSupported(encoding)) {
+                    throw new UnsupportedEncodingException(encoding);
+                }
+            } catch (java.nio.charset.IllegalCharsetNameException e) {
                 throw new UnsupportedEncodingException(encoding);
             }
         }
         this.encoding = encoding;
     }
 
-    public String getEncoding() { return encoding; }
-    public synchronized void setFilter(Filter newFilter) throws SecurityException { filter = newFilter; }
-    public Filter getFilter() { return filter; }
+    public String getEncoding() {
+        return encoding;
+    }
+
+    public synchronized void setFilter(Filter newFilter) throws SecurityException {
+        filter = newFilter;
+    }
+
+    public Filter getFilter() {
+        return filter;
+    }
 
     public synchronized void setErrorManager(ErrorManager em) {
-        if (em == null) throw new NullPointerException();
+        if (em == null) {
+            throw new NullPointerException();
+        }
         errorManager = em;
     }
 
-    public ErrorManager getErrorManager() { return errorManager; }
+    public ErrorManager getErrorManager() {
+        return errorManager;
+    }
 
     protected void reportError(String msg, Exception ex, int code) {
         try {
@@ -55,16 +74,24 @@ public abstract class Handler {
     }
 
     public synchronized void setLevel(Level newLevel) throws SecurityException {
-        if (newLevel == null) throw new NullPointerException();
+        if (newLevel == null) {
+            throw new NullPointerException();
+        }
         logLevel = newLevel;
     }
 
-    public Level getLevel() { return logLevel; }
+    public Level getLevel() {
+        return logLevel;
+    }
 
     public boolean isLoggable(LogRecord record) {
         int levelValue = getLevel().intValue();
-        if (record == null) return false;
-        if (record.getLevel().intValue() < levelValue || levelValue == Level.OFF.intValue()) return false;
+        if (record == null) {
+            return false;
+        }
+        if (record.getLevel().intValue() < levelValue || levelValue == Level.OFF.intValue()) {
+            return false;
+        }
         Filter f = getFilter();
         return f == null || f.isLoggable(record);
     }

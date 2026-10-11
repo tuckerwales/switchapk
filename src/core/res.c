@@ -789,24 +789,25 @@ bool arsc_get_value(ResTable *t, uint32_t id, ResValue *out) {
     return !(out->type == RV_REFERENCE && out->data == id);
 }
 
-/* Style parents merge root first. Material3 themes reach about 30 levels over MaterialComponents and AppCompat
- * down to the framework theme, so the cap only guards against cycles. */
+/* AssetManager2 has no depth limit: Material3 themes chain about 25 styles down to the
+ * framework theme. The guard only stops parent cycles. */
+#define BAG_MAX_DEPTH 128
+
 static void bag_merge(ResTable *t, uint32_t id, ResBag *out, int depth) {
-    if (depth > 128) return;
+    if (depth > BAG_MAX_DEPTH) return;
     const ResEntryDef *e = arsc_get_entry(t, id);
     if (!e || !e->complex) return;
     if (e->parent) bag_merge(t, e->parent, out, depth + 1);
-    /* As AssetManager2::GetBag: an entry's own items are all kept (some tool chains write every array item with
-     * key 0); a key only replaces an item inherited from the parent chain. */
-    const uint32_t inherited = out->count;
+    /* As AssetManager2::GetBag: an entry's own items are all kept (array items may share a key);
+     * only keys inherited from the parent are overridden. */
+    uint32_t inherited = out->count;
     for (uint32_t i = 0; i < e->nitems; i++) {
         uint32_t k;
         for (k = 0; k < inherited; k++)
             if (out->items[k].name == e->items[i].name) break;
         if (k == inherited) {
-            k = out->count;
             out->items = sa_realloc(out->items, (out->count + 1) * sizeof(ResBagItem));
-            out->count++;
+            k = out->count++;
         }
         out->items[k] = e->items[i];
     }

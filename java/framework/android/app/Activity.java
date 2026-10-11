@@ -735,7 +735,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
         }
     }
 
-    /** framework-internal (hidden in AOSP): android.preference reads it. */
+    /** @hide AOSP has it public (hidden); PreferenceActivity uses it. */
     public final boolean isResumed() { return mResumed; }
 
     final boolean isStopped() { return mStopped; }
@@ -1079,11 +1079,9 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void setRecentsScreenshotEnabled(boolean enabled) {}
 
-    private ActivityManager.TaskDescription mTaskDescription = new ActivityManager.TaskDescription();
-
-    /** Kept for getTaskDescription-style reads; there is no recents screen to show it. */
     public void setTaskDescription(ActivityManager.TaskDescription taskDescription) {
-        if (taskDescription != null) mTaskDescription = new ActivityManager.TaskDescription(taskDescription);
+        ActivityManager.sTaskDescription = taskDescription != null
+                ? new ActivityManager.TaskDescription(taskDescription) : null;
     }
 
     public void reportFullyDrawn() {}

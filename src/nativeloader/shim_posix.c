@@ -743,7 +743,6 @@ static int sh_sigprocmask(int how, const sh_sigset_t *set, sh_sigset_t *old) {
 
 /* ---- dl_iterate_phdr lives in elf_loader.c (it knows the loaded images) ----------------------------------------- */
 
-int loader_dl_iterate_phdr(int (*cb)(void *info, size_t size, void *data), void *data);
 
 /* ---- host-only: descriptors, sockets, name lookup, the kernel ----------------------------------------------- */
 
@@ -1064,7 +1063,7 @@ static struct sh_mallinfo sh_mallinfo(void) {
 }
 
 static int sh_dl_iterate_phdr(int (*cb)(void *info, size_t size, void *data), void *data) {
-    return loader_dl_iterate_phdr(cb, data);
+    return loader_iterate_phdr(cb, data);
 }
 
 /* ---- the table ---------------------------------------------------------------------------------------- */

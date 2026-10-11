@@ -1,8 +1,8 @@
 package java.util.logging;
 
-import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 
 public class StreamHandler extends Handler {
@@ -22,20 +22,37 @@ public class StreamHandler extends Handler {
     }
 
     protected synchronized void setOutputStream(OutputStream out) throws SecurityException {
-        if (out == null) throw new NullPointerException();
+        if (out == null) {
+            throw new NullPointerException();
+        }
         flushAndClose();
         output = out;
         doneHeader = false;
         String encoding = getEncoding();
-        try {
-            writer = encoding == null ? new OutputStreamWriter(output) : new OutputStreamWriter(output, encoding);
-        } catch (java.io.UnsupportedEncodingException e) {
+        if (encoding == null) {
             writer = new OutputStreamWriter(output);
+        } else {
+            try {
+                writer = new OutputStreamWriter(output, encoding);
+            } catch (UnsupportedEncodingException ex) {
+                throw new Error("Unexpected exception " + ex);
+            }
         }
     }
 
+    public synchronized void setEncoding(String encoding) throws SecurityException, UnsupportedEncodingException {
+        super.setEncoding(encoding);
+        if (output == null) {
+            return;
+        }
+        flush();
+        writer = encoding == null ? new OutputStreamWriter(output) : new OutputStreamWriter(output, encoding);
+    }
+
     public synchronized void publish(LogRecord record) {
-        if (!isLoggable(record)) return;
+        if (!isLoggable(record)) {
+            return;
+        }
         String msg;
         try {
             msg = getFormatter().format(record);
@@ -54,7 +71,12 @@ public class StreamHandler extends Handler {
         }
     }
 
-    public boolean isLoggable(LogRecord record) { return writer != null && record != null && super.isLoggable(record); }
+    public boolean isLoggable(LogRecord record) {
+        if (writer == null || record == null) {
+            return false;
+        }
+        return super.isLoggable(record);
+    }
 
     public synchronized void flush() {
         if (writer != null) {
@@ -66,7 +88,7 @@ public class StreamHandler extends Handler {
         }
     }
 
-    private synchronized void flushAndClose() {
+    private synchronized void flushAndClose() throws SecurityException {
         if (writer != null) {
             try {
                 if (!doneHeader) {
@@ -84,5 +106,7 @@ public class StreamHandler extends Handler {
         }
     }
 
-    public synchronized void close() throws SecurityException { flushAndClose(); }
+    public synchronized void close() throws SecurityException {
+        flushAndClose();
+    }
 }

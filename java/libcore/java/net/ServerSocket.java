@@ -118,6 +118,15 @@ public class ServerSocket implements java.io.Closeable {
     }
 
     public void close() throws IOException {
+        if (channel != null) {
+            channel.close();
+            return;
+        }
+        closeInternal$();
+    }
+
+    /** @hide */
+    public void closeInternal$() throws IOException {
         if (closed) {
             return;
         }
@@ -127,8 +136,20 @@ public class ServerSocket implements java.io.Closeable {
         }
     }
 
+    private java.nio.channels.ServerSocketChannel channel;
+
     public java.nio.channels.ServerSocketChannel getChannel() {
-        return null;
+        return channel;
+    }
+
+    /** @hide */
+    public void setChannel$(java.nio.channels.ServerSocketChannel ch) {
+        channel = ch;
+    }
+
+    /** @hide The listening descriptor, or -1 before bind. */
+    public int fd$() {
+        return fd;
     }
 
     public boolean isBound() {

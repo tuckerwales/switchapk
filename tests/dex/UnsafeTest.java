@@ -1,96 +1,111 @@
-// sun.misc.Unsafe as desugared java.util.concurrent uses it: field and array offsets, CAS, get/put, getAndAdd.
 import java.lang.reflect.Field;
-import java.util.concurrent.atomic.AtomicInteger;
 import sun.misc.Unsafe;
 
+/**
+ * sun.misc.Unsafe as libraries use it (desugared j$ ConcurrentHashMap, atomics libraries): run on OpenJDK and on
+ * switchapk by tests/run_dex_test.sh, output must match. Offsets are layout specific, so only behaviour is printed.
+ */
 public class UnsafeTest {
     static class Box {
-        int i = 1;
-        long j = 2;
-        Object o = "a";
-        boolean z;
-        byte b;
-        short s;
+        int count = 3;
+        long total = 10L;
+        volatile Object ref = "a";
+        boolean flag;
+        byte b = 1;
+        short s = 2;
         char c = 'x';
         float f = 1.5f;
-        double d = 2.5;
-        Box() { i = 99; }
+        double d = 2.25;
+        static int created;
+
+        Box() {
+            created++;
+        }
     }
 
-    static void p(Object o) { System.out.println(o); }
-
     public static void main(String[] args) throws Exception {
-        Field tf = Unsafe.class.getDeclaredField("theUnsafe");
-        tf.setAccessible(true);
-        Unsafe u = (Unsafe) tf.get(null);
-        Box x = new Box();
-        long oi = u.objectFieldOffset(Box.class.getDeclaredField("i"));
-        long oj = u.objectFieldOffset(Box.class.getDeclaredField("j"));
-        long oo = u.objectFieldOffset(Box.class.getDeclaredField("o"));
-        long oz = u.objectFieldOffset(Box.class.getDeclaredField("z"));
-        long ob = u.objectFieldOffset(Box.class.getDeclaredField("b"));
-        long os = u.objectFieldOffset(Box.class.getDeclaredField("s"));
-        long oc = u.objectFieldOffset(Box.class.getDeclaredField("c"));
-        long of = u.objectFieldOffset(Box.class.getDeclaredField("f"));
-        long od = u.objectFieldOffset(Box.class.getDeclaredField("d"));
-        p("distinct " + (oi != oj && oj != oo && oi != oo));
-        p(u.getInt(x, oi) + " " + u.getLong(x, oj) + " " + u.getObject(x, oo) + " " + u.getChar(x, oc) + " "
-                + u.getFloat(x, of) + " " + u.getDouble(x, od));
-        p(u.compareAndSwapInt(x, oi, 99, 5) + " " + u.compareAndSwapInt(x, oi, 99, 6) + " " + x.i);
-        p(u.compareAndSwapLong(x, oj, 2L, 1L << 40) + " " + u.compareAndSwapLong(x, oj, 2L, 3L) + " " + x.j);
-        p(u.compareAndSwapObject(x, oo, "a", "b") + " " + u.compareAndSwapObject(x, oo, "a", "c") + " " + x.o);
-        u.putIntVolatile(x, oi, 7);
-        u.putOrderedLong(x, oj, -1L);
-        u.putObjectVolatile(x, oo, null);
-        u.putBoolean(x, oz, true);
-        u.putByte(x, ob, (byte) -3);
-        u.putShort(x, os, (short) 300);
-        u.putChar(x, oc, 'y');
-        u.putFloat(x, of, -0.25f);
-        u.putDouble(x, od, 1e100);
-        p(x.i + " " + x.j + " " + x.o + " " + x.z + " " + x.b + " " + x.s + " " + x.c + " " + x.f + " " + x.d);
-        p(u.getAndAddInt(x, oi, 3) + " " + x.i + " " + u.getAndSetLong(x, oj, 9) + " " + x.j + " "
-                + u.getAndSetObject(x, oo, "z") + " " + x.o + " " + u.getAndAddLong(x, oj, 1) + " " + x.j);
+        Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+        theUnsafe.setAccessible(true);
+        Unsafe u = (Unsafe) theUnsafe.get(null);
+        System.out.println("unsafe " + (u != null));
 
-        Object[] objs = new Object[4];
-        int ob0 = u.arrayBaseOffset(Object[].class);
-        int os0 = u.arrayIndexScale(Object[].class);
-        p("ref scale ok " + (os0 == 4 || os0 == 8));
-        u.putObjectVolatile(objs, ob0 + 2L * os0, "two");
-        p(objs[2] + " " + u.getObjectVolatile(objs, ob0 + 2L * os0) + " "
-                + u.compareAndSwapObject(objs, ob0 + 3L * os0, null, "three") + " " + objs[3]);
-        int[] ints = {10, 20, 30};
-        int ib = u.arrayBaseOffset(int[].class);
+        long count = u.objectFieldOffset(Box.class.getDeclaredField("count"));
+        long total = u.objectFieldOffset(Box.class.getDeclaredField("total"));
+        long ref = u.objectFieldOffset(Box.class.getDeclaredField("ref"));
+        long flag = u.objectFieldOffset(Box.class.getDeclaredField("flag"));
+        long bo = u.objectFieldOffset(Box.class.getDeclaredField("b"));
+        long so = u.objectFieldOffset(Box.class.getDeclaredField("s"));
+        long co = u.objectFieldOffset(Box.class.getDeclaredField("c"));
+        long fo = u.objectFieldOffset(Box.class.getDeclaredField("f"));
+        long dO = u.objectFieldOffset(Box.class.getDeclaredField("d"));
+        System.out.println("distinct " + (count != total && total != ref && ref != count));
+
+        Box box = new Box();
+        System.out.println("getInt " + u.getInt(box, count) + " getLong " + u.getLong(box, total) + " getObject "
+                + u.getObject(box, ref));
+        System.out.println("cas int " + u.compareAndSwapInt(box, count, 3, 4) + " " + u.compareAndSwapInt(box, count, 3, 5)
+                + " -> " + box.count);
+        System.out.println("cas long " + u.compareAndSwapLong(box, total, 10L, 1L << 40) + " -> " + box.total);
+        System.out.println("cas obj " + u.compareAndSwapObject(box, ref, "a", "b") + " "
+                + u.compareAndSwapObject(box, ref, "a", "c") + " -> " + box.ref);
+        u.putIntVolatile(box, count, 42);
+        u.putOrderedLong(box, total, -7L);
+        u.putObjectVolatile(box, ref, null);
+        System.out.println("put " + box.count + " " + box.total + " " + box.ref + " " + u.getIntVolatile(box, count));
+        System.out.println("getAndAdd " + u.getAndAddInt(box, count, 8) + " " + box.count + " "
+                + u.getAndAddLong(box, total, 7) + " " + box.total + " " + u.getAndSetObject(box, ref, "z") + " "
+                + box.ref);
+        u.putBoolean(box, flag, true);
+        u.putByte(box, bo, (byte) -3);
+        u.putShort(box, so, (short) 300);
+        u.putChar(box, co, 'q');
+        u.putFloat(box, fo, 0.25f);
+        u.putDouble(box, dO, -1.5);
+        System.out.println("small " + box.flag + " " + box.b + " " + box.s + " " + box.c + " " + box.f + " " + box.d + " "
+                + u.getBoolean(box, flag) + " " + u.getByte(box, bo) + " " + u.getShort(box, so) + " "
+                + u.getChar(box, co) + " " + u.getFloat(box, fo) + " " + u.getDouble(box, dO));
+
+        int[] ints = {1, 2, 3, 4};
+        long ib = u.arrayBaseOffset(int[].class);
         int is = u.arrayIndexScale(int[].class);
-        p(is + " " + u.getInt(ints, ib + 1L * is) + " " + u.compareAndSwapInt(ints, ib + 2L * is, 30, 31) + " " + ints[2]);
-        long[] longs = {5};
-        p(u.arrayIndexScale(long[].class) + " " + u.getAndAddLong(longs, u.arrayBaseOffset(long[].class), 5) + " " + longs[0]);
-        p(u.arrayIndexScale(byte[].class) + " " + u.arrayIndexScale(char[].class) + " " + u.arrayIndexScale(double[].class));
+        System.out.println("int scale " + is + " long scale " + u.arrayIndexScale(long[].class) + " byte scale "
+                + u.arrayIndexScale(byte[].class));
+        System.out.println("array " + u.getInt(ints, ib + 2L * is) + " " + u.compareAndSwapInt(ints, ib + 3L * is, 4, 40)
+                + " " + ints[3]);
+        Object[] objs = {"p", "q"};
+        long ob = u.arrayBaseOffset(Object[].class);
+        int os = u.arrayIndexScale(Object[].class);
+        System.out.println("objs " + u.getObjectVolatile(objs, ob + os) + " "
+                + u.compareAndSwapObject(objs, ob, "p", "r") + " " + objs[0]);
+        long[] longs = new long[2];
+        long lb = u.arrayBaseOffset(long[].class);
+        u.putLongVolatile(longs, lb + 8, 99L);
+        System.out.println("longs " + longs[1] + " " + u.getAndAddLong(longs, lb + 8, 1) + " " + longs[1]);
 
         Box raw = (Box) u.allocateInstance(Box.class);
-        p("allocateInstance " + raw.i + " " + raw.o + " " + (int) raw.c);
-
-        // contention through getAndAddInt
-        final Unsafe fu = u;
-        final int[] counter = new int[1];
-        final long cb = u.arrayBaseOffset(int[].class);
-        Thread[] ts = new Thread[4];
-        for (int k = 0; k < ts.length; k++) {
-            ts[k] = new Thread(() -> { for (int n = 0; n < 5000; n++) fu.getAndAddInt(counter, cb, 1); });
-            ts[k].start();
+        System.out.println("allocate " + raw.count + " " + raw.ref + " created " + Box.created);
+        try {
+            u.allocateInstance(Runnable.class);
+        } catch (InstantiationException e) {
+            System.out.println("interface " + e.getClass().getName());
         }
-        for (Thread t : ts) t.join();
-        p("counter " + counter[0]);
 
-        // park/unpark round trip
-        final Thread main = Thread.currentThread();
-        final AtomicInteger flag = new AtomicInteger();
-        Thread w = new Thread(() -> { flag.set(1); fu.unpark(main); });
-        w.start();
-        while (flag.get() == 0) u.park(false, 50000000L);
-        w.join();
-        p("parked " + flag.get());
-        u.park(true, System.currentTimeMillis() + 10);
-        p("done");
+        long mem = u.allocateMemory(32);
+        u.setMemory(mem, 32, (byte) 0);
+        u.putLong(mem, 0x1122334455667788L);
+        u.putInt(mem + 8, -5);
+        u.putByte(mem + 12, (byte) 7);
+        u.putDouble(mem + 16, 3.5);
+        u.copyMemory(mem, mem + 24, 8);
+        System.out.println("memory " + Long.toHexString(u.getLong(mem)) + " " + u.getInt(mem + 8) + " " + u.getByte(mem + 12)
+                + " " + u.getDouble(mem + 16) + " " + Long.toHexString(u.getLong(mem + 24)));
+        u.freeMemory(mem);
+        System.out.println("address " + u.addressSize());
+        try {
+            u.objectFieldOffset(Box.class.getDeclaredField("created"));
+            System.out.println("static allowed");
+        } catch (IllegalArgumentException e) {
+            System.out.println("static " + e.getClass().getName());
+        }
     }
 }

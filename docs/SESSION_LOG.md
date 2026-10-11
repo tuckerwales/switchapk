@@ -808,6 +808,101 @@ what is left in flight.
   COMPATIBILITY.md "Findings" and PLAN next steps item 9.
 - `make` and VmTest pass. Nothing was run on hardware.
 
+
+### Session 25 (2026-10-09/10, branch ccr-0c4b5dc0-hmtab0)
+
+- Worked down the corpus first blockers (WS4, WS9, WS11, WS16). 12 of 13
+  corpus apps now reach a drawn screen on the host, up from 2;
+  COMPATIBILITY.md "Findings" lists what each fix unblocked.
+- Framework: android.preference, ListActivity and FragmentBreadCrumbs
+  ported from AOSP with a generated com.android.internal.R
+  (tools/gen_internal_r.py); tests/apps/prefs checks inflation, defaults,
+  dependencies, list and EditText dialogs and persistence over two runs.
+  activity-alias, ActivityManager, DisplayManager, InputManager,
+  MediaScannerConnection, RingtoneManager, real Intent.parseIntent,
+  versionName in PackageInfo, asset and ParcelFileDescriptor descriptors,
+  OverScroller Interpolator constructors, Holo decors via the Toolbar
+  decor, requestFeature after an early getDecorView.
+- Two resource/config bugs with wide reach: bag merging dropped array items
+  that share a key (all arrays from newer aapt2 collapsed to one item), and
+  Configuration.locale was null.
+- libcore: FileChannel (locks, mapping, MappedByteBuffer), regex Unicode
+  blocks/scripts/categories, runtime properties, SAX and
+  javax.xml.parsers, java.util.logging, ServiceLoader, generic
+  signatures, sun.misc.Unsafe, ProcessBuilder (refused), ObjectStreamField,
+  java.nio selectors and socket channels. New JDK-compared dex tests:
+  RegexTest, NioTest, XmlTest, UnsafeTest, LoggingTest, GenericsTest,
+  SelectorTest.
+- VM: dex_proto_desc overflowed a stack buffer on long Kotlin return
+  types; Log messages are written line by line so causes are not cut off;
+  SWITCHAPK_TRACE_THROW=1 logs every throw.
+- Native shim: shim_runtime.c (C++ runtime entry points, locale and wide
+  chars, syslog, semaphores, rwlocks, sincos, vasprintf) and
+  dl_iterate_phdr from the loader.
+- `make`, all tests/dex tests and the sample app checks pass (gles needs
+  host Mesa; it passed on a rerun after a cold-start timeout). `make -f
+  Makefile.switch` builds the NRO without warnings (devkitPro fetched with
+  tools/fetch_toolchains.py devkitpro). Nothing was run on hardware.
+
+### Session 26 (2026-10-10, branch ccr-0c4b5dc0-hmtab0)
+
+- Resources: style bags stopped merging parents after 20 levels, which cut
+  Material3 themes off from the framework theme (no windowNoTitle, so the
+  titled decor was chosen and failed on windowTitleSize). The guard is now
+  128 and only stops cycles.
+- External storage follows Android's layout (`/storage/emulated/0`,
+  `Android/data/<pkg>/files`, `Android/obb/<pkg>`), fixing Simple Commons
+  path parsing. PackageManager gained queryIntentContentProviders,
+  queryContentProviders and the API 33 typed-flag overloads.
+- AssetManager.openFd throws FileNotFoundException for compressed assets,
+  as Android does.
+- android.bluetooth answers as absent (BluetoothManager with a null
+  adapter, classic socket classes) and OrientationEventListener is ported
+  from AOSP: Frozen Bubble starts clean with Bluetooth play greyed out.
+- WindowManagerGlobal.removeView takes window focus away before it
+  unregisters the window, so updates from onWindowFocusChanged(false)
+  still reach it (Shattered PD).
+- AudioManager was missing 177 members: constants, ringer and mode,
+  AudioFocusRequest, AudioDeviceInfo (one built-in speaker), routing and
+  property queries, sound effects (off). 19 niche ones remain stubbed.
+- Simple Calculator now starts with no uncaught or unexpected errors.
+  Mindustry's preview error is still open: concurrent and single-threaded
+  decoding of the same save match the JDK.
+- `make`, all tests/dex tests, the sample app checks (curves passed on a
+  rerun after an animation-timing miss) and the corpus run pass. Nothing
+  was run on hardware.
+
+### Session 27 (2026-10-10, branch ccr-854a3d8f-8aqeix)
+
+- WS10 home screen rewrite. The launcher moved from main_switch.c into
+  `src/app/launcher.c`, which draws with gfx into a buffer and takes
+  libnx-free input, so the host runs it too (`switchapk-host --launcher`,
+  `--splash`, `--error-screen`, `--nro-icon`).
+- New look: dark gradient background, status bar with clock, Wi-Fi and
+  battery, a carousel of large icon tiles with an accent glow on the
+  selected one, a details panel (label, package, version, size, last
+  played) with a Play button, button hints that also take taps, and a
+  NEW badge on apps never started. APKs without a bitmap icon get a
+  colored tile with their initial.
+- Easier launching: remembers the last app and opens on it after the app
+  ends, sorts by recently played (Y for A to Z), key repeat on hold, L/R
+  and ZL/ZR jumps, swipe to scroll, tap a tile then tap again or Play, X
+  rescans. Labels and icons are cached per APK in
+  `sdmc:/switch/switchapk/launcher/icons`, so the reload after each app
+  does not reopen every APK. A splash with the app icon shows while the VM
+  boots, and the error screen scrolls and offers Try again.
+- The palette follows the project logo: deep navy from the console
+  outline, Joy-Con blue and red glows on the left and right, a
+  blue-to-red selection ring like the hexagon border, "apk" and Android
+  greens for Play, and a hexagon header mark. Letter tiles use logo
+  tones only.
+- The NRO shows the project logo in hbmenu: cropped and scaled from
+  `docs/assets/logo.jpg` by the host build at build time and encoded by
+  `tools/ppm_to_jpeg.py` (no new binary committed).
+- `make`, `make -f Makefile.switch` (no warnings), VmTest,
+  tests/launcher/check_launcher.sh and tests/apps/labeled/check_info.sh
+  pass. Nothing was run on hardware.
+
 ### Session 25 (2026-10-10, branch ccr-d683819b-nm914p)
 
 - WS13: the corpus tracks proprietary apps. A `"source": "local"` entry
@@ -940,3 +1035,13 @@ what is left in flight.
   when the size wraps the address space, so every such sprintf in native code
   lost output. Fixed and covered in tests/c/shim_sem_test.c. Puzzles now
   shows a generated Sudoku: 12 of the 13 open apps draw.
+- 2026-10-11, merge of main: main had landed parallel implementations of
+  most of this branch's corpus fixes (113 conflicting files). Main's were
+  kept; this branch contributed what main lacked: the Switch native layers
+  (shim_bsd, shim_newlib, vfd), shim_posix and the OSRS native work, the
+  in-process executables (spawn.c, ProcessImpl, tests/apps/procs), native
+  library extraction, the fortified sprintf fix, autofill and
+  CursorAnchorInfo (PR 22), UserManager and SAXException.getCause. After
+  the merge all 13 open corpus apps draw on the host, every dex test, C
+  test and tests/apps check (with prefs and procs) passes, and the Switch
+  build links.

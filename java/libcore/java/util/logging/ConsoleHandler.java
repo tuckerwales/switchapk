@@ -11,5 +11,7 @@ public class ConsoleHandler extends StreamHandler {
         flush();
     }
 
-    public void close() { flush(); }
+    public void close() {
+        flush();
+    }
 }

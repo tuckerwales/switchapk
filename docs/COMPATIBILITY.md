@@ -2,9 +2,8 @@
 
 How switchapk does on real, open-source APKs, and what it lacks for them.
 The corpus is listed in `tests/corpus/corpus.json` (F-Droid builds, pinned by
-version code and sha256, plus proprietary apps whose APK each developer
-supplies; see "Proprietary apps" below). APKs are fetched into
-`build/corpus` and never committed.
+version code and sha256). APKs are fetched into `build/corpus` and never
+committed.
 
 ## Running it
 
@@ -177,59 +176,60 @@ generated section below (the rest of this file is written by hand).
 Static ranking says what to build for breadth; the run says what blocks
 each app first. Re-run after a fix and the tables move.
 
-## Findings (2026-10-10)
+## Findings (2026-10-11)
 
-First blockers, in the order that unblocks the most apps:
+All 13 open apps reach a drawn screen on the host (2 did in session 24):
+Pixel Dungeon, Replica Island, Blockinger, Frozen Bubble, Shattered Pixel
+Dungeon, Vector Pinball, Mindustry (loading screen), Unciv (first-run
+language picker), Andor's Trail, Simple Solitaire, Simon Tatham's Puzzles
+(a generated Sudoku), DroidFish (with its Stockfish engine running) and
+Simple Calculator. Only the first screen is checked: the smoke script taps
+once and presses back. Old School RuneScape (local, see above) draws its own
+"Error connecting to server" screen.
 
-| Gap | Apps blocked at start | Evidence | Workstream |
-|---|---|---|---|
-| Mindustry still renders black with every native import resolved (cause unknown) | Mindustry | run: blank screen | WS8/WS9 |
-| No game-server connection: in the sandbox where this ran, TLS is re-terminated and port 43594 blocked (environment); the Switch socket layer is new and not run on hardware | Old School RuneScape | run: the client's own "Error connecting to server" screen | WS9/WS11 |
+What it took, by the first blocker each fix removed:
 
-Past their first screen but with a known gap:
+| Fix | Apps |
+|---|---|
+| android.preference (ported from AOSP), ListActivity | Andor's Trail, DroidFish, Frozen Bubble, Simple Solitaire, Blockinger |
+| Array resources: newer aapt2 gives every item the same key, and bag merging dropped all but one | Simple Solitaire (and any app built with recent aapt2) |
+| Default locale in Configuration (was null) | DroidFish |
+| java.runtime.name and the other Android runtime properties | Vector Pinball, Unciv (libGDX desktop path) |
+| Regex Unicode blocks, scripts and categories | Shattered PD |
+| FileChannel lock/map, MappedByteBuffer | Unciv |
+| activity-alias launches its target | Simple Calculator |
+| Holo action bar decor through the Toolbar decor (ActionBarView is not ported) | Blockinger |
+| OverScroller Interpolator constructors (were auto-stubbed, leaving the object empty) | Simple Solitaire (RecyclerView) |
+| ActivityManager, DisplayManager, InputManager, MediaScannerConnection | Simple Calculator, Shattered PD, Unciv |
+| SAX and javax.xml.parsers | DroidFish (AndroidSVG) |
+| sun.misc.Unsafe | Vector Pinball (desugared j$ ConcurrentHashMap) |
+| java.util.logging, ServiceLoader, generic signatures | Unciv (SLF4J, Kotlin reflection, libGDX Json) |
+| ProcessBuilder runs bionic executables in-process (spawn.c), with native libraries extracted to nativeLibraryDir | DroidFish (Stockfish), Simon Tatham's Puzzles (its generator) |
+| Fortified sprintf with an unknown buffer size truncated its output (the shim passed (size_t)-1 to glibc's vsnprintf) | Simon Tatham's Puzzles (empty game descriptions; any native code using sprintf) |
+| AutofillManager, CursorAnchorInfo (PR 22), color state lists as drawables | Simon Tatham's Puzzles (Jetpack Compose) |
+| Asset descriptors (openFd), PackageInfo.versionName, requestFeature after an early getDecorView | Shattered PD |
+| dex_proto_desc stack overflow on a long Kotlin return type | Unciv (VM abort) |
+| Native shim: C++ new/delete, sincos, locale and wide chars, syslog, semaphores, rwlocks, dl_iterate_phdr | Vector Pinball, Frozen Bubble, Mindustry |
+| java.nio Selector and socket channels | Mindustry (network client at startup) |
+| Style parent chains deeper than 20 were cut off, so Material3 themes lost the framework theme (no windowNoTitle, so the titled decor failed to inflate) | Simple Calculator (and any Material3 app) |
+| External storage in Android's layout (`/storage/emulated/0/Android/data/<pkg>/files`) | Simple Calculator (Simple Commons cuts paths at `Android/data`) |
+| PackageManager.queryIntentContentProviders and the API 33 typed-flag overloads | Simple Calculator (EmojiCompat via Glide) |
+| android.bluetooth answering as absent (no adapter), OrientationEventListener (from AOSP) | Frozen Bubble (Bluetooth multiplayer greyed out) |
+| A removed window loses focus while still added (apps call setFlags from onWindowFocusChanged(false)) | Shattered PD |
+| openFd refuses compressed assets like Android (was a descriptor that could not be mapped) | Mindustry (Arc falls back to streams) |
 
-| Gap | App | Workstream |
+Still open:
+
+| Gap | Apps | Evidence |
 |---|---|---|
-| Compose: `View.getContentCaptureSession`, `RenderNode.getMatrix` and `RenderNode.setClipToOutline` auto-stub | Simon Tatham's Puzzles | WS1 |
-| NIO selectors (`java.nio.channels.spi.SelectorProvider`, used by ktor) | Unciv multiplayer status check | WS11 |
-| Java object streams (ObjectOutputStream/ObjectInputStream); only `ObjectStreamField` exists | none at start yet | WS16 |
+| Compose: `View.getContentCaptureSession`, `RenderNode.getMatrix` and `setClipToOutline` auto-stub | Simon Tatham's Puzzles | run: STUB lines |
+| Executables share the app's loaded libraries instead of private copies, and cannot be killed (destroy() ends their streams) | DroidFish, Simon Tatham's Puzzles | spawn.c limits; not seen to matter yet |
+| Mindustry's map previews fail decoding a save chunk (EOFException in `ShortChunkSaveVersion.readMap`; was `Pixmap.setRaw` index -1024) | Mindustry | run, caught by the app; the same save decodes like the JDK through InflaterInputStream and DataInputStream, single and 8 threads, so the cause is in what the app does around it |
+| AppCompat/AndroidX surface: accessibility, android.transition, android.icu, AppOpsManager, window insets | Andor's Trail, DroidFish, Simple Calculator, Simon Tatham's Puzzles, Unciv | static scan, 80 to 190 SDK classes each |
 
-Fixed on 2026-10-10/11 and re-run: `android.preference` and `ListActivity`
-(Andor's Trail, Frozen Bubble), a default `Configuration` locale, SAX2 and
-`javax.xml.parsers`, `ProcessBuilder` and `sem_*` (DroidFish), regex
-Unicode blocks and general categories, DisplayManager, InputManager,
-real asset descriptors for MediaPlayer, manifest versionName, the
-requestFeature rule (Shattered PD), activity-alias and android:enabled
-(Simple Calculator), `ObjectStreamField`, `sun.misc.Unsafe` and generic
-signatures in reflection (Vector Pinball, Unciv; desugared
-ConcurrentHashMap and libGDX Json), the S+ PendingIntent rule on an API 29
-device (WorkManager), and a VM overflow on long method descriptors
-(Kotlin reflection). Then: style chains deeper than 20 levels lost their
-framework root (Material3 themes; Simple Calculator), array bags whose
-items all carry key 0 collapsed to one item (Simple Solitaire), the Holo
-decor `ActionBarView` (Blockinger), ActivityManager.TaskDescription,
-device-layout external app directories and MediaScannerConnection. Then:
-in-process executables for ProcessBuilder with native libraries extracted to
-nativeLibraryDir (DroidFish runs Stockfish 16.1; Puzzles runs its
-generator), ServiceLoader over META-INF/services (Kotlin reflection),
-color state lists as drawables, PR 22's autofill and CursorAnchorInfo for
-Compose, and a shim bug that truncated every fortified sprintf with an
-unknown buffer size (Puzzles' game descriptions).
-
-Already working on the host: **Pixel Dungeon** and **Replica Island** reach
-their title screens with no stubs hit; **Andor's Trail**, **Frozen Bubble**,
-**DroidFish**, **Shattered Pixel Dungeon**, **Vector Pinball**, **Unciv**,
-**Simple Calculator**, **Simple Solitaire**, **Blockinger** and **Simon
-Tatham's Puzzles** draw their first screens (Replica Island is GLES1, which
-renders on Mesa 25.2). They are the first candidates for screenshot
-goldens (WS13) and for a device demo.
-
-Beyond the first blockers, the AndroidX apps (Andor's Trail, DroidFish,
-Simple Calculator, Simon Tatham's Puzzles, Unciv) reference 100 to 220
-missing SDK classes each. The breadth tables below rank them; the
-accessibility (`AccessibilityNodeInfo`, `AccessibilityManager`),
-`android.transition`, `android.icu`, `AppOpsManager` and window insets
-APIs lead.
+`SWITCHAPK_TRACE_THROW=1` makes the host log every throw with its location,
+which finds the cause when an app catches an error and shows its own crash
+screen.
 
 <!-- corpus:begin (generated by tools/corpus.py report; edit outside these markers) -->
 
@@ -239,28 +239,27 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 |---|---|---|---|---|---|---|---|---|
 | Pixel Dungeon | 0 | 9/20 | framework only | 1 | 0 | 0 | none | draws |
 | Replica Island | 0 | 3/8 | framework only | 1 | 0 | 0 | none | draws |
-| Blockinger | 0 | 8/17 | support library | 2 | 1 | 6 | none | draws |
-| Frozen Bubble | 0 | 12/12 | framework only | 11 | 0 | 1 | arm64, 1 libs, 2 unresolved | draws |
+| Blockinger | 0 | 8/17 | support library | 2 | 1 | 5 | none | draws |
+| Frozen Bubble | 0 | 12/12 | framework only | 6 | 0 | 1 | arm64, 1 libs, 0 unresolved | draws |
 | Shattered Pixel Dungeon | 1 | 21/36 | libgdx, androidx (other), androidx.core | 7 | 0 | 1 | arm64, 2 libs, 0 unresolved | draws |
-| Vector Pinball | 1 | 4/37 | libgdx, support library | 9 | 21 | 3 | arm64, 1 libs, 0 unresolved | draws |
-| Mindustry | 1 | 21/36 | arc | 18 | 21 | 0 | arm64, 2 libs, 0 unresolved | blank screen |
-| Unciv | 1 | 21/36 | libgdx, androidx (other), androidx.core, kotlinx.coroutines, support library (Kotlin) | 202 | 95 | 124 | arm64, 1 libs, 0 unresolved | draws |
-| Andor's Trail | 2 | 21/36 | androidx (other), androidx.core, support library, androidx.fragment (Kotlin) | 143 | 47 | 41 | none | draws |
-| Simple Solitaire Collection | 2 | 11/25 | support library | 9 | 0 | 7 | none | draws |
-| Simon Tatham's Puzzles | 2 | 21/36 | androidx.compose, androidx (other), androidx.appcompat, material, androidx.core, kotlinx.coroutines, androidx.recyclerview, androidx.constraintlayout, androidx.fragment (Kotlin) | 93 | 3 | 85 | arm64, 3 libs, 0 unresolved | draws |
-| DroidFish | 2 | 16/28 | androidx (other), material, androidx.core, androidx.appcompat, androidx.recyclerview, androidx.fragment, androidx.constraintlayout, support library | 79 | 4 | 41 | arm64, 3 libs, 0 unresolved | draws |
-| Simple Calculator | 3 | 23/34 | androidx.appcompat, material, androidx (other), androidx.compose, androidx.recyclerview, androidx.fragment, kotlinx.coroutines, androidx.core, rxjava (Kotlin) | 112 | 9 | 93 | none | draws |
-| Old School RuneScape (local, 241.3) | 3 | 26/35 | play services, androidx (other), androidx.core, androidx.appcompat, material, firebase, androidx.recyclerview, androidx.fragment, support library, androidx.constraintlayout (Kotlin) | 115 | 7 | 71 | arm64, 6 libs, 0 unresolved | draws |
+| Vector Pinball | 1 | 4/37 | libgdx, support library | 9 | 21 | 2 | arm64, 1 libs, 0 unresolved | draws |
+| Mindustry | 1 | 21/36 | arc | 13 | 4 | 0 | arm64, 2 libs, 0 unresolved | draws |
+| Unciv | 1 | 21/36 | libgdx, androidx (other), androidx.core, kotlinx.coroutines, support library (Kotlin) | 185 | 70 | 124 | arm64, 1 libs, 0 unresolved | draws |
+| Andor's Trail | 2 | 21/36 | androidx (other), androidx.core, support library, androidx.fragment (Kotlin) | 140 | 45 | 37 | none | draws |
+| Simple Solitaire Collection | 2 | 11/25 | support library | 9 | 0 | 6 | none | draws |
+| Simon Tatham's Puzzles | 2 | 21/36 | androidx.compose, androidx (other), androidx.appcompat, material, androidx.core, kotlinx.coroutines, androidx.recyclerview, androidx.constraintlayout, androidx.fragment (Kotlin) | 91 | 3 | 84 | arm64, 3 libs, 0 unresolved | draws |
+| DroidFish | 2 | 16/28 | androidx (other), material, androidx.core, androidx.appcompat, androidx.recyclerview, androidx.fragment, androidx.constraintlayout, support library | 77 | 4 | 40 | arm64, 3 libs, 0 unresolved | draws |
+| Simple Calculator | 3 | 23/34 | androidx.appcompat, material, androidx (other), androidx.compose, androidx.recyclerview, androidx.fragment, kotlinx.coroutines, androidx.core, rxjava (Kotlin) | 110 | 9 | 92 | none | draws |
+| Old School RuneScape (local, 241.3) | 3 | 26/35 | play services, androidx (other), androidx.core, androidx.appcompat, material, firebase, androidx.recyclerview, androidx.fragment, support library, androidx.constraintlayout (Kotlin) | 111 | 7 | 65 | arm64, 6 libs, 0 unresolved | draws |
 
 ### Most-needed packages (static, by number of apps)
 
 | Package | Apps |
 |---|---|
 | android.app | 10 (andorstrail, blockinger, calculator, droidfish, osrs, sgtpuzzles, shatteredpd, solitaire, unciv, vectorpinball) |
-| android.media | 9 (andorstrail, blockinger, calculator, droidfish, osrs, sgtpuzzles, solitaire, unciv, vectorpinball) |
-| android.view | 9 (andorstrail, calculator, droidfish, frozenbubble, osrs, sgtpuzzles, solitaire, unciv, vectorpinball) |
 | android.widget | 9 (andorstrail, blockinger, calculator, droidfish, frozenbubble, osrs, sgtpuzzles, solitaire, unciv) |
 | android.os | 8 (andorstrail, calculator, droidfish, frozenbubble, osrs, sgtpuzzles, shatteredpd, unciv) |
+| android.view | 8 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, solitaire, unciv, vectorpinball) |
 | android.view.accessibility | 8 (andorstrail, blockinger, calculator, droidfish, osrs, sgtpuzzles, solitaire, unciv) |
 | android.content.pm | 7 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, solitaire, unciv) |
 | android.transition | 7 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, solitaire, unciv) |
@@ -269,6 +268,7 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 | android.graphics.fonts | 6 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, unciv) |
 | android.icu.text | 6 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, unciv) |
 | android.icu.util | 6 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, unciv) |
+| android.media | 6 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, unciv) |
 | android.net | 6 (andorstrail, blockinger, droidfish, frozenbubble, osrs, unciv) |
 | android.text | 6 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, unciv) |
 | android.view.inputmethod | 6 (andorstrail, calculator, droidfish, osrs, sgtpuzzles, unciv) |
@@ -276,7 +276,6 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 | java.io | 6 (andorstrail, calculator, droidfish, osrs, unciv, vectorpinball) |
 | java.net | 6 (andorstrail, droidfish, frozenbubble, mindustry, osrs, unciv) |
 | android.appwidget | 5 (andorstrail, calculator, droidfish, sgtpuzzles, unciv) |
-| android.bluetooth | 5 (andorstrail, droidfish, frozenbubble, sgtpuzzles, unciv) |
 | android.content | 5 (andorstrail, droidfish, osrs, sgtpuzzles, unciv) |
 | android.hardware.usb | 5 (andorstrail, calculator, droidfish, sgtpuzzles, unciv) |
 | android.net.wifi | 5 (andorstrail, droidfish, frozenbubble, sgtpuzzles, unciv) |
@@ -285,7 +284,6 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 | android.telephony | 5 (andorstrail, calculator, droidfish, sgtpuzzles, unciv) |
 | android.view.textclassifier | 5 (calculator, droidfish, osrs, sgtpuzzles, unciv) |
 | android.webkit | 5 (andorstrail, droidfish, osrs, sgtpuzzles, unciv) |
-| java.nio.channels.spi | 5 (calculator, mindustry, osrs, sgtpuzzles, unciv) |
 | android.app.admin | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
 | android.app.usage | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
 | android.hardware | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
@@ -296,6 +294,8 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 | android.net.nsd | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
 | android.net.wifi.p2p | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
 | android.nfc | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
+| android.os.storage | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
+| android.print | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
 
 ### Most-needed classes (static)
 
@@ -335,12 +335,12 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 | android.transition.TransitionManager | 5 (andorstrail, calculator, droidfish, osrs, solitaire) |
 | android.transition.TransitionSet | 5 (andorstrail, calculator, droidfish, osrs, solitaire) |
 | android.webkit.WebView | 5 (andorstrail, droidfish, osrs, sgtpuzzles, unciv) |
-| java.io.ObjectStreamClass | 5 (andorstrail, calculator, droidfish, osrs, unciv) |
 | android.app.ActivityOptions | 4 (andorstrail, droidfish, osrs, unciv) |
 | android.app.DownloadManager | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
 | android.app.LocaleManager | 4 (calculator, osrs, sgtpuzzles, unciv) |
 | android.app.SharedElementCallback | 4 (andorstrail, droidfish, osrs, unciv) |
 | android.app.WallpaperManager | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
+| android.app.admin.DevicePolicyManager | 4 (andorstrail, droidfish, sgtpuzzles, unciv) |
 
 ### Most-needed members (static)
 
@@ -357,7 +357,6 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 | android.app.Notification$Builder.setContent(RemoteViews) | stub | 5 (andorstrail, blockinger, droidfish, osrs, unciv) |
 | android.app.Notification$Builder.setTicker(CharSequence, RemoteViews) | stub | 5 (andorstrail, blockinger, droidfish, osrs, unciv) |
 | android.content.pm.PackageManager.queryIntentActivityOptions(ComponentName, Intent[], Intent, int) | stub | 5 (calculator, droidfish, osrs, sgtpuzzles, solitaire) |
-| android.media.AudioManager.playSoundEffect(int) | stub | 5 (calculator, droidfish, osrs, sgtpuzzles, solitaire) |
 | android.view.Window$Callback.onProvideKeyboardShortcuts(List, Menu, int) | stub | 5 (calculator, droidfish, osrs, sgtpuzzles, solitaire) |
 | android.view.accessibility.AccessibilityNodeInfo.setRangeInfo(AccessibilityNodeInfo$RangeInfo) | stub | 5 (andorstrail, calculator, droidfish, sgtpuzzles, unciv) |
 | android.widget.PopupWindow.setEnterTransition(Transition) | stub | 5 (calculator, droidfish, osrs, sgtpuzzles, solitaire) |
@@ -388,26 +387,19 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 | android.view.accessibility.AccessibilityNodeInfo.isAccessibilityDataSensitive() | stub | 4 (calculator, osrs, sgtpuzzles, unciv) |
 | android.view.accessibility.AccessibilityNodeInfo.isTextSelectable() | stub | 4 (calculator, osrs, sgtpuzzles, unciv) |
 | android.view.inputmethod.EditorInfo.setInitialSurroundingSubText(CharSequence, int) | stub | 4 (calculator, osrs, sgtpuzzles, unciv) |
-
-### Unresolved native imports (static)
-
-| Symbol | Apps |
-|---|---|
-| isblank | 1 (frozenbubble) |
-| stpcpy | 1 (frozenbubble) |
+| android.widget.TextView.getTextClassifier() | stub | 4 (calculator, droidfish, osrs, sgtpuzzles) |
 
 ### Hit at runtime (smoke run)
 
 | Signal | Apps |
 |---|---|
-| exception java.lang.NoClassDefFoundError: android.bluetooth.BluetoothAdapter | 1 (frozenbubble) |
+| exception java.lang.IndexOutOfBoundsException: index=-1024 out of bounds (limit=262144, nb=4) | 1 (mindustry) |
 | exception java.lang.NoClassDefFoundError: javax.net.ssl.HttpsURLConnection | 1 (osrs) |
 | exception java.lang.UnsatisfiedLinkError: No implementation found for com.jagex.android.ApplicationContext.onUpdateInternetAvailable(ZZ)V | 1 (osrs) |
 | exception java.util.concurrent.TimeoutException: Timed out waiting for Task | 1 (osrs) |
 | stub method android.content.pm.PackageManager.queryIntentContentProviders(Landroid/content/Intent;I)Ljava/util/List; | 1 (osrs) |
 | stub method android.graphics.RenderNode.getMatrix(Landroid/graphics/Matrix;)V | 1 (sgtpuzzles) |
 | stub method android.graphics.RenderNode.setClipToOutline(Z)Z | 1 (sgtpuzzles) |
-| stub method android.media.AudioManager.unloadSoundEffects()V | 1 (vectorpinball) |
 | stub method android.view.View.getContentCaptureSession()Landroid/view/contentcapture/ContentCaptureSession; | 1 (sgtpuzzles) |
 
 <!-- corpus:end -->

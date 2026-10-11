@@ -1,21 +1,15 @@
 package android.media;
 
 import android.content.ComponentName;
-import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.IBinder;
-import android.provider.MediaStore;
-import android.webkit.MimeTypeMap;
-import java.io.File;
 
 /**
- * The media scanner client. There is no scanner service: a scan of an existing image, video
- * or audio file inserts it into MediaStore (as the scanner would) and reports its content
- * Uri; any other file, or a missing one, reports a null Uri. Callbacks run on a background
- * thread, as AOSP delivers them on a binder thread.
+ * No media scanner runs here: connecting succeeds at once and every scan completes with a null Uri,
+ * which is what Android reports when a file could not be scanned. Callbacks come on a background
+ * thread, as on Android (a binder thread there).
  */
 public class MediaScannerConnection implements ServiceConnection {
     public interface OnScanCompletedListener {
@@ -37,13 +31,17 @@ public class MediaScannerConnection implements ServiceConnection {
 
     public void connect() {
         synchronized (this) {
-            if (mConnected) return;
+            if (mConnected) {
+                return;
+            }
             mConnected = true;
         }
         if (mClient != null) {
-            new Thread(new Runnable() {
-                public void run() { mClient.onMediaScannerConnected(); }
-            }, "MediaScannerConnection").start();
+            post(new Runnable() {
+                public void run() {
+                    mClient.onMediaScannerConnected();
+                }
+            });
         }
     }
 
@@ -53,63 +51,48 @@ public class MediaScannerConnection implements ServiceConnection {
         }
     }
 
-    public synchronized boolean isConnected() { return mConnected; }
-
-    public void scanFile(final String path, final String mimeType) {
-        synchronized (this) {
-            if (!mConnected) throw new IllegalStateException("not connected to MediaScannerService");
-        }
-        new Thread(new Runnable() {
-            public void run() {
-                Uri uri = scan(mContext, path, mimeType);
-                if (mClient != null) mClient.onScanCompleted(path, uri);
-            }
-        }, "MediaScannerConnection").start();
+    public synchronized boolean isConnected() {
+        return mConnected;
     }
 
-    public static void scanFile(final Context context, final String[] paths, final String[] mimeTypes,
+    public void scanFile(final String path, String mimeType) {
+        synchronized (this) {
+            if (!mConnected) {
+                throw new IllegalStateException("not connected to MediaScannerService");
+            }
+        }
+        if (mClient != null) {
+            post(new Runnable() {
+                public void run() {
+                    mClient.onScanCompleted(path, null);
+                }
+            });
+        }
+    }
+
+    public static void scanFile(Context context, final String[] paths, String[] mimeTypes,
             final OnScanCompletedListener callback) {
-        new Thread(new Runnable() {
+        if (callback == null || paths == null) {
+            return;
+        }
+        post(new Runnable() {
             public void run() {
-                for (int i = 0; i < paths.length; i++) {
-                    String mime = mimeTypes != null && i < mimeTypes.length ? mimeTypes[i] : null;
-                    Uri uri = scan(context, paths[i], mime);
-                    if (callback != null) callback.onScanCompleted(paths[i], uri);
+                for (String path : paths) {
+                    callback.onScanCompleted(path, null);
                 }
             }
-        }, "MediaScannerConnection").start();
+        });
     }
 
-    public void onServiceConnected(ComponentName className, IBinder service) {}
+    private static void post(Runnable r) {
+        Thread t = new Thread(r, "MediaScannerConnection");
+        t.setDaemon(true);
+        t.start();
+    }
 
-    public void onServiceDisconnected(ComponentName className) {}
+    public void onServiceConnected(ComponentName className, IBinder service) {
+    }
 
-    private static Uri scan(Context context, String path, String mimeType) {
-        if (path == null || context == null) return null;
-        File file = new File(path);
-        if (!file.isFile()) return null;
-        String mime = mimeType;
-        if (mime == null) {
-            String name = file.getName();
-            int dot = name.lastIndexOf('.');
-            if (dot >= 0) mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substring(dot + 1).toLowerCase());
-        }
-        if (mime == null) return null;
-        Uri table;
-        if (mime.startsWith("image/")) table = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-        else if (mime.startsWith("video/")) table = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
-        else if (mime.startsWith("audio/")) table = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        else return null;
-        ContentValues values = new ContentValues();
-        values.put(MediaStore.MediaColumns.DATA, file.getPath());
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, file.getName());
-        values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
-        values.put(MediaStore.MediaColumns.SIZE, file.length());
-        try {
-            ContentResolver cr = context.getContentResolver();
-            return cr.insert(table, values);
-        } catch (RuntimeException e) {
-            return null;
-        }
+    public void onServiceDisconnected(ComponentName className) {
     }
 }

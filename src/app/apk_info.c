@@ -17,6 +17,7 @@
 #define ATTR_LABEL 0x01010001
 #define ATTR_ICON 0x01010002
 #define ATTR_NAME 0x01010003
+#define ATTR_VERSION_NAME 0x0101021c
 
 #define ICON_MAX 1024
 
@@ -24,6 +25,8 @@ void apk_identity_free(ApkIdentity *id) {
     if (!id) return;
     free(id->label);
     free(id->icon);
+    free(id->package);
+    free(id->version);
     memset(id, 0, sizeof *id);
 }
 
@@ -144,6 +147,11 @@ bool apk_read_identity(const char *path, int density_dpi, ApkIdentity *out) {
     XmlNode *root = doc ? doc->root : NULL;
     XmlNode *app = root ? xml_child(root, "application") : NULL;
     if (!app && root && root->name && strcmp(root->name, "application") == 0) app = root;
+    if (root) {
+        const char *pkg = xml_attr_str(root, NULL, "package");
+        if (pkg && pkg[0]) out->package = sa_strdup(pkg);
+        out->version = resolve_string(table, android_attr(root, "versionName", ATTR_VERSION_NAME));
+    }
     if (app) {
         app_label = android_attr(app, "label", ATTR_LABEL);
         app_icon = android_attr(app, "icon", ATTR_ICON);

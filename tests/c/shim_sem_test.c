@@ -1,5 +1,5 @@
 /*
- * Checks bionic libc shims (src/nativeloader/shim_libc.c) through shim_lookup: sem_* (counting, trywait,
+ * Checks bionic libc shims (shim_runtime.c, shim_libc.c) through shim_lookup: sem_* (counting, trywait,
  * timedwait timeouts, a cross-thread post) and fortified sprintf with an unknown object size.
  *   make && cc -Isrc -pthread tests/c/shim_sem_test.c $(find build/host -name '*.o' ! -name 'main_host.o') \
  *     -lz -lm -ldl -o build/shim_sem_test \
@@ -80,8 +80,8 @@ int main(void) {
     EXPECT(p_timedwait(&s, &ts) == -1 && errno == ETIMEDOUT);
     EXPECT(p_destroy(&s) == 0);
 
-    /* zero-filled static semaphore (count 0) woken from another thread */
-    memset(&g_sem, 0, sizeof g_sem);
+    /* a semaphore at count 0 woken from another thread */
+    EXPECT(p_init(&g_sem, 0, 0) == 0);
     pthread_t t;
     pthread_create(&t, NULL, poster, NULL);
     EXPECT(p_wait(&g_sem) == 0);

@@ -30,6 +30,7 @@ import android.view.Display;
 import android.view.WindowManager;
 import android.view.WindowManagerImpl;
 import android.view.inputmethod.InputMethodManager;
+import android.os.Environment;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -198,9 +199,10 @@ public class ContextImpl extends Context {
     @Override public File getNoBackupFilesDir() { return ensure(new File(getDataDir(), "no_backup")); }
     @Override public File getCacheDir() { return ensure(new File(getDataDir(), "cache")); }
     @Override public File getCodeCacheDir() { return ensure(new File(getDataDir(), "code_cache")); }
-    /** App-specific external storage as on a device: /storage/emulated/0/Android/{data,obb,media}/<pkg>. */
+    // External app directories use Android's layout on the shared storage volume (mapped to
+    // <data root>/sdcard), so users can drop OBB files where Android puts them.
     private File externalAppDir(String kind) {
-        return new File("/storage/emulated/0/Android/" + kind + "/" + mPackageName);
+        return new File(Environment.getExternalStorageDirectory(), "Android/" + kind + "/" + mPackageName);
     }
 
     @Override public File getObbDir() { return ensure(externalAppDir("obb")); }
@@ -346,8 +348,6 @@ public class ContextImpl extends Context {
     @Override
     public Object getSystemService(String name) {
         if (WINDOW_SERVICE.equals(name)) return WindowManagerImpl.getDefault();
-        if (DISPLAY_SERVICE.equals(name)) return android.hardware.display.DisplayManager.create();
-        if (INPUT_SERVICE.equals(name)) return android.hardware.input.InputManager.getInstance();
         if (ALARM_SERVICE.equals(name)) return AlarmManager.getInstance();
         if (NOTIFICATION_SERVICE.equals(name)) return NotificationManager.getInstance();
         if (JOB_SCHEDULER_SERVICE.equals(name)) {
@@ -363,6 +363,14 @@ public class ContextImpl extends Context {
         }
         if (TELEPHONY_SERVICE.equals(name)) return new android.telephony.TelephonyManager();
         if (CAMERA_SERVICE.equals(name)) return new android.hardware.camera2.CameraManager();
+        if (ACTIVITY_SERVICE.equals(name)) return new ActivityManager(getOuterContext());
+        if (INPUT_SERVICE.equals(name)) return android.hardware.input.InputManager.getInstance();
+        if (DISPLAY_SERVICE.equals(name)) return new android.hardware.display.DisplayManager(getOuterContext());
+        if (AUTOFILL_MANAGER_SERVICE.equals(name)) return android.view.autofill.AutofillManager.getInstance();
+        if (USER_SERVICE.equals(name)) {
+            if (sUserManager == null) sUserManager = new android.os.UserManager();
+            return sUserManager;
+        }
         if (POWER_SERVICE.equals(name)) {
             if (sPowerManager == null) sPowerManager = new android.os.PowerManager();
             return sPowerManager;
@@ -375,21 +383,13 @@ public class ContextImpl extends Context {
         if (ACCESSIBILITY_SERVICE.equals(name)) {
             return android.view.accessibility.AccessibilityManager.getInstance(this);
         }
-        if (AUTOFILL_MANAGER_SERVICE.equals(name)) return android.view.autofill.AutofillManager.getInstance();
         if (SEARCH_SERVICE.equals(name)) {
             if (mSearchManager == null) mSearchManager = new SearchManager(getOuterContext(), null);
             return mSearchManager;
         }
         if (AUDIO_SERVICE.equals(name)) return AudioManager.getInstance();
         if (CONNECTIVITY_SERVICE.equals(name)) return android.net.ConnectivityManager.from(this);
-        if (ACTIVITY_SERVICE.equals(name)) {
-            if (sActivityManager == null) sActivityManager = new ActivityManager();
-            return sActivityManager;
-        }
-        if (USER_SERVICE.equals(name)) {
-            if (sUserManager == null) sUserManager = new android.os.UserManager();
-            return sUserManager;
-        }
+        if (BLUETOOTH_SERVICE.equals(name)) return android.bluetooth.BluetoothManager.create$();
         if (CLIPBOARD_SERVICE.equals(name)) {
             if (sClipboard == null) sClipboard = new ClipboardManager();
             return sClipboard;
@@ -399,17 +399,15 @@ public class ContextImpl extends Context {
 
     private static ClipboardManager sClipboard;
     private static android.os.PowerManager sPowerManager;
-    private static android.os.UserManager sUserManager;
-    private static ActivityManager sActivityManager;
     private static android.location.LocationManager sLocationManager;
     private android.view.LayoutInflater mLayoutInflater;
     private SearchManager mSearchManager;
 
+    private static android.os.UserManager sUserManager;
+
     @Override
     public String getSystemServiceName(Class<?> serviceClass) {
         if (serviceClass == WindowManager.class) return WINDOW_SERVICE;
-        if (serviceClass == android.hardware.display.DisplayManager.class) return DISPLAY_SERVICE;
-        if (serviceClass == android.hardware.input.InputManager.class) return INPUT_SERVICE;
         if (serviceClass == AlarmManager.class) return ALARM_SERVICE;
         if (serviceClass == NotificationManager.class) return NOTIFICATION_SERVICE;
         if (serviceClass == android.app.job.JobScheduler.class) return JOB_SCHEDULER_SERVICE;
@@ -418,19 +416,22 @@ public class ContextImpl extends Context {
         if (serviceClass == android.hardware.SensorManager.class) return SENSOR_SERVICE;
         if (serviceClass == android.os.BatteryManager.class) return BATTERY_SERVICE;
         if (serviceClass == android.os.PowerManager.class) return POWER_SERVICE;
+        if (serviceClass == ActivityManager.class) return ACTIVITY_SERVICE;
+        if (serviceClass == android.hardware.input.InputManager.class) return INPUT_SERVICE;
+        if (serviceClass == android.hardware.display.DisplayManager.class) return DISPLAY_SERVICE;
+        if (serviceClass == android.view.autofill.AutofillManager.class) return AUTOFILL_MANAGER_SERVICE;
+        if (serviceClass == android.os.UserManager.class) return USER_SERVICE;
         if (serviceClass == android.location.LocationManager.class) return LOCATION_SERVICE;
         if (serviceClass == android.telephony.TelephonyManager.class) return TELEPHONY_SERVICE;
         if (serviceClass == android.hardware.camera2.CameraManager.class) return CAMERA_SERVICE;
         if (serviceClass == InputMethodManager.class) return INPUT_METHOD_SERVICE;
         if (serviceClass == android.view.LayoutInflater.class) return LAYOUT_INFLATER_SERVICE;
         if (serviceClass == android.view.accessibility.AccessibilityManager.class) return ACCESSIBILITY_SERVICE;
-        if (serviceClass == android.view.autofill.AutofillManager.class) return AUTOFILL_MANAGER_SERVICE;
         if (serviceClass == SearchManager.class) return SEARCH_SERVICE;
         if (serviceClass == AudioManager.class) return AUDIO_SERVICE;
         if (serviceClass == android.net.ConnectivityManager.class) return CONNECTIVITY_SERVICE;
         if (serviceClass == ClipboardManager.class) return CLIPBOARD_SERVICE;
-        if (serviceClass == android.os.UserManager.class) return USER_SERVICE;
-        if (serviceClass == ActivityManager.class) return ACTIVITY_SERVICE;
+        if (serviceClass == android.bluetooth.BluetoothManager.class) return BLUETOOTH_SERVICE;
         return null;
     }
 

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="Sound" android:key="cat_sound">
+        <CheckBoxPreference
+            android:key="sound"
+            android:title="Sound effects"
+            android:summaryOn="Sound is on"
+            android:summaryOff="Sound is off"
+            android:defaultValue="true" />
+        <SwitchPreference
+            android:key="music"
+            android:title="Music"
+            android:dependency="sound"
+            android:defaultValue="false" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="Game">
+        <ListPreference
+            android:key="difficulty"
+            android:title="Difficulty"
+            android:summary="%s"
+            android:entries="@array/difficulty_names"
+            android:entryValues="@array/difficulty_values"
+            android:defaultValue="1" />
+        <EditTextPreference
+            android:key="name"
+            android:title="Player name"
+            android:defaultValue="Player" />
+        <Preference
+            android:key="about"
+            android:title="About"
+            android:summary="Version 1">
+            <intent android:action="android.intent.action.VIEW" android:data="https://example.com/about">
+                <extra android:name="from" android:value="prefs" />
+            </intent>
+        </Preference>
+    </PreferenceCategory>
+</PreferenceScreen>

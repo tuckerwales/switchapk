@@ -83,8 +83,10 @@ public class PhoneWindow extends Window {
 
     @Override
     public boolean requestFeature(int featureId) {
-        // AOSP: only once content was set; a decor installed by getDecorView() does not count
-        if (mContentParentExplicitlySet) throw new android.util.AndroidRuntimeException("requestFeature() must be called before adding content");
+        // As AOSP: only content the app set counts; a decor made early by getDecorView() does not.
+        if (mContentParentExplicitlySet) {
+            throw new android.util.AndroidRuntimeException("requestFeature() must be called before adding content");
+        }
         final int features = getFeatures();
         final int newFeatures = features | (1 << featureId);
         if ((newFeatures & (1 << FEATURE_CUSTOM_TITLE)) != 0 && (newFeatures & ~(1 << FEATURE_CUSTOM_TITLE)
@@ -104,8 +106,8 @@ public class PhoneWindow extends Window {
         if (mContentParent == null) installDecor();
         else mContentParent.removeAllViews();
         mLayoutInflater.inflate(layoutResID, mContentParent);
-        mContentParentExplicitlySet = true;
         mContentParent.requestApplyInsets();
+        mContentParentExplicitlySet = true;
         final Callback cb = getCallback();
         if (cb != null && !isDestroyed()) cb.onContentChanged();
     }
@@ -121,8 +123,8 @@ public class PhoneWindow extends Window {
         if (mContentParent == null) installDecor();
         else mContentParent.removeAllViews();
         mContentParent.addView(view, params);
-        mContentParentExplicitlySet = true;
         mContentParent.requestApplyInsets();
+        mContentParentExplicitlySet = true;
         final Callback cb = getCallback();
         if (cb != null && !isDestroyed()) cb.onContentChanged();
     }
@@ -131,8 +133,8 @@ public class PhoneWindow extends Window {
     public void addContentView(View view, ViewGroup.LayoutParams params) {
         if (mContentParent == null) installDecor();
         mContentParent.addView(view, params);
-        mContentParentExplicitlySet = true;
         mContentParent.requestApplyInsets();
+        mContentParentExplicitlySet = true;
         final Callback cb = getCallback();
         if (cb != null && !isDestroyed()) cb.onContentChanged();
     }
@@ -709,6 +711,11 @@ public class PhoneWindow extends Window {
                 final int attr = com.android.internal.util.InternalRes.attr("windowActionBarFullscreenDecorLayout");
                 layoutResource = attr != 0 && context.getTheme().resolveAttribute(attr, res, true) && res.resourceId != 0
                         ? res.resourceId : internalId(context, "screen_action_bar", "layout");
+                // Holo decors (screen_action_bar) are built on ActionBarView, which is not ported:
+                // they get the Toolbar decor, which WindowDecorActionBar drives the same way.
+                if (layoutResource == internalId(context, "screen_action_bar", "layout")) {
+                    layoutResource = internalId(context, "screen_toolbar", "layout");
+                }
                 layoutName = "action bar decor";
             } else {
                 layoutResource = internalId(context, "screen_title", "layout");

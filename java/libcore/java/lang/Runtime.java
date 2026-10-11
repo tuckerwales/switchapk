@@ -79,29 +79,33 @@ public class Runtime {
         return exec(command, null, null);
     }
 
+    public Process exec(String[] cmdarray) throws java.io.IOException {
+        return exec(cmdarray, null, null);
+    }
+
     public Process exec(String command, String[] envp) throws java.io.IOException {
         return exec(command, envp, null);
     }
 
     public Process exec(String command, String[] envp, java.io.File dir) throws java.io.IOException {
-        if (command.length() == 0) throw new IllegalArgumentException("Empty command");
+        if (command.isEmpty()) {
+            throw new IllegalArgumentException("Empty command");
+        }
         java.util.StringTokenizer st = new java.util.StringTokenizer(command);
         String[] cmdarray = new String[st.countTokens()];
-        for (int i = 0; st.hasMoreTokens(); i++) cmdarray[i] = st.nextToken();
+        for (int i = 0; st.hasMoreTokens(); i++) {
+            cmdarray[i] = st.nextToken();
+        }
         return exec(cmdarray, envp, dir);
-    }
-
-    public Process exec(String[] cmdarray) throws java.io.IOException {
-        return exec(cmdarray, null, null);
     }
 
     public Process exec(String[] cmdarray, String[] envp) throws java.io.IOException {
         return exec(cmdarray, envp, null);
     }
 
-    /** Runs through ProcessBuilder.start (bionic executables only; see ProcessImpl). */
+    /** No processes on the console: ProcessBuilder.start reports the failed exec. */
     public Process exec(String[] cmdarray, String[] envp, java.io.File dir) throws java.io.IOException {
-        return new ProcessBuilder(cmdarray).environment(envp).directory(dir).start();
+        return new ProcessBuilder(cmdarray).directory(dir).start();
     }
 
     @Deprecated

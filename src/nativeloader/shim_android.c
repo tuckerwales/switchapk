@@ -381,6 +381,9 @@ static void build_shim(void) {
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
     t = shim_android_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    t = shim_runtime_symbols(&n);
+    for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    /* shim_posix after shim_runtime: where both define a symbol, the posix (and Switch) entries win */
     t = shim_posix_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
     /* last: the Switch tables replace entries above */

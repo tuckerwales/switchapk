@@ -2,11 +2,7 @@ package java.io;
 
 import java.lang.reflect.Field;
 
-/**
- * A serializable field of a Serializable class (the JDK's ObjectStreamField). Classes
- * declare these in serialPersistentFields; libcore has no ObjectOutputStream or
- * ObjectInputStream yet, so they are only descriptions.
- */
+/** A Serializable field, as in serialPersistentFields (no object streams use it here yet). */
 public class ObjectStreamField implements Comparable<Object> {
     private final String name;
     private final String signature;
@@ -20,18 +16,22 @@ public class ObjectStreamField implements Comparable<Object> {
     }
 
     public ObjectStreamField(String name, Class<?> type, boolean unshared) {
-        if (name == null) throw new NullPointerException();
+        if (name == null) {
+            throw new NullPointerException();
+        }
         this.name = name;
         this.type = type;
         this.unshared = unshared;
+        this.signature = signatureOf(type).intern();
         this.field = null;
-        this.signature = signatureOf(type);
     }
 
     ObjectStreamField(String name, String signature, boolean unshared) {
-        if (name == null) throw new NullPointerException();
+        if (name == null) {
+            throw new NullPointerException();
+        }
         this.name = name;
-        this.signature = signature;
+        this.signature = signature.intern();
         this.unshared = unshared;
         this.field = null;
         switch (signature.charAt(0)) {
@@ -54,62 +54,83 @@ public class ObjectStreamField implements Comparable<Object> {
         this.unshared = unshared;
         this.name = field.getName();
         Class<?> ftype = field.getType();
-        this.type = showType || ftype.isPrimitive() ? ftype : Object.class;
-        this.signature = signatureOf(ftype);
+        this.type = (showType || ftype.isPrimitive()) ? ftype : Object.class;
+        this.signature = signatureOf(ftype).intern();
     }
 
-    private static String signatureOf(Class<?> c) {
+    static String signatureOf(Class<?> cl) {
         StringBuilder sb = new StringBuilder();
-        while (c.isArray()) {
+        while (cl.isArray()) {
             sb.append('[');
-            c = c.getComponentType();
+            cl = cl.getComponentType();
         }
-        if (c.isPrimitive()) {
-            if (c == Integer.TYPE) sb.append('I');
-            else if (c == Byte.TYPE) sb.append('B');
-            else if (c == Long.TYPE) sb.append('J');
-            else if (c == Float.TYPE) sb.append('F');
-            else if (c == Double.TYPE) sb.append('D');
-            else if (c == Short.TYPE) sb.append('S');
-            else if (c == Character.TYPE) sb.append('C');
-            else if (c == Boolean.TYPE) sb.append('Z');
-            else if (c == Void.TYPE) sb.append('V');
+        if (cl.isPrimitive()) {
+            if (cl == Integer.TYPE) sb.append('I');
+            else if (cl == Byte.TYPE) sb.append('B');
+            else if (cl == Long.TYPE) sb.append('J');
+            else if (cl == Float.TYPE) sb.append('F');
+            else if (cl == Double.TYPE) sb.append('D');
+            else if (cl == Short.TYPE) sb.append('S');
+            else if (cl == Character.TYPE) sb.append('C');
+            else if (cl == Boolean.TYPE) sb.append('Z');
+            else if (cl == Void.TYPE) sb.append('V');
         } else {
-            sb.append('L').append(c.getName().replace('.', '/')).append(';');
+            sb.append('L').append(cl.getName().replace('.', '/')).append(';');
         }
         return sb.toString();
     }
 
-    public String getName() { return name; }
+    public String getName() {
+        return name;
+    }
 
-    public Class<?> getType() { return type; }
+    public Class<?> getType() {
+        return type;
+    }
 
-    public char getTypeCode() { return signature.charAt(0); }
+    public char getTypeCode() {
+        return signature.charAt(0);
+    }
 
-    public String getTypeString() { return isPrimitive() ? null : signature; }
+    public String getTypeString() {
+        return isPrimitive() ? null : signature;
+    }
 
-    public int getOffset() { return offset; }
+    public int getOffset() {
+        return offset;
+    }
 
-    protected void setOffset(int offset) { this.offset = offset; }
+    protected void setOffset(int offset) {
+        this.offset = offset;
+    }
 
     public boolean isPrimitive() {
         char tcode = signature.charAt(0);
         return tcode != 'L' && tcode != '[';
     }
 
-    public boolean isUnshared() { return unshared; }
+    public boolean isUnshared() {
+        return unshared;
+    }
 
-    /** Primitives first, then by name (the JDK's order). */
     public int compareTo(Object obj) {
         ObjectStreamField other = (ObjectStreamField) obj;
         boolean isPrim = isPrimitive();
-        if (isPrim != other.isPrimitive()) return isPrim ? -1 : 1;
+        if (isPrim != other.isPrimitive()) {
+            return isPrim ? -1 : 1;
+        }
         return name.compareTo(other.name);
     }
 
-    public String toString() { return signature + ' ' + name; }
+    public String toString() {
+        return signature + ' ' + name;
+    }
 
-    Field getField() { return field; }
+    Field getField() {
+        return field;
+    }
 
-    String getSignature() { return signature; }
+    String getSignature() {
+        return signature;
+    }
 }

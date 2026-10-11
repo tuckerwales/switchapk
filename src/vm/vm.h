@@ -354,6 +354,7 @@ int vm_shorty_slots(const char *shorty, bool is_static);
 /* ---- exceptions --------------------------------------------------------------------------- */
 
 void vm_throw(VMThread *t, Object *exc);
+void vm_trace_throw(VMThread *t, Object *exc, Method *m, uint32_t pc);
 void vm_throw_new(VMThread *t, const char *cls_desc, const char *fmt, ...) SA_PRINTF(3, 4);
 void vm_throw_npe(VMThread *t, const char *what);
 void vm_throw_oom(VMThread *t);

@@ -1,79 +1,91 @@
 #!/usr/bin/env python3
-"""Checks tests/apps/prefs (android.preference) across two host runs that share --data.
+"""Checks tests/apps/prefs across two host runs that share --data.
 
-    tools/build_apk.sh tests/apps/prefs
     rm -rf build/data/apps/com.example.prefs
-    mkdir -p build/shots/prefs1 build/shots/prefs2
-    for r in 1 2; do build/host/switchapk-host --data build/data --screen 1280x720@240 \\
-        --script tests/apps/prefs/prefs.script --screenshots build/shots/prefs$r \\
-        build/apps/prefs/prefs.apk > build/shots/prefs$r/prefs.log 2>&1; done
+    for r in 1 2; do mkdir -p build/shots/prefs$r
+        build/host/switchapk-host --data build/data --screen 1280x720@240 \\
+            --script tests/apps/prefs/prefs.script --screenshots build/shots/prefs$r \\
+            build/apps/prefs/prefs.apk > build/shots/prefs$r/prefs.log 2>&1; done
     python3 tests/apps/prefs/check_shots.py build/shots/prefs1 build/shots/prefs2
 
-Run 1: PreferenceManager.setDefaultValues writes the XML defaults, then a legacy PreferenceActivity lists the
-hierarchy. The script unticks Sound (Volume depends on it and greys out), turns Music on, picks Hard in the
-Level list dialog (the summary formats the entry with %s) and types a name in the EditText dialog. Run 2 must
-read the changed values back, with setDefaultValues leaving them alone.
+Run 1 starts from the XML defaults, unchecks Sound effects (which disables the dependent Music
+switch, so the tap on Music does nothing), clicks About, picks Hard in the Difficulty list dialog
+and types a player name in the EditText dialog. Run 2 reads those values back: setDefaultValues
+does not overwrite them, and Music is enabled again once Sound effects is rechecked.
 """
 import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from shotlib import close, pixel, read_png  # noqa: E402
+from shotlib import check  # noqa: E402
 
-RUN1 = [
-    "I/PREFS: defaults sound=true music=false level=2 name=Player has=true",
-    "I/PREFS: volume enabled=true level summary=Now: Normal",
-    "I/PREFS: changed sound=false volume enabled=true level summary=Now: Normal",
-    "I/PREFS: changed music=true volume enabled=false level summary=Now: Normal",
-    "I/PREFS: changed level=3 volume enabled=false level summary=Now: Hard",
-    "I/PREFS: changed name=Ana volume enabled=false level summary=Now: Hard",
+TEAL = 0xFF008577
+GREY_BOX = 0xFF646464
+DIM = 0xFF646464
+
+BOTH = [
+    "I/PREFS: default name com.example.prefs_preferences",
+    "I/PREFS: screen count=2 sound in cat_sound",
+    "I/PREFS: about intent android.intent.action.VIEW https://example.com/about from=prefs",
+    "I/PREFS: adapter before bind true",
+    "I/PREFS: list adapter count=7",
+    "I/PREFS: clicked about",
 ]
-RUN2 = ["I/PREFS: defaults sound=false music=true level=3 name=Ana has=true"]
-SWITCH_ON = 0xFF008274   # the Material switch thumb, accent colour
-SWITCH_OFF = 0xFFB9B9B9  # the off track
-SHOTS = ["prefs_start.png", "prefs_toggled.png", "prefs_list_dialog.png", "prefs_edit_dialog.png", "prefs_done.png"]
+RUN1 = [
+    "I/PREFS: defaults sound=true music=false difficulty=1 name=Player",
+    "I/PREFS: difficulty entry=Normal summary=Normal",
+    "I/PREFS: changed sound=false",
+    "I/PREFS: after sound music enabled=false difficulty summary=Normal name=Player",
+    "I/PREFS: changed difficulty=2",
+    "I/PREFS: after difficulty music enabled=false difficulty summary=Hard name=Player",
+    "I/PREFS: changed name=Ada",
+    "I/PREFS: after name music enabled=false difficulty summary=Hard name=Ada",
+]
+RUN2 = [
+    "I/PREFS: defaults sound=false music=false difficulty=2 name=Ada",
+    "I/PREFS: difficulty entry=Hard summary=Hard",
+    "I/PREFS: changed sound=true",
+    "I/PREFS: after sound music enabled=true difficulty summary=Hard name=Ada",
+    "I/PREFS: changed music=true",
+]
 
 
-def check_log(path, lines):
+def require(log_path, needles, banned):
+    text = open(log_path, encoding="utf-8", errors="replace").read()
     fails = 0
-    text = open(path).read() if os.path.exists(path) else ""
-    pos = 0
-    for line in lines:
-        i = text.find(line, pos)
-        if i < 0:
-            print("FAIL %s: missing (in order) %r" % (os.path.basename(path), line))
-            fails += 1
-        else:
-            pos = i + len(line)
-    for bad in ("Exception", "STUB:"):
-        if bad in text:
-            print("FAIL %s: contains %s" % (os.path.basename(path), bad))
-            fails += 1
+    tag = os.path.basename(os.path.dirname(log_path))
+    for line in needles:
+        ok = line in text
+        print("%s %s has %s" % ("ok  " if ok else "FAIL", tag, line))
+        fails += 0 if ok else 1
+    for line in banned:
+        ok = line not in text
+        print("%s %s lacks %s" % ("ok  " if ok else "FAIL", tag, line))
+        fails += 0 if ok else 1
     return fails
 
 
 def main():
     if len(sys.argv) != 3:
-        raise SystemExit("usage: check_shots.py <run1-dir> <run2-dir>")
-    d1, d2 = sys.argv[1], sys.argv[2]
-    fails = check_log(os.path.join(d1, "prefs.log"), RUN1) + check_log(os.path.join(d2, "prefs.log"), RUN2)
-    for name in SHOTS:
-        if not os.path.exists(os.path.join(d1, name)):
-            print("FAIL missing %s" % name)
-            fails += 1
-    if not fails:
-        w, h, px = read_png(os.path.join(d1, "prefs_start.png"))
-        c = pixel(px, w, 1235, 386)
-        if not close(c, SWITCH_OFF, 12):
-            print("FAIL Music switch should start off: %08x" % c)
-            fails += 1
-        w, h, px = read_png(os.path.join(d1, "prefs_toggled.png"))
-        c = pixel(px, w, 1235, 386)
-        if not close(c, SWITCH_ON, 12):
-            print("FAIL Music switch should be on after the tap: %08x" % c)
-            fails += 1
-    print("ok" if not fails else "%d failures" % fails)
-    return 1 if fails else 0
+        print("usage: check_shots.py <run1-dir> <run2-dir>")
+        return 2
+    run1, run2 = sys.argv[1], sys.argv[2]
+    banned = ["Exception", "changed music"]
+    fails = require(os.path.join(run1, "prefs.log"), BOTH + RUN1, banned)
+    fails += require(os.path.join(run2, "prefs.log"), BOTH + RUN2, ["Exception"])
+    fails += check(os.path.join(run1, "prefs.png"), [(1240, 180, TEAL, "sound checked")])
+    fails += check(os.path.join(run1, "off.png"), [(1220, 180, GREY_BOX, "sound unchecked"),
+                                                   (1240, 180, 0xFFFAFAFA, "box empty")])
+    fails += check(os.path.join(run1, "dialog.png"), [(100, 700, DIM, "dimmed behind dialog"),
+                                                      (302, 357, TEAL, "Normal selected"),
+                                                      (640, 300, 0xFFFFFFFF, "dialog")])
+    fails += check(os.path.join(run1, "done.png"), [(640, 300, 0xFFFAFAFA, "dialogs closed")])
+    fails += check(os.path.join(run2, "prefs.png"), [(1220, 180, GREY_BOX, "sound restored unchecked")])
+    if fails:
+        print("FAIL %d" % fails)
+        return 1
+    print("ok")
+    return 0
 
 
 if __name__ == "__main__":

@@ -27,8 +27,8 @@ check() {
     done
 }
 
-check "$LABELED" "label=Labeled" "icon=16x16" "px0=FF1122CC" "px1=FF33AA44"
-check "$HELLO" "label=Hello" "icon=none"
+check "$LABELED" "label=Labeled" "package=com.example.labeled" "version=1.2.3" "icon=16x16" "px0=FF1122CC" "px1=FF33AA44"
+check "$HELLO" "label=Hello" "version=" "icon=none"
 base=$(basename "$PLAIN" .apk)
-check "$PLAIN" "label=$base" "icon=none"
+check "$PLAIN" "label=$base" "package=" "version=" "icon=none"
 echo "apk-info ok"

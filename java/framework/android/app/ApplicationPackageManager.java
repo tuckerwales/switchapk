@@ -22,6 +22,7 @@ import java.util.List;
 
 /** framework-internal. Package queries for the single loaded APK. */
 public class ApplicationPackageManager extends PackageManager {
+    private final HashMap<ComponentName, Integer> mComponentEnabled = new HashMap<ComponentName, Integer>();
     private final HashMap<String, Integer> mAppEnabled = new HashMap<String, Integer>();
 
     @Override
@@ -32,13 +33,18 @@ public class ApplicationPackageManager extends PackageManager {
         pi.applicationInfo = ActivityThread.sAppInfo;
         pi.versionCode = ActivityThread.sVersionCode;
         pi.versionCodeMajor = ActivityThread.sVersionCodeMajor;
-        pi.versionName = ActivityThread.versionName();
-        long installed = ActivityThread.sApkPath != null ? new java.io.File(ActivityThread.sApkPath).lastModified() : 0;
+        pi.versionName = ActivityThread.sVersionName;
+        if (pi.versionName == null && ActivityThread.sVersionNameRes != 0) {
+            try {
+                pi.versionName = ActivityThread.sResources.getString(ActivityThread.sVersionNameRes);
+            } catch (RuntimeException ignored) {
+            }
+        }
+        long installed = new java.io.File(ActivityThread.sAppInfo.sourceDir).lastModified();
         pi.firstInstallTime = installed;
         pi.lastUpdateTime = installed;
-        if ((flags & GET_PERMISSIONS) != 0 && !ActivityThread.sRequestedPermissions.isEmpty()) {
-            pi.requestedPermissions = ActivityThread.sRequestedPermissions.toArray(new String[0]);
-            // install-time grant: every requested permission is granted
+        if ((flags & GET_PERMISSIONS) != 0 && !ActivityThread.sPermissions.isEmpty()) {
+            pi.requestedPermissions = ActivityThread.sPermissions.toArray(new String[0]);
             pi.requestedPermissionsFlags = new int[pi.requestedPermissions.length];
             java.util.Arrays.fill(pi.requestedPermissionsFlags, PackageInfo.REQUESTED_PERMISSION_GRANTED);
         }
@@ -151,12 +157,6 @@ public class ApplicationPackageManager extends PackageManager {
     }
 
     @Override
-    public List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags) {
-        // manifest providers are parsed without intent filters, so none matches
-        return new ArrayList<ResolveInfo>();
-    }
-
-    @Override
     public List<ResolveInfo> queryIntentServices(Intent intent, int flags) {
         ArrayList<ResolveInfo> out = new ArrayList<ResolveInfo>();
         if (intent == null) return out;
@@ -189,6 +189,19 @@ public class ApplicationPackageManager extends PackageManager {
             }
         }
         return null;
+    }
+
+    @Override
+    public List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags) {
+        // Provider intent filters are not parsed; the providers apps look up this way (font and
+        // emoji providers) come from other packages, which are absent here.
+        return new ArrayList<ResolveInfo>();
+    }
+
+    @Override
+    public List<ProviderInfo> queryContentProviders(String processName, int uid, int flags) {
+        // Every provider runs in the one app process.
+        return new ArrayList<ProviderInfo>(ActivityThread.sProviders);
     }
 
     @Override
@@ -298,17 +311,12 @@ public class ApplicationPackageManager extends PackageManager {
 
     @Override
     public void setComponentEnabledSetting(ComponentName componentName, int newState, int flags) {
-        synchronized (ActivityThread.sComponentEnabled) {
-            ActivityThread.sComponentEnabled.put(componentName, Integer.valueOf(newState));
-        }
+        mComponentEnabled.put(componentName, Integer.valueOf(newState));
     }
 
     @Override
     public int getComponentEnabledSetting(ComponentName componentName) {
-        Integer state;
-        synchronized (ActivityThread.sComponentEnabled) {
-            state = ActivityThread.sComponentEnabled.get(componentName);
-        }
+        Integer state = mComponentEnabled.get(componentName);
         return state != null ? state.intValue() : COMPONENT_ENABLED_STATE_DEFAULT;
     }
 

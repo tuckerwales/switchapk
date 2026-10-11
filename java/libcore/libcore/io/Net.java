@@ -55,6 +55,37 @@ public final class Net {
 
     public static native void close(int fd);
 
+    // ---- non-blocking calls for java.nio channels: one system call, never wait ----
+
+    public static native void setNonBlocking(int fd, boolean on) throws IOException;
+
+    /** events: 1 readable, 2 writable; revents also 4 error or hang-up, 8 bad descriptor. */
+    public static native int poll(int[] fds, int[] events, int[] revents, int n, int timeoutMs) throws IOException;
+
+    /** True if connected at once, false while the connection is in progress. */
+    public static native boolean connectNow(int fd, byte[] addr, int port) throws IOException;
+
+    public static native boolean finishConnectNow(int fd) throws IOException;
+
+    /** Bytes read, 0 if it would block, -1 at end of stream. */
+    public static native int recvNow(int fd, byte[] b, int off, int len) throws IOException;
+
+    /** Bytes written, 0 if it would block. */
+    public static native int sendNow(int fd, byte[] b, int off, int len) throws IOException;
+
+    /** The accepted descriptor (blocking), or -1 if none is waiting. */
+    public static native int acceptNow(int fd, byte[] peer, int[] info) throws IOException;
+
+    /** Datagram length, or -1 if none is waiting. */
+    public static native int recvfromNow(int fd, byte[] b, int off, int len, byte[] peer, int[] info)
+            throws IOException;
+
+    /** Bytes sent, 0 if it would block; addr null sends to the connected peer. */
+    public static native int sendtoNow(int fd, byte[] b, int off, int len, byte[] addr, int port) throws IOException;
+
+    /** Connects (addr null: disconnects) a datagram socket. */
+    public static native void connectDatagram(int fd, byte[] addr, int port) throws IOException;
+
     /** Splits a getaddrinfo result into address arrays. */
     public static byte[][] split(byte[] packed) {
         int count = 0;

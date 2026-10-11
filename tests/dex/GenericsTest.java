@@ -1,104 +1,139 @@
-// Generic reflection from signatures: fields, methods, constructors, classes, type variables, wildcards, arrays.
-import java.io.IOException;
-import java.io.Serializable;
 import java.lang.reflect.*;
 import java.util.*;
 
+/**
+ * Generic signatures through reflection (Gson TypeToken, libGDX Json, Moshi and Kotlin reflection rely on them):
+ * run on OpenJDK and on switchapk by tests/run_dex_test.sh, output must match.
+ */
 public class GenericsTest {
-    static class Base<K, V> {}
-    interface Shape<T extends Comparable<T>> {}
+    static abstract class TypeToken<T> {
+        final Type type;
 
-    static class Holder<T extends Number & Comparable<T>> extends Base<String, List<T>> implements Shape<Integer>, Serializable {
-        List<String> names;
-        Map<String, List<Integer>> table;
-        List<? extends Number> ups;
-        List<? super Integer> downs;
-        List<?> any;
-        T value;
-        T[] values;
-        List<String>[] lists;
+        TypeToken() {
+            Type sup = getClass().getGenericSuperclass();
+            type = ((ParameterizedType) sup).getActualTypeArguments()[0];
+        }
+    }
+
+    static class Outer<O> {
+        class Inner<I> {
+            O o;
+            I i;
+        }
+
+        static class Nested<N extends Number & Comparable<N>> {
+            N n;
+        }
+    }
+
+    interface Shape<S> {
+    }
+
+    static class Box<T extends Comparable<? super T>> extends ArrayList<T> implements Shape<Map<String, T[]>>, Comparable<Box<T>> {
+        List<? extends Number> numbers;
+        Map<String, List<int[]>> nested;
+        T[] array;
+        List<?> wildcard;
+        Outer<String>.Inner<Integer> inner;
+        Map.Entry<String, Long> entry;
+        Outer.Nested<Integer> nestedStatic;
         int plain;
-        String[] strings;
-        Holder<T>.Inner inner;
-        Map.Entry<String, T> entry;
+        String raw;
 
-        Holder(List<T> init, int n) throws IOException {}
+        public int compareTo(Box<T> o) {
+            return 0;
+        }
 
-        <E extends Exception> List<T> pick(Map<? super String, T[]> m, E[] errs, int i) throws E, IllegalStateException {
+        <E extends Exception, R> R call(List<? super T> in, Class<R> type) throws E {
             return null;
         }
 
-        static <A, B extends A> B cast(A a) { return null; }
-
-        void raw(List l) {}
-
-        class Inner {}
+        Box(List<T> init) {
+        }
     }
 
-    static class Chain extends ArrayList<Map<String, Integer>> {}
+    static void show(String label, Type t) {
+        System.out.println(label + ": " + t.getTypeName() + " [" + kind(t) + "]");
+    }
 
-    static void p(Object o) { System.out.println(o); }
-
-    static String describe(Type t) {
-        if (t instanceof Class) return "C:" + ((Class<?>) t).getName();
+    static String kind(Type t) {
+        if (t instanceof Class) {
+            return "Class";
+        }
         if (t instanceof ParameterizedType) {
-            ParameterizedType pt = (ParameterizedType) t;
-            StringBuilder sb = new StringBuilder("P:" + describe(pt.getRawType()) + "[owner=" + (pt.getOwnerType() == null ? "-" : describe(pt.getOwnerType())) + "](");
-            for (Type a : pt.getActualTypeArguments()) sb.append(describe(a)).append(',');
-            return sb.append(')').toString();
+            ParameterizedType p = (ParameterizedType) t;
+            StringBuilder sb = new StringBuilder("Parameterized raw=" + ((Class<?>) p.getRawType()).getName() + " owner="
+                    + (p.getOwnerType() == null ? "null" : p.getOwnerType().getTypeName()) + " args=");
+            for (Type a : p.getActualTypeArguments()) {
+                sb.append('{').append(kind(a)).append('}');
+            }
+            return sb.toString();
+        }
+        if (t instanceof GenericArrayType) {
+            return "Array of " + kind(((GenericArrayType) t).getGenericComponentType());
         }
         if (t instanceof WildcardType) {
             WildcardType w = (WildcardType) t;
-            return "W:" + Arrays.toString(w.getUpperBounds()) + "/" + Arrays.toString(w.getLowerBounds());
+            return "Wildcard upper=" + Arrays.toString(w.getUpperBounds()) + " lower=" + Arrays.toString(w.getLowerBounds());
         }
-        if (t instanceof GenericArrayType) return "A:" + describe(((GenericArrayType) t).getGenericComponentType());
         if (t instanceof TypeVariable) {
             TypeVariable<?> v = (TypeVariable<?>) t;
             Object d = v.getGenericDeclaration();
-            String dn = d instanceof Class ? ((Class<?>) d).getSimpleName() : d instanceof Method ? ((Method) d).getName() : "ctor";
-            return "V:" + v.getName() + "@" + dn + Arrays.toString(v.getBounds());
+            String dn = d instanceof Class ? ((Class<?>) d).getSimpleName() : ((Member) d).getName();
+            StringBuilder sb = new StringBuilder("Var " + v.getName() + " of " + dn + " bounds=");
+            for (Type b : v.getBounds()) {
+                sb.append(b.getTypeName()).append(';');
+            }
+            return sb.toString();
         }
-        return "?" + t;
+        return t.getClass().getName();
     }
 
     public static void main(String[] args) throws Exception {
-        String[] fields = {"names", "table", "ups", "downs", "any", "value", "values", "lists", "plain", "strings", "inner", "entry"};
-        for (String n : fields) {
-            Field f = Holder.class.getDeclaredField(n);
-            Type t = f.getGenericType();
-            p(n + " " + t + " | " + t.getTypeName() + " | " + describe(t));
+        show("token list", new TypeToken<List<String>>() {}.type);
+        show("token map", new TypeToken<Map<String, List<Integer>>>() {}.type);
+        show("token array", new TypeToken<List<String>[]>() {}.type);
+        show("token class", new TypeToken<String>() {}.type);
+
+        Class<?> box = Box.class;
+        show("superclass", box.getGenericSuperclass());
+        for (Type t : box.getGenericInterfaces()) {
+            show("interface", t);
         }
-        Method pick = null, cast = null, raw = null;
-        for (Method m : Holder.class.getDeclaredMethods()) {
-            if (m.getName().equals("pick")) pick = m;
-            if (m.getName().equals("cast")) cast = m;
-            if (m.getName().equals("raw")) raw = m;
+        for (TypeVariable<?> v : box.getTypeParameters()) {
+            show("type param", v);
         }
-        p("pick ret " + describe(pick.getGenericReturnType()));
-        for (Type t : pick.getGenericParameterTypes()) p("pick param " + describe(t));
-        for (Type t : pick.getGenericExceptionTypes()) p("pick throws " + describe(t));
-        p("pick exceptions " + Arrays.toString(pick.getExceptionTypes()));
-        p("pick tparams " + Arrays.toString(pick.getTypeParameters()) + " " + describe(pick.getTypeParameters()[0]));
-        p("cast " + describe(cast.getGenericReturnType()) + " " + Arrays.toString(cast.getTypeParameters()));
-        p("raw " + Arrays.toString(raw.getGenericParameterTypes()));
-        Constructor<?> c = Holder.class.getDeclaredConstructors()[0];
-        p("ctor " + Arrays.toString(c.getGenericParameterTypes()) + " throws " + Arrays.toString(c.getExceptionTypes()));
-        p("holder super " + describe(Holder.class.getGenericSuperclass()));
-        for (Type t : Holder.class.getGenericInterfaces()) p("holder iface " + describe(t));
-        TypeVariable<?>[] tv = Holder.class.getTypeParameters();
-        p("holder tparams " + tv.length + " " + describe(tv[0]));
-        p("shape tparams " + describe(Shape.class.getTypeParameters()[0]));
-        p("shape super " + Shape.class.getGenericSuperclass());
-        p("chain " + Chain.class.getGenericSuperclass());
-        p("plain " + String.class.getGenericSuperclass() + " " + Arrays.toString(Object.class.getTypeParameters())
-                + " " + int[].class.getGenericSuperclass() + " " + Arrays.toString(Chain.class.getGenericInterfaces()));
-        Type a = Holder.class.getDeclaredField("names").getGenericType();
-        Type b = Holder.class.getDeclaredField("names").getGenericType();
-        p("equal " + a.equals(b) + " " + (a.hashCode() == b.hashCode()) + " "
-                + tv[0].equals(Holder.class.getTypeParameters()[0])
-                + " " + Holder.class.getDeclaredField("value").getGenericType().equals(tv[0]));
-        Type w1 = ((ParameterizedType) Holder.class.getDeclaredField("ups").getGenericType()).getActualTypeArguments()[0];
-        Type w2 = ((ParameterizedType) Holder.class.getDeclaredField("ups").getGenericType()).getActualTypeArguments()[0];
-        p("wild equal " + w1.equals(w2) + " " + (w1.hashCode() == w2.hashCode()));
+        for (String f : new String[] {"numbers", "nested", "array", "wildcard", "inner", "entry", "nestedStatic", "plain", "raw"}) {
+            show("field " + f, box.getDeclaredField(f).getGenericType());
+        }
+        Method call = box.getDeclaredMethod("call", List.class, Class.class);
+        for (TypeVariable<?> v : call.getTypeParameters()) {
+            show("method param", v);
+        }
+        for (Type t : call.getGenericParameterTypes()) {
+            show("call arg", t);
+        }
+        show("call returns", call.getGenericReturnType());
+        for (Type t : call.getGenericExceptionTypes()) {
+            show("call throws", t);
+        }
+        Constructor<?> ctor = box.getDeclaredConstructor(List.class);
+        for (Type t : ctor.getGenericParameterTypes()) {
+            show("ctor arg", t);
+        }
+        show("compareTo arg", box.getDeclaredMethod("compareTo", Box.class).getGenericParameterTypes()[0]);
+
+        Type a = new TypeToken<Map<String, List<Integer>>>() {}.type;
+        Type b = new TypeToken<Map<String, List<Integer>>>() {}.type;
+        System.out.println("equal " + a.equals(b) + " hash " + (a.hashCode() == b.hashCode()));
+        TypeVariable<?> t1 = box.getTypeParameters()[0];
+        TypeVariable<?> t2 = (TypeVariable<?>) ((GenericArrayType) box.getDeclaredField("array").getGenericType())
+                .getGenericComponentType();
+        System.out.println("var equal " + t1.equals(t2) + " decl " + (t2.getGenericDeclaration() == Box.class));
+        show("inner field o", Outer.Inner.class.getDeclaredField("o").getGenericType());
+        show("list superclass", ArrayList.class.getGenericSuperclass());
+        show("string superclass", String.class.getGenericSuperclass());
+        System.out.println("interface super " + Shape.class.getGenericSuperclass() + " object " + Object.class.getGenericSuperclass());
+        System.out.println("int[] " + int[].class.getGenericSuperclass() + " params " + Arrays.toString(int.class.getTypeParameters()));
     }
 }

@@ -116,7 +116,15 @@ public final class ActivityThread {
                 throw new android.content.ActivityNotFoundException("Unable to find explicit activity class "
                         + intent.getComponent().toShortString() + "; have you declared this activity in your AndroidManifest.xml?");
             }
-            // Implicit intents for other apps (browser, mail, settings) have no handler here.
+            if (SystemBrowser.handles(intent)) {
+                final ActivityRecord from = caller != null ? findRecord(caller) : null;
+                final Intent web = new Intent(intent);
+                post(new Runnable() {
+                    public void run() { openBrowser(from, web); }
+                });
+                return;
+            }
+            // Implicit intents for other apps (mail, settings) have no handler here.
             Log.w(TAG, "No activity for " + intent);
             return;
         }
@@ -298,6 +306,43 @@ public final class ActivityThread {
             return;
         }
         launch(caller, parsed, intent, requestCode, resultWho, top);
+    }
+
+    private static boolean sBrowserOpen;
+
+    /** The platform browser comes up like another app's activity: the top activity pauses and stops under it. */
+    private static void openBrowser(ActivityRecord caller, Intent intent) {
+        if (sShutdown || sBrowserOpen) return;
+        sBrowserOpen = true;
+        ActivityRecord prev = top();
+        if (prev != null) {
+            if ((intent.getFlags() & Intent.FLAG_ACTIVITY_NO_USER_ACTION) == 0 && prev.activity.mResumed) {
+                prev.activity.performUserLeaving();
+            }
+            stopRecord(prev, true);
+        }
+        String callback = SystemBrowser.callbackFor(intent.getData());
+        SystemBrowser.open(intent.getDataString(), callback, new SystemBrowser.Listener() {
+            public void closed(final String callbackUrl, boolean available) {
+                post(new Runnable() {
+                    public void run() { browserClosed(callbackUrl); }
+                });
+            }
+        });
+    }
+
+    /** Back from the browser: a callback URL goes to the activity that takes it, else the top activity resumes. */
+    private static void browserClosed(String callbackUrl) {
+        sBrowserOpen = false;
+        if (sShutdown) return;
+        Intent redirect = callbackUrl != null ? SystemBrowser.redirectIntent(callbackUrl) : null;
+        ParsedActivity parsed = redirect != null ? resolveActivity(redirect) : null;
+        if (parsed != null) {
+            redirect.setComponent(new ComponentName(parsed.info.packageName, parsed.info.name));
+            handleStartActivity(null, parsed, redirect, -1, null);
+            return;
+        }
+        resumeTop();
     }
 
     /** Creates, starts and resumes a new activity on top; prev (the old top) is paused first and stopped after. */

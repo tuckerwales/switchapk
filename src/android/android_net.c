@@ -1,5 +1,6 @@
 /*
- * android.net natives: the platform's view of connectivity for ConnectivityManager.
+ * android.net natives: the platform's view of connectivity for ConnectivityManager, and the system browser
+ * (android.app.SystemBrowser) that ACTION_VIEW on web URLs opens.
  */
 #include "android.h"
 #include "../platform/platform.h"
@@ -14,7 +15,28 @@ static void ConnectivityManager_nGetState(VMThread *t, uint64_t *args, JValue *r
     ret->raw = (uint32_t)((n.connected ? 1 : 0) | ((n.transport & 7) << 1) | ((signal & 15) << 4));
 }
 
+/* static int SystemBrowser.nOpenUrl(String url, String callback, String[] out): PLATFORM_BROWSER_*; out[0] gets
+ * the callback URL. Blocks until the browser closes, with the GIL released. */
+static void SystemBrowser_nOpenUrl(VMThread *t, uint64_t *args, JValue *ret) {
+    char *url = nat_str((Object *)(uintptr_t)args[0]);
+    char *callback = nat_str((Object *)(uintptr_t)args[1]);
+    ArrayObject *out = (ArrayObject *)(uintptr_t)args[2];
+    char *got = sa_calloc(1, 8192);
+    VM_BLOCKING_BEGIN(t);
+    int r = platform_open_url(url, callback, got, 8192);
+    VM_BLOCKING_END(t);
+    if (r == PLATFORM_BROWSER_CALLBACK && out && out->length > 0) {
+        ARRAY_DATA(out, Object *)[0] = vm_new_string_utf8(t, got);
+    }
+    free(got);
+    free(url);
+    free(callback);
+    ret->raw = (uint32_t)r;
+}
+
 static const NativeMethodReg g_regs[] = {
+    {"Landroid/app/SystemBrowser;", "nOpenUrl", "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)I",
+     SystemBrowser_nOpenUrl},
     {"Landroid/net/ConnectivityManager;", "nGetState", "()I", ConnectivityManager_nGetState},
 };
 

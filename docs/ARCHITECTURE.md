@@ -229,6 +229,10 @@ ServiceLoader), io, nio (buffers, charset, file channels with locks and
 mapping, socket channels and selectors), text, math, net (sockets, DNS and
 HTTP/1.1; 5.1), zip and jar (5.2), security (digests), org.xml.sax and
 javax.xml.parsers (5.3), and sun.misc.Unsafe (5.4).
+`System` reports ART's identity: `java.vm.vendor` "The Android Project" (apps test it: Old
+School RuneScape loads its Windows build otherwise), `java.runtime.name` "Android Runtime".
+Manifest `<meta-data android:value="@type/name">` references are resolved to their values once
+resources load, as PackageParser does (Play services reads google_play_services_version so).
 `ClassLoader.getSystemClassLoader()` is a `dalvik.system.PathClassLoader`, the loader of every
 class and what `Context.getClassLoader()` returns. Classes come from the VM's one class path;
 the dex files a `PathClassLoader`/`DexClassLoader` names are not loaded. `findLibrary` follows

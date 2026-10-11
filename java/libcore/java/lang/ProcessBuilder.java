@@ -62,6 +62,19 @@ public final class ProcessBuilder {
         return environment;
     }
 
+    /** Runtime.exec's envp: "NAME=value" strings replace the inherited environment (null keeps it). */
+    ProcessBuilder environment(String[] envp) {
+        if (envp != null) {
+            environment = new HashMap<String, String>();
+            for (String envstring : envp) {
+                if (envstring.indexOf('\u0000') != -1) envstring = envstring.replaceFirst("\u0000.*", "");
+                int eqlsign = envstring.indexOf('=', 1);
+                if (eqlsign != -1) environment.put(envstring.substring(0, eqlsign), envstring.substring(eqlsign + 1));
+            }
+        }
+        return this;
+    }
+
     public File directory() {
         return directory;
     }

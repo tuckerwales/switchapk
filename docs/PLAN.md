@@ -566,6 +566,14 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-11 (after the merge, OSRS re-run): three regressions from taking
+  main's side fixed. `java.vm.vendor` is ART's "The Android Project" again
+  (Old School RuneScape loads its Windows library for any other vendor);
+  `<meta-data android:value="@...">` references resolve to their values
+  once resources load (`ActivityThread.resolveMetaDataRefs`; Play services
+  checks google_play_services_version that way); `Runtime.exec` passes envp
+  through the package-private `ProcessBuilder.environment(String[])`.
+  ARCHITECTURE 5.
 - 2026-10-11 (merge of main into this branch): both lines had built the
   corpus fixes in parallel; main's implementations were kept (preference,
   SAX in libcore with xmlpull staying in the framework, reflection

@@ -4,7 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
-import java.nio.charset.StandardCharsets;
 import java.security.cert.CRL;
 import java.security.cert.CRLException;
 import java.security.cert.CertPath;
@@ -245,12 +244,73 @@ final class X509Factory extends CertificateFactorySpi {
             if (next != '\r') footer.append((char) next);
         }
         checkHeaderFooter(header.toString().trim(), footer.toString().trim());
-        String b64 = new String(data.toByteArray(), StandardCharsets.ISO_8859_1).replaceAll("\\s+", "");
-        try {
-            return java.util.Base64.getDecoder().decode(b64);
-        } catch (IllegalArgumentException e) {
-            throw new IOException(e.getMessage(), e);
+        byte[] raw = data.toByteArray();
+        return base64(raw, 0, raw.length);
+    }
+
+    private static final byte[] BASE64 = new byte[128];
+
+    static {
+        Arrays.fill(BASE64, (byte) -1);
+        String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        for (int i = 0; i < 64; i++) BASE64[alphabet.charAt(i)] = (byte) i;
+        for (char c : " \t\n\r\f\u000b".toCharArray()) BASE64[c] = -2;
+    }
+
+    /** Base64 (with padding, whitespace ignored) of b[from..to); a table loop, as this runs for every system CA. */
+    static byte[] base64(byte[] b, int from, int to) throws IOException {
+        byte[] out = new byte[(to - from) * 3 / 4 + 3];
+        int n = 0, acc = 0, bits = 0, pad = 0;
+        for (int i = from; i < to; i++) {
+            int c = b[i] & 0xff;
+            if (c == '=') {
+                pad++;
+                continue;
+            }
+            int v = c < 128 ? BASE64[c] : -1;
+            if (v == -2) continue;
+            if (v < 0 || pad > 0) throw new IOException("Illegal base64 character " + Integer.toHexString(c));
+            acc = (acc << 6) | v;
+            bits += 6;
+            if (bits >= 8) {
+                bits -= 8;
+                out[n++] = (byte) (acc >> bits);
+            }
         }
+        if (pad > 2 || bits >= 6 || (pad > 0 && (bits + pad * 6) % 8 != 0)) throw new IOException("Bad base64 padding");
+        return Arrays.copyOf(out, n);
+    }
+
+    /**
+     * The first PEM block (or the DER) of an in-memory file such as a system CA file, without
+     * the per-byte stream reads of readBlock. Null if there is none.
+     */
+    static byte[] firstBlock(byte[] f) throws IOException {
+        if (f.length > 0 && (f[0] & 0xff) == Der.SEQUENCE) return readBlock(new java.io.ByteArrayInputStream(f));
+        int begin = indexOf(f, "-----BEGIN ", 0);
+        while (begin > 0 && f[begin - 1] != '\n' && f[begin - 1] != '\r') begin = indexOf(f, "-----BEGIN ", begin + 1);
+        if (begin < 0) return null;
+        int eol = begin;
+        while (eol < f.length && f[eol] != '\n' && f[eol] != '\r') eol++;
+        int end = indexOf(f, "-----END ", eol);
+        if (end < 0) throw new IOException("Incomplete data");
+        int endEol = end;
+        while (endEol < f.length && f[endEol] != '\n' && f[endEol] != '\r') endEol++;
+        checkHeaderFooter(new String(f, begin, eol - begin, "ISO-8859-1").trim(), new String(f, end, endEol - end, "ISO-8859-1").trim());
+        return base64(f, eol, end);
+    }
+
+    private static int indexOf(byte[] f, String s, int from) {
+        int n = s.length();
+        outer:
+        for (int i = Math.max(from, 0); i + n <= f.length; i++) {
+            if (f[i] != s.charAt(0)) continue;
+            for (int j = 1; j < n; j++) {
+                if (f[i + j] != s.charAt(j)) continue outer;
+            }
+            return i;
+        }
+        return -1;
     }
 
     private static void checkHeaderFooter(String header, String footer) throws IOException {

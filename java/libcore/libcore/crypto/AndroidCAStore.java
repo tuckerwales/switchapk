@@ -1,5 +1,6 @@
 package libcore.crypto;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -78,13 +79,8 @@ final class AndroidCAStore extends KeyStoreSpi {
         }
         X509Certificate c = null;
         try {
-            InputStream in = new FileInputStream(new File(dir, file));
-            try {
-                byte[] der = X509Factory.readBlock(in);
-                if (der != null) c = new X509CertImpl(der);
-            } finally {
-                in.close();
-            }
+            byte[] der = X509Factory.firstBlock(readFile(new File(dir, file)));
+            if (der != null) c = new X509CertImpl(der);
         } catch (IOException | CertificateException e) {
             System.err.println("AndroidCAStore: cannot read " + file + ": " + e);
             return null;
@@ -93,6 +89,19 @@ final class AndroidCAStore extends KeyStoreSpi {
             CACHE.put(file, c);
         }
         return c;
+    }
+
+    private static byte[] readFile(File f) throws IOException {
+        InputStream in = new FileInputStream(f);
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream(4096);
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            return out.toByteArray();
+        } finally {
+            in.close();
+        }
     }
 
     public Certificate engineGetCertificate(String alias) {

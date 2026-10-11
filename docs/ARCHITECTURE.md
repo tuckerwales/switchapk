@@ -312,13 +312,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   up to 20 (303, and 301/302 after POST, become GET; 307/308 resend a
   buffered body). Errors follow Android's OkHttp-based client:
   `getInputStream` throws FileNotFoundException for any status >= 400
-  and `getErrorStream` returns that body. https throws
-  `SSLHandshakeException` until TLS exists; `javax.net.ssl` holds only
-  the exception classes, `TrustManager` and a `TrustManagerFactory`
-  whose `getInstance` throws NoSuchAlgorithmException (so clients with
-  their own TLS, such as ktor, fail with a catchable exception rather
-  than NoClassDefFoundError). `javax.net.SocketFactory` and
-  `ServerSocketFactory` return plain sockets.
+  and `getErrorStream` returns that body. https URLs get
+  `HttpsURLConnectionImpl`, which runs the same client over a TLS socket
+  (5.6) and forwards every URLConnection method to it.
+  `javax.net.SocketFactory` and `ServerSocketFactory` return plain
+  sockets.
 - `android.net.ConnectivityManager` (`Context.CONNECTIVITY_SERVICE`,
   one instance per process) reads `platform_network_state` through
   `ConnectivityManager.nGetState()` (`src/android/android_net.c`: bit 0
@@ -472,6 +470,59 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
 - `tests/dex/CryptoTest.java` checks the provider against OpenJDK with
   published vectors; `tests/apps/keystore` checks the keystore across
   two runs.
+
+### 5.6 TLS (WS11)
+
+- Engine: `src/native/java_ssl.c` (`libcore.ssl.Tls` natives) runs TLS
+  1.2 client sessions on mbedtls 2.28 (host: the system libmbedtls;
+  Switch: the devkitPro portlib). A session never touches a socket: its
+  record layer reads and writes two memory buffers, Java feeds it what
+  it read from the transport (`nFeed`) and sends what it produced
+  (`nPending`/`nDrain`). Socket I/O, timeouts and layered sockets stay in
+  Java, and the same session can back SSLEngine later. Each session has
+  its own CTR_DRBG seeded from `platform_random_bytes`. Handshake steps,
+  record crypto and chain verification release the GIL; every call on a
+  session is serialized by its Java owner.
+- Trust is decided by Java TrustManagers, as on Android: sessions run
+  with `MBEDTLS_SSL_VERIFY_NONE` and `nHandshake` returns NEED_VERIFY
+  right after the server's Certificate message, before the client sends
+  its key exchange. `SslSocketImpl` builds the X509Certificate chain,
+  calls the context's trust manager (the 3-argument
+  `X509ExtendedTrustManager` form when it is one) and then `nVerified`,
+  or sends a fatal alert and throws SSLHandshakeException. mbedtls still
+  checks the ServerKeyExchange signature with the certificate's key.
+- The platform trust manager (`libcore.ssl.TrustManagerImpl`, from
+  TrustManagerFactory "PKIX") verifies with mbedtls (`nVerifyChain`:
+  path building, signatures, validity dates, basic constraints, key
+  usage and serverAuth) against anchors parsed once (`nAnchors`): the
+  given KeyStore's certificates, or Android's system CA set for a null
+  KeyStore. That set is AOSP's `system/ca-certificates` for Android 15
+  (145 PEM files), fetched by `tools/fetch_toolchains.py sdk` into
+  `build/toolchains/cacerts` and mapped to
+  `/system/etc/security/cacerts` (romfs on the Switch). Failures carry
+  Android's messages ("Trust anchor for certification path not
+  found."). Endpoint identification "HTTPS" in the socket's
+  SSLParameters checks the host name too.
+- `SSLContext` "TLS" (aliases SSL, TLSv1 to TLSv1.3) and "Default" come
+  from the built-in "AndroidOpenSSL" provider (`libcore.ssl.SslServices`),
+  as do TrustManagerFactory and KeyManagerFactory "PKIX". `SslSocketImpl`
+  wraps a transport socket (the app's, or one it connects itself) and
+  delegates the Socket methods to it; SNI is the host name the socket
+  was made with, ALPN comes from `SSLParameters.setApplicationProtocols`
+  and `getApplicationProtocol()` reports the result.
+  `android.net.ssl.SSLSockets` and `android.net.http.X509TrustManagerExtensions`
+  (the verified path) are there for OkHttp.
+- HttpsURLConnection checks the host with its HostnameVerifier after the
+  handshake (default `libcore.ssl.HostnameVerifierImpl`, OkHostnameVerifier's
+  rules: subjectAltName DNS and IP entries, one-label wildcards, no
+  common name), and throws SSLPeerUnverifiedException like Android.
+- Not yet: TLS 1.3 (mbedtls 2.28), server sockets, SSLEngine
+  (`createSSLEngine` throws UnsupportedOperationException), session
+  resumption, client certificates.
+- Tests: `tests/tls/run_tls_test.sh` starts `tests/tls/server.py`
+  (Python ssl, fixed local ports 47441-47444, test PKI from
+  `tests/tls/gen_certs.py`) and runs `tests/dex/TlsTest.java` against the
+  reference JVM and switchapk.
 
 ## 6. Android framework (java/framework)
 

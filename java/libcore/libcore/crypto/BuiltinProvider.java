@@ -168,6 +168,9 @@ public final class BuiltinProvider extends Provider {
                 return new NativePrng();
             }
         });
+
+        // TLS (SSLContext, TrustManagerFactory, KeyManagerFactory) from libcore.ssl.
+        for (Provider.Service s : libcore.ssl.SslServices.services(this)) putService(s);
     }
 
     private static List<String> list(String... s) {

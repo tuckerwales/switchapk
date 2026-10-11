@@ -359,7 +359,12 @@ NATIVE(Tls_nPeerCerts) {
 NATIVE(Tls_nCipherSuite) {
     UNUSED_ARGS();
     Tls *s = tls_of(t, A_LONG(0));
-    const char *c = s ? mbedtls_ssl_get_ciphersuite(&s->ssl) : NULL;
+    const char *c = NULL;
+    if (s) {
+        /* during the handshake the suite is in the session being negotiated */
+        c = mbedtls_ssl_get_ciphersuite(&s->ssl);
+        if (!c && s->ssl.session_negotiate) c = mbedtls_ssl_get_ciphersuite_name(s->ssl.session_negotiate->ciphersuite);
+    }
     if (s) R_OBJ(c ? vm_new_string_utf8(t, c) : NULL);
 }
 

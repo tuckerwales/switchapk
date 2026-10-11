@@ -463,13 +463,27 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   and OAEP ciphers, CRT with blinding), EC on P-256/384/521 (ECDSA,
   ECDH) and DH (MODP groups), over `BigInteger` with native multiply,
   division and Montgomery modPow (`src/native/java_math.c`). Not there
-  yet: DSA, X25519/Ed25519, ChaCha20, 3DES, certificates and
-  CertificateFactory (with TLS, WS11). The specs and
+  yet: DSA, X25519/Ed25519, ChaCha20, 3DES, RSASSA-PSS. The specs and
   interfaces for them exist, so third-party providers (BouncyCastle)
   can supply the algorithms.
 - `tests/dex/CryptoTest.java` checks the provider against OpenJDK with
   published vectors; `tests/apps/keystore` checks the keystore across
   two runs.
+
+- X.509 (WS11): `CertificateFactory` "X.509" (`libcore.crypto.X509Factory`:
+  DER, PEM with text around it, PKCS#7 bundles, PkiPath/PKCS7 cert
+  paths) makes `X509CertImpl`, which parses certificates in Java and
+  returns exactly the input DER from `getEncoded()`; `getPublicKey()` is
+  an RSA or EC key whose encoding is the certificate's SPKI byte for
+  byte (pinning hashes it). `X500Principal` keeps the DER and formats
+  RFC 2253, RFC 1779 and canonical names as OpenJDK does
+  (`libcore.crypto.X500Name`). KeyStores: "BKS" (the default type, as on
+  Android; loads BouncyCastle BKS files' certificates and unprotected
+  keys) and "PKCS12" are in-memory stores (`MemoryKeyStore`; no store()
+  and no PKCS#12 file loading yet); "AndroidCAStore" lists
+  `$ANDROID_ROOT/etc/security/cacerts` as `system:<file>` aliases,
+  parsing lazily with a process-wide cache. `tests/dex/X509Test.java`
+  matches OpenJDK.
 
 ### 5.6 TLS (WS11)
 

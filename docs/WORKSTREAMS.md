@@ -315,7 +315,8 @@ behaviour clean (UnknownHostException) before full support.
 Status: sockets, DNS, UDP, HTTP/1.1 with transparent gzip and
 ConnectivityManager are in (see ARCHITECTURE 5.1), and so are
 java.util.zip and java.util.jar (5.2). Remaining: TLS (mbedtls;
-`javax.net.ssl` has only the exception classes, https throws
+`javax.net.ssl` has only the exception classes and a TrustManagerFactory
+with no algorithms, https throws
 SSLHandshakeException), connection pooling, CookieManager, NIO socket
 channels, and running tests/apps/net on hardware.
 

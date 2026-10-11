@@ -314,7 +314,10 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `getInputStream` throws FileNotFoundException for any status >= 400
   and `getErrorStream` returns that body. https throws
   `SSLHandshakeException` until TLS exists; `javax.net.ssl` holds only
-  the exception classes so far. `javax.net.SocketFactory` and
+  the exception classes, `TrustManager` and a `TrustManagerFactory`
+  whose `getInstance` throws NoSuchAlgorithmException (so clients with
+  their own TLS, such as ktor, fail with a catchable exception rather
+  than NoClassDefFoundError). `javax.net.SocketFactory` and
   `ServerSocketFactory` return plain sockets.
 - `android.net.ConnectivityManager` (`Context.CONNECTIVITY_SERVICE`,
   one instance per process) reads `platform_network_state` through

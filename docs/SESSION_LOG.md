@@ -1045,3 +1045,14 @@ what is left in flight.
   the merge all 13 open corpus apps draw on the host, every dex test, C
   test and tests/apps check (with prefs and procs) passes, and the Switch
   build links.
+- 2026-10-11, full rerun on PR 26: clean host and Switch builds, all 15
+  dex tests, the C tests, gfx_test and the launcher check pass; 45 of 46
+  tests/apps samples pass (curves is the known timing flake); all 14 corpus
+  apps draw, OSRS included (its own "Error connecting to server" screen in
+  the sandbox). The rerun found three merge regressions (java.vm.vendor,
+  meta-data @integer references, Runtime.exec envp) and fixed them. The
+  screenshots also showed Unciv's tap ending on its crash screen: ktor's
+  TLS setup hit NoClassDefFoundError for javax.net.ssl.TrustManagerFactory
+  now that NIO selectors let it get that far. A TrustManagerFactory whose
+  getInstance throws NoSuchAlgorithmException makes it a caught connection
+  failure; the tap now picks a language as it should.

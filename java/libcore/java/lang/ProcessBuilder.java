@@ -9,10 +9,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Process creation. There are no child processes on the Switch (and the host
- * runtime does not spawn bionic executables), so start() fails the way a failed
- * exec does on Android: with an IOException naming the program. Apps that run
- * helper binaries (chess engines, ffmpeg) catch it and report the error.
+ * Process creation. There is no fork on the Switch: start() runs a bionic executable
+ * (an app's own engine or helper binary) inside switchapk, see ProcessImpl. Anything else
+ * (a shell, /system/bin tools) fails as a missing program does on Android: with an
+ * IOException naming it.
  */
 public final class ProcessBuilder {
     private List<String> command;
@@ -191,9 +191,6 @@ public final class ProcessBuilder {
         String[] cmdarray = command.toArray(new String[command.size()]);
         if (cmdarray.length == 0) throw new IndexOutOfBoundsException();
         for (String arg : cmdarray) if (arg == null) throw new NullPointerException();
-        String dir = directory == null ? null : directory.toString();
-        throw new IOException("Cannot run program \"" + cmdarray[0] + "\""
-                + (dir == null ? "" : " (in directory \"" + dir + "\")")
-                + ": error=38, Function not implemented");
+        return ProcessImpl.start(cmdarray, environment, directory, redirects(), redirectErrorStream);
     }
 }

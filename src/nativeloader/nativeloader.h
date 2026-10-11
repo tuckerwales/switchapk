@@ -50,6 +50,15 @@ const ShimSym *shim_android_symbols(size_t *n);
 const ShimSym *shim_posix_symbols(size_t *n);
 const ShimSym *shim_bsd_symbols(size_t *n); /* Switch sockets and errno; empty on the host */
 const ShimSym *shim_newlib_symbols(size_t *n); /* Switch file, time and thread ABI; empty on the host */
+const ShimSym *shim_spawn_symbols(size_t *n);  /* process context wrappers (spawn.c), joined after all others */
+void shim_spawn_bind(void *(*prev)(const char *name)); /* gives spawn.c the entries it wraps */
+
+/* Loads a PIE executable as a fresh image (never shared with a previous load) and returns its entry point, or
+ * NULL with err set. */
+void *loader_load_executable(const char *path, char *err, size_t errlen);
+/* Writes the APK's lib/<abi>/ libraries into the directory android_dir maps to, when missing or changed. */
+void loader_extract_native_libs(const char *android_dir);
+char *platform_map_path(const char *android_path);
 
 /*
  * Runs VM code from any thread. Native code runs without the GIL, and the app's own threads (the

@@ -48,6 +48,8 @@ public final class Os {
 
     public static native boolean setLastModified(String path, long time);
 
+    public static native boolean setExecutable(String path, boolean executable, boolean ownerOnly);
+
     public static native String hostPath(String path);
 
     public static native long freeSpace(String path);

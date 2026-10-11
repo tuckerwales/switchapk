@@ -398,6 +398,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     reflection: Shattered PD, Vector Pinball and Unciv draw (2026-10-11)
   - [x] deep style chains, key-0 array bags, Holo ActionBarView: Simple
     Calculator, Simple Solitaire and Blockinger draw (2026-10-11)
+  - [x] in-process executables, ServiceLoader, fortified sprintf fix:
+    DroidFish runs Stockfish, Simon Tatham's Puzzles draws (2026-10-11)
 
 ## Next steps (in order)
 
@@ -463,14 +465,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    auto-stubs silently today.
 
 9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`).
-   11 of the 13 open apps draw on the host. Left: Mindustry's black screen
-   (WS8/WS9) and Puzzles' missing-file exit (WS9). Known gaps past the
-   first screen: DroidFish's engine needs an in-process exec of a bionic
-   executable (WS9), Unciv's multiplayer check needs NIO selectors (WS11),
-   java.io object streams (WS16). Old School RuneScape draws its own
-   "Error connecting to server" screen on the host; its next step is the
-   game connection (WS11). Next after that: run the apps that draw on a
-   console, and grow the corpus.
+   12 of the 13 open apps draw on the host, DroidFish with Stockfish
+   running and Puzzles generating games through in-process executables.
+   Left: Mindustry's black screen (WS8/WS9). Known gaps past the first
+   screen: Unciv's multiplayer check needs NIO selectors (WS11), java.io
+   object streams (WS16), Compose's ContentCaptureSession and
+   RenderNode.getMatrix/setClipToOutline stubs (WS1). Old School RuneScape
+   draws its own "Error connecting to server" screen on the host; its next
+   step is the game connection (WS11). Next: run the apps that draw on a
+   console (the arm64 build of tests/apps/procs needs NDK_ARM64), merge the
+   rest of PR 22's branch (crypto WS17, fonts) and grow the corpus.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -527,6 +531,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-11 (WS9 with WS16): in-process executables. New files
+  src/nativeloader/spawn.c, spawn.h, spawn_entry.S (Makefile.switch now builds
+  src/nativeloader/*.S) and src/native/java_process.c; new shim table
+  `shim_spawn_symbols` joined after all others plus `shim_spawn_bind`
+  (nativeloader.h); `loader_load_executable` and `loader_extract_native_libs`
+  in elf_loader.c; `XF()`, `pthread_create`, `shim_map_path` and the assert
+  shims consult the process context. `platform_map_path` maps `/data/app/` to
+  `<data root>/app/`; `Os.stat` returns an eighth element (execute) and
+  `Os.setExecutable` is new. Java: `java.lang.ProcessImpl` (natives), real
+  `ServiceLoader`, `ServiceConfigurationError`, `ActivityThread.nExtractNativeLibs`
+  (android_os.c). Fortified sprintf no longer truncates. No Java fields are
+  read from C. ARCHITECTURE 5, 6.4.1, 6.7 updated.
 
 - 2026-10-11 (WS16 with WS4, WS15; corpus apps): new natives
   `GenericSignatures.readSystemNative` (java_annotation.c) and

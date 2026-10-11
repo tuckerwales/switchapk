@@ -197,7 +197,20 @@ void android_request_quit(void) {
     platform_push_event(&ev);
 }
 
+/* static native void ActivityThread.nExtractNativeLibs(String nativeLibraryDir) */
+NATIVE(ActivityThread_nExtractNativeLibs) {
+    UNUSED_ARGS();
+    char *dir = nat_str(A_OBJ(0));
+    if (!dir) return;
+    extern void loader_extract_native_libs(const char *android_dir);
+    VM_BLOCKING_BEGIN(t);
+    loader_extract_native_libs(dir);
+    VM_BLOCKING_END(t);
+    free(dir);
+}
+
 static const NativeMethodReg g_regs[] = {
+    {"Landroid/app/ActivityThread;", "nExtractNativeLibs", "(Ljava/lang/String;)V", ActivityThread_nExtractNativeLibs},
     {"Landroid/os/MessageQueue;", "nativePollOnce", "(I)V", MessageQueue_nativePollOnce},
     {"Landroid/os/MessageQueue;", "nativeWake", "()V", MessageQueue_nativeWake},
     {"Landroid/util/Log;", "native_println", "(ILjava/lang/String;Ljava/lang/String;)V", Log_native_println},

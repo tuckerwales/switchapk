@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <fcntl.h>
 #ifdef __SWITCH__
 #include <malloc.h>
@@ -41,6 +42,8 @@
 #include <sys/time.h>
 #endif
 
+#include "spawn.h"
+
 #define LOG_TAG "libc"
 
 char *platform_map_path(const char *android_path);
@@ -57,6 +60,9 @@ char *shim_map_path(const char *path, bool write) {
         return NULL;
     }
     if (path[0] && path[0] != '/') {
+        /* an executable started through ProcessBuilder has the working directory it was given */
+        const char *cwd = nl_proc_cwd();
+        if (cwd) return sa_sprintf("%s/%s", cwd, path);
         static bool warned;
         if (!warned) {
             warned = true;
@@ -111,11 +117,13 @@ static int sh_register_atfork(void (*prepare)(void), void (*parent)(void), void 
 
 static void sh_assert2(const char *file, int line, const char *function, const char *expr) {
     LOGE("%s:%d: %s: assertion \"%s\" failed", file, line, function, expr);
+    nl_proc_abort(); /* inside a ProcessBuilder executable only that process ends */
     abort();
 }
 
 static void sh_assert(const char *file, int line, const char *expr) {
     LOGE("%s:%d: assertion \"%s\" failed", file, line, expr);
+    nl_proc_abort();
     abort();
 }
 
@@ -205,29 +213,39 @@ static char *sh_strrchr_chk(const char *s, int c, size_t n) {
     SA_UNUSED(n);
     return strrchr(s, c);
 }
+/*
+ * Fortified printf: blen is __builtin_object_size of the destination, (size_t)-1 when the compiler cannot
+ * tell. glibc's vsnprintf must not see such a size: buf + size wraps around and it truncates the output
+ * (snprintf(b, SIZE_MAX, "%d", 42) writes "4"), so an unknown or huge bound formats unbounded, as
+ * bionic's sprintf does.
+ */
+static int bounded_vsnprintf(char *buf, size_t n, const char *fmt, va_list ap) {
+    if (n > (size_t)INT_MAX) return vsprintf(buf, fmt, ap);
+    return vsnprintf(buf, n, fmt, ap);
+}
 static int sh_vsnprintf_chk(char *buf, size_t len, int flags, size_t blen, const char *fmt, va_list ap) {
     SA_UNUSED(flags);
     SA_UNUSED(blen);
-    return vsnprintf(buf, len, fmt, ap);
+    return bounded_vsnprintf(buf, len, fmt, ap);
 }
 static int sh_snprintf_chk(char *buf, size_t len, int flags, size_t blen, const char *fmt, ...) {
     SA_UNUSED(flags);
     SA_UNUSED(blen);
     va_list ap;
     va_start(ap, fmt);
-    int r = vsnprintf(buf, len, fmt, ap);
+    int r = bounded_vsnprintf(buf, len, fmt, ap);
     va_end(ap);
     return r;
 }
 static int sh_vsprintf_chk(char *buf, int flags, size_t blen, const char *fmt, va_list ap) {
     SA_UNUSED(flags);
-    return vsnprintf(buf, blen, fmt, ap);
+    return bounded_vsnprintf(buf, blen, fmt, ap);
 }
 static int sh_sprintf_chk(char *buf, int flags, size_t blen, const char *fmt, ...) {
     SA_UNUSED(flags);
     va_list ap;
     va_start(ap, fmt);
-    int r = vsnprintf(buf, blen, fmt, ap);
+    int r = bounded_vsnprintf(buf, blen, fmt, ap);
     va_end(ap);
     return r;
 }
@@ -244,11 +262,16 @@ FILE *sh_stdin, *sh_stdout, *sh_stderr;
 
 static FILE *XF(FILE *f) {
     uint8_t *p = (uint8_t *)f;
-    if (p >= sh_sF[0] && p < sh_sF[0] + sizeof sh_sF) {
-        size_t i = (size_t)(p - sh_sF[0]) / BIONIC_FILE_SIZE;
-        return i == 0 ? stdin : i == 1 ? stdout : stderr;
-    }
-    return f;
+    int which = -1;
+    if (p >= sh_sF[0] && p < sh_sF[0] + sizeof sh_sF) which = (int)((size_t)(p - sh_sF[0]) / BIONIC_FILE_SIZE);
+    else if (f == stdin) which = 0;
+    else if (f == stdout) which = 1;
+    else if (f == stderr) which = 2;
+    if (which < 0) return f;
+    /* inside an executable started through ProcessBuilder the standard streams are its pipes */
+    FILE *proc = nl_proc_stdio(which);
+    if (proc) return proc;
+    return which == 0 ? stdin : which == 1 ? stdout : stderr;
 }
 
 static FILE *sh_fopen(const char *path, const char *mode) {
@@ -741,6 +764,7 @@ static int sh_pthread_create(pthread_t *out, const BionicAttr *attr, void *(*fn)
     if (stack < 256 * 1024) stack = 256 * 1024; /* our JNI and log paths want some room */
     pthread_attr_setstacksize(&a, stack);
     if (attr && (attr->flags & 1)) pthread_attr_setdetachstate(&a, PTHREAD_CREATE_DETACHED);
+    nl_proc_wrap_thread(&fn, &arg); /* threads of a ProcessBuilder executable stay in its process */
     int r = pthread_create(out, &a, fn, arg);
     pthread_attr_destroy(&a);
     return r;

@@ -283,10 +283,14 @@ JDK's Xerces does). SAX1 (`Parser`, `HandlerBase`) exists only for signatures:
 overloads use the same reader.
 `java.io.ObjectStreamField` exists for `serialPersistentFields` declarations
 (desugared ConcurrentHashMap); ObjectOutputStream/ObjectInputStream do not.
-`ProcessBuilder.start()` and every `Runtime.exec` fail like a failed exec on Android, with an
-IOException "Cannot run program ...: error=38, Function not implemented": there are no child
-processes on the Switch and the host does not run bionic executables. Apps that start helper
-binaries (DroidFish's chess engine) catch it and report the error.
+`ProcessBuilder.start()` and `Runtime.exec` run bionic executables in-process (`ProcessImpl`
+over spawn.c, section 6.7): an app's own engine or helper binary works; a bare program name
+(`sh`, `su`, `logcat`) fails with "error=2, No such file or directory", a non-ELF with "error=8,
+Exec format error", as on a device without them. File and INHERIT redirects run through pump
+threads. `java.util.ServiceLoader` reads `META-INF/services/<name>` from the class loader's
+resources (the APK), creating providers lazily in file order; `stream()` and `findFirst()` too.
+`File.canExecute` reads the execute bit on the host (any regular file on the Switch, which has
+none), `setExecutable` sets it.
 Natives in `src/native`. File paths from Java are translated by
 `platform_map_path()` (src/native/java_io.c):
 
@@ -808,6 +812,13 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   that fire during layout are posted (AdapterView SelectionNotifier), so
   listeners can change other views. Transitions and window animations
   are not run.
+- A color state list file (`res/color/*.xml`) requested as a drawable becomes a
+  ColorStateListDrawable, as AOSP ResourcesImpl does (Compose themes use these).
+- `android.view.autofill` (AutofillManager, always disabled, from getSystemService; AutofillId,
+  AutofillValue, the View autofill id/value methods), AccessibilityServiceInfo with empty
+  enabled/installed service lists, and CursorAnchorInfo/EditorBoundsInfo with the editor-state
+  IME calls as no-ops come from PR 22's branch (cherry-picked); Jetpack Compose's root view
+  needs them.
 - Holo decor action bar: framework-res's `screen_action_bar` inflates
   `com.android.internal.widget.ActionBarView`, here a Toolbar styled from the
   theme's `actionBarStyle` (background, height, title/subtitle text styles)
@@ -1175,6 +1186,25 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `byteOffset` (by `vm_buffer_address`, declared in vm.h).
 
 ### 6.7 Native libraries
+- In-process executables (src/nativeloader/spawn.c, spawn.h, spawn_entry.S): ProcessBuilder
+  loads a PIE executable as a fresh image (`loader_load_executable`, never shared with an
+  earlier start) and runs it on an 8 MB thread, entering `_start` on a kernel-style stack
+  (argc, argv, envp, AT_NULL) through `nl_enter_entry`; the shim's `__libc_init` calls main
+  and exit. The thread and the threads it creates (`pthread_create` passes it on) carry a
+  process context: bionic's stdin/stdout/stderr, `__sF`, fds 0-2, printf/puts/getchar/scanf/
+  perror and isatty go to in-memory pipes (64 KB, buffers freed when a stream is done) that
+  `java.lang.ProcessImpl` reads and writes with the GIL released; exit/_exit/abort and failed
+  asserts end that process (status 134 for abort) by a longjmp to its thread start, or by
+  ending a secondary thread; relative paths resolve against its working directory; getenv
+  answers from its environment. These wrappers are the `shim_spawn_symbols` table, joined
+  after every other table and wrapping the entries it replaces (`shim_spawn_bind`). Limits:
+  images stay mapped, the libraries an executable needs are the app's already-loaded
+  instances (not private copies), destroy() can only end the streams, setenv/environ and
+  signals are not per process.
+- At start `ActivityThread` extracts `lib/<abi>/*.so` from the APK into its
+  `nativeLibraryDir` (`/data/app/<pkg>/lib/<abi>`, mapped to `<data root>/app/...`;
+  `loader_extract_native_libs`, skipped when sizes match), as the installer does, so apps
+  can stat, copy and exec those files. Libraries still load from the APK.
 
 - `System.loadLibrary("foo")` / `System.load(path)` reach
   `nativeloader_load_library` (src/nativeloader/elf_loader.c). Libraries
@@ -1211,7 +1241,9 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - Shim (`shim_libc.c`, `shim_android.c`, `shim_posix.c`): bionic names mapped to the host
   C library where the ABI matches, with wrappers where bionic differs:
   Android path mapping for open/fopen/stat/opendir/..., bionic sysconf
-  numbering, `__errno`, fortify `_chk` entry points, `__sF`
+  numbering, `__errno`, fortify `_chk` entry points (`__sprintf_chk` and friends format
+  unbounded when the object size is unknown, `(size_t)-1`: glibc's vsnprintf truncates
+  when buf + size wraps), `__sF`
   (stdin/stdout/stderr for code built before API 23) and FILE* translation,
   stack protector, `__cxa_atexit` (native destructors never run), pthread
   mutexes, condition variables and rwlocks (bionic's 40/48/56-byte objects hold a

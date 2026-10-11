@@ -739,6 +739,8 @@ public final class ActivityThread {
         return sVersionName;
     }
 
+    private static native void nExtractNativeLibs(String nativeLibraryDir);
+
     private static void parseManifest() throws Exception {
         sRequestedPermissions.clear();
         sActivities.clear();
@@ -888,6 +890,8 @@ public final class ActivityThread {
         // Android's layout; the native loader serves lib<name>.so under it from the APK's lib/<abi>/
         sAppInfo.nativeLibraryDir = "/data/app/" + sPackageName + "/lib/"
                 + ("x86_64".equals(android.os.Build.CPU_ABI) ? "x86_64" : "arm64");
+        // as the package installer does (extractNativeLibs): apps read, copy and exec files in it
+        nExtractNativeLibs(sAppInfo.nativeLibraryDir);
         sAppInfo.uid = Process.myUid();
         sAppInfo.enabled = true;
         sAppInfo.flags |= ApplicationInfo.FLAG_HAS_CODE;

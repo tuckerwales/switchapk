@@ -1,6 +1,6 @@
 /*
- * Checks the bionic sem_* shims (src/nativeloader/shim_libc.c) through shim_lookup: counting, trywait,
- * timedwait timeouts and a cross-thread post.
+ * Checks bionic libc shims (src/nativeloader/shim_libc.c) through shim_lookup: sem_* (counting, trywait,
+ * timedwait timeouts, a cross-thread post) and fortified sprintf with an unknown object size.
  *   make && cc -Isrc -pthread tests/c/shim_sem_test.c $(find build/host -name '*.o' ! -name 'main_host.o') \
  *     -lz -lm -ldl -o build/shim_sem_test \
  *     && build/shim_sem_test
@@ -88,6 +88,13 @@ int main(void) {
     pthread_join(t, NULL);
     EXPECT(p_getvalue(&g_sem, &v) == 0 && v == 0);
     EXPECT(p_destroy(&g_sem) == 0);
+
+    /* __sprintf_chk(buf, 0, (size_t)-1, ...): what fortified code passes when the size is unknown */
+    int (*p_sprintf_chk)(char *, int, size_t, const char *, ...) = shim_lookup("__sprintf_chk");
+    int (*p_snprintf_chk)(char *, size_t, int, size_t, const char *, ...) = shim_lookup("__snprintf_chk");
+    char buf[32];
+    EXPECT(p_sprintf_chk && p_sprintf_chk(buf, 0, (size_t)-1, "%d-%s", 4242, "ab") == 7 && strcmp(buf, "4242-ab") == 0);
+    EXPECT(p_snprintf_chk && p_snprintf_chk(buf, 5, 0, sizeof buf, "%d", 123456) == 6 && strcmp(buf, "1234") == 0);
 
     if (!g_fail) printf("PASS shim_sem_test\n");
     return g_fail;

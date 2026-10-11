@@ -373,6 +373,8 @@ bool shim_is_library(const char *soname) {
 static SaMap g_shim;
 static pthread_once_t g_shim_once = PTHREAD_ONCE_INIT;
 
+static void *prev_entry(const char *name) { return sa_map_get(&g_shim, name); }
+
 static void build_shim(void) {
     size_t n;
     const ShimSym *t = shim_libc_symbols(&n);
@@ -385,6 +387,10 @@ static void build_shim(void) {
     t = shim_bsd_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
     t = shim_newlib_symbols(&n);
+    for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    /* the process-context wrappers go on top of whatever the tables above chose */
+    shim_spawn_bind(prev_entry);
+    t = shim_spawn_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
 }
 

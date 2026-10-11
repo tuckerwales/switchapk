@@ -927,3 +927,16 @@ what is left in flight.
   `getInstalledAccessibilityServiceList` (both empty). Checked on the host
   with a view that does Compose's lookups from onAttachedToWindow; the
   Compose app itself has not been rerun.
+- 2026-10-11, in-process executables: ProcessBuilder runs bionic PIE
+  executables inside switchapk (spawn.c: fresh image, kernel-style stack into
+  _start, __libc_init, per-thread process context for stdio, fds 0-2, exit,
+  abort, asserts, cwd and getenv; in-memory pipes to java.lang.ProcessImpl).
+  Native libraries are extracted to nativeLibraryDir at start. New sample
+  tests/apps/procs (a hand-built bionic executable) passes. DroidFish now runs
+  Stockfish 16.1. Simon Tatham's Puzzles needed ServiceLoader, color state list
+  drawables and PR 22's autofill and CursorAnchorInfo commits (cherry-picked,
+  the user pointed at them), then crashed in its generator: the fortified
+  __sprintf_chk shim passed (size_t)-1 to glibc's vsnprintf, which truncates
+  when the size wraps the address space, so every such sprintf in native code
+  lost output. Fixed and covered in tests/c/shim_sem_test.c. Puzzles now
+  shows a generated Sudoku: 12 of the 13 open apps draw.

@@ -432,7 +432,10 @@ public class Resources {
         }
         try {
             Drawable dr;
-            if (isXml) {
+            if (isXml && file.startsWith("res/color")) {
+                // AOSP ResourcesImpl.loadXmlDrawable: a color state list used as a drawable
+                dr = new android.graphics.drawable.ColorStateListDrawable(loadColorStateList(value, id, theme));
+            } else if (isXml) {
                 XmlResourceParser rp = mAssets.openXmlResourceParser(value.assetCookie, file);
                 dr = Drawable.createFromXmlForDensity(this, rp, density, theme);
                 rp.close();

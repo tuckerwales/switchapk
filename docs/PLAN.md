@@ -394,6 +394,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     stops at "Error connecting to server"
   - [x] android.preference, ListActivity, SAX2 and ProcessBuilder: Andor's
     Trail, Frozen Bubble and DroidFish draw (2026-10-10)
+  - [x] activity-alias, regex blocks, DisplayManager, Unsafe and generic
+    reflection: Shattered PD, Vector Pinball and Unciv draw (2026-10-11)
 
 ## Next steps (in order)
 
@@ -459,18 +461,17 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    auto-stubs silently today.
 
 9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`).
-   Pixel Dungeon, Replica Island, Andor's Trail, Frozen Bubble and
-   DroidFish draw on the host. First blockers for the rest: the Holo decor
-   `ActionBarView` (Blockinger, WS4); java.io serialization (Vector
-   Pinball, WS16); regex `\p{InBlock}` classes (Shattered PD, WS16);
-   DisplayManager (Unciv, WS15); activity-alias launch (Simple Calculator,
-   WS4); an AIOOBE in Solitaire's own GameSelector (WS4, untraced);
-   Mindustry's black screen (WS8/WS9); Puzzles' missing helper (WS9).
-   DroidFish's engine needs an in-process exec of a bionic executable on
-   the ELF loader (WS9). Old School RuneScape draws its own "Error
-   connecting to server" screen on the host; its next step is the game
-   connection (WS11). Re-run the corpus after each fix and update the
-   findings table.
+   Pixel Dungeon, Replica Island, Andor's Trail, Frozen Bubble, DroidFish,
+   Shattered PD, Vector Pinball and Unciv draw on the host. First blockers
+   for the rest: the Holo decor `ActionBarView` (Blockinger, WS4); a
+   layout_height inflation error (Simple Calculator, WS4); an AIOOBE in
+   Solitaire's own GameSelector (WS4); Mindustry's black screen (WS8/WS9);
+   Puzzles' missing helper (WS9). Known gaps past the first screen:
+   DroidFish's engine needs an in-process exec of a bionic executable
+   (WS9), Unciv's multiplayer check needs NIO selectors (WS11). Old School
+   RuneScape draws its own "Error connecting to server" screen on the host;
+   its next step is the game connection (WS11). Re-run the corpus after
+   each fix and update the findings table.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -527,6 +528,19 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-11 (WS16 with WS4, WS15; corpus apps): new natives
+  `GenericSignatures.readSystemNative` (java_annotation.c) and
+  `sun.misc.Unsafe` (src/native/java_unsafe.c, natives_java_unsafe_register);
+  new libcore classes `java.lang.reflect.GenericSignatures`,
+  `GenericSignatureFormatError`, `java.io.ObjectStreamField`,
+  `sun.misc.Unsafe`. Framework: `android.hardware.display` (DisplayManager,
+  VirtualDisplay, VirtualDisplayConfig, HdrConversionMode) and
+  `android.hardware.input.InputManager`, registered in ContextImpl;
+  `ActivityThread.sComponentEnabled` now holds component enabled states for
+  ApplicationPackageManager. `dex_proto_desc` no longer overflows on very
+  long descriptors. No Java fields are read from C. ARCHITECTURE 4.2, 5,
+  6.4.1 updated.
 
 - 2026-10-10 (WS4 with WS9; corpus apps): `org.xmlpull.v1` moved from
   java/framework to java/libcore (package unchanged) so libcore's SAX2

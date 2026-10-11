@@ -1167,11 +1167,41 @@ public final class Pattern implements java.io.Serializable {
         };
 
         static CharPredicate property(String name) {
+            // Unicode blocks: \p{InGreek}, \p{block=Greek}, \p{blk=Greek} (names as Character.UnicodeBlock.forName)
+            String blockName = null;
+            if (name.startsWith("In")) {
+                blockName = name.substring(2);
+            } else if (name.startsWith("block=") || name.startsWith("blk=")) {
+                blockName = name.substring(name.indexOf('=') + 1);
+            }
+            if (blockName != null) {
+                final Character.UnicodeBlock block;
+                try {
+                    block = Character.UnicodeBlock.forName(blockName);
+                } catch (IllegalArgumentException e) {
+                    return null;
+                }
+                return new CharPredicate() {
+                    boolean is(int ch) {
+                        return Character.isValidCodePoint(ch) && Character.UnicodeBlock.of(ch) == block;
+                    }
+                };
+            }
+            if (name.startsWith("general_category=") || name.startsWith("gc=")) {
+                name = name.substring(name.indexOf('=') + 1);
+                final int mask = categoryMask(name);
+                return mask == 0 ? null : categoryPredicate(mask);
+            }
             if (name.startsWith("Is")) {
                 name = name.substring(2);
             }
             if (name.startsWith("java")) {
                 name = name.substring(4);
+            }
+            int mask = categoryMask(name);
+            if (mask != 0 && !name.equals("L") && !name.equals("Lu") && !name.equals("Ll") && !name.equals("Nd")
+                    && !name.equals("N") && !name.equals("Cc")) {
+                return categoryPredicate(mask);
             }
             switch (name) {
                 case "Lower": case "Ll": case "LowerCase":
@@ -1241,14 +1271,6 @@ public final class Pattern implements java.io.Serializable {
                             return Character.isWhitespace(ch);
                         }
                     };
-                case "M": case "Mn":
-                    return range(0x300, 0x36f, false);
-                case "S": case "Sm": case "Sc": case "So":
-                    return new CharPredicate() {
-                        boolean is(int ch) {
-                            return "$+<=>^`|~".indexOf(ch) >= 0 || (ch >= 0x2000 && ch < 0x3000);
-                        }
-                    };
                 case "Han":
                     return range(0x4e00, 0x9fff, false);
                 case "Hiragana":
@@ -1271,6 +1293,62 @@ public final class Pattern implements java.io.Serializable {
                     return null;
             }
         }
+    }
+
+    /** Bit set of Character.getType values for a general category name ("Lu", "L", "LC", ...), 0 if unknown. */
+    static int categoryMask(String name) {
+        switch (name) {
+            case "Cn": return 1 << Character.UNASSIGNED;
+            case "Lu": return 1 << Character.UPPERCASE_LETTER;
+            case "Ll": return 1 << Character.LOWERCASE_LETTER;
+            case "Lt": return 1 << Character.TITLECASE_LETTER;
+            case "Lm": return 1 << Character.MODIFIER_LETTER;
+            case "Lo": return 1 << Character.OTHER_LETTER;
+            case "Mn": return 1 << Character.NON_SPACING_MARK;
+            case "Me": return 1 << Character.ENCLOSING_MARK;
+            case "Mc": return 1 << Character.COMBINING_SPACING_MARK;
+            case "Nd": return 1 << Character.DECIMAL_DIGIT_NUMBER;
+            case "Nl": return 1 << Character.LETTER_NUMBER;
+            case "No": return 1 << Character.OTHER_NUMBER;
+            case "Zs": return 1 << Character.SPACE_SEPARATOR;
+            case "Zl": return 1 << Character.LINE_SEPARATOR;
+            case "Zp": return 1 << Character.PARAGRAPH_SEPARATOR;
+            case "Cc": return 1 << Character.CONTROL;
+            case "Cf": return 1 << Character.FORMAT;
+            case "Co": return 1 << Character.PRIVATE_USE;
+            case "Cs": return 1 << Character.SURROGATE;
+            case "Pd": return 1 << Character.DASH_PUNCTUATION;
+            case "Ps": return 1 << Character.START_PUNCTUATION;
+            case "Pe": return 1 << Character.END_PUNCTUATION;
+            case "Pc": return 1 << Character.CONNECTOR_PUNCTUATION;
+            case "Po": return 1 << Character.OTHER_PUNCTUATION;
+            case "Sm": return 1 << Character.MATH_SYMBOL;
+            case "Sc": return 1 << Character.CURRENCY_SYMBOL;
+            case "Sk": return 1 << Character.MODIFIER_SYMBOL;
+            case "So": return 1 << Character.OTHER_SYMBOL;
+            case "Pi": return 1 << Character.INITIAL_QUOTE_PUNCTUATION;
+            case "Pf": return 1 << Character.FINAL_QUOTE_PUNCTUATION;
+            case "L": return categoryMask("Lu") | categoryMask("Ll") | categoryMask("Lt") | categoryMask("Lm")
+                    | categoryMask("Lo");
+            case "LC": case "L&": return categoryMask("Lu") | categoryMask("Ll") | categoryMask("Lt");
+            case "M": return categoryMask("Mn") | categoryMask("Me") | categoryMask("Mc");
+            case "N": return categoryMask("Nd") | categoryMask("Nl") | categoryMask("No");
+            case "Z": return categoryMask("Zs") | categoryMask("Zl") | categoryMask("Zp");
+            case "C": return categoryMask("Cc") | categoryMask("Cf") | categoryMask("Co") | categoryMask("Cs")
+                    | categoryMask("Cn");
+            case "P": return categoryMask("Pd") | categoryMask("Ps") | categoryMask("Pe") | categoryMask("Pc")
+                    | categoryMask("Po") | categoryMask("Pi") | categoryMask("Pf");
+            case "S": return categoryMask("Sm") | categoryMask("Sc") | categoryMask("Sk") | categoryMask("So");
+            default: return 0;
+        }
+    }
+
+    static CharPredicate categoryPredicate(final int mask) {
+        return new CharPredicate() {
+            boolean is(int ch) {
+                return Character.isValidCodePoint(ch) && (mask & (1 << Character.getType(ch))) != 0;
+            }
+        };
     }
 
     static final class LiteralPred extends CharPredicate {

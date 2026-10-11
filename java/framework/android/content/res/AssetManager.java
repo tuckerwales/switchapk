@@ -52,6 +52,16 @@ public final class AssetManager implements AutoCloseable {
     public final AssetFileDescriptor openFd(String fileName) throws IOException {
         long[] info = new long[2];
         if (!nAssetInfo(fileName, info)) throw new FileNotFoundException(fileName);
+        String apk = info[0] >= 0 ? nApkPath() : null;
+        if (apk != null) {
+            try {
+                android.os.ParcelFileDescriptor pfd = android.os.ParcelFileDescriptor.open(new java.io.File(apk),
+                        android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+                return new AssetFileDescriptor(this, fileName, pfd, info[0], info[1]);
+            } catch (FileNotFoundException e) {
+                // fall back to an asset-only descriptor
+            }
+        }
         return new AssetFileDescriptor(this, fileName, info[0], info[1]);
     }
 

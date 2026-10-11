@@ -37,8 +37,10 @@ public final class Field extends AccessibleObject implements Member {
     }
 
     public Type getGenericType() {
-        return type;
+        return GenericSignatures.fieldType(this);
     }
+
+    long vmFieldToken() { return vmField; }
 
     private void checkReceiver(Object obj) {
         if (!Modifier.isStatic(modifiers)) {

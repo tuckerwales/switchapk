@@ -341,6 +341,8 @@ public class ContextImpl extends Context {
     @Override
     public Object getSystemService(String name) {
         if (WINDOW_SERVICE.equals(name)) return WindowManagerImpl.getDefault();
+        if (DISPLAY_SERVICE.equals(name)) return android.hardware.display.DisplayManager.create();
+        if (INPUT_SERVICE.equals(name)) return android.hardware.input.InputManager.getInstance();
         if (ALARM_SERVICE.equals(name)) return AlarmManager.getInstance();
         if (NOTIFICATION_SERVICE.equals(name)) return NotificationManager.getInstance();
         if (JOB_SCHEDULER_SERVICE.equals(name)) {
@@ -400,6 +402,8 @@ public class ContextImpl extends Context {
     @Override
     public String getSystemServiceName(Class<?> serviceClass) {
         if (serviceClass == WindowManager.class) return WINDOW_SERVICE;
+        if (serviceClass == android.hardware.display.DisplayManager.class) return DISPLAY_SERVICE;
+        if (serviceClass == android.hardware.input.InputManager.class) return INPUT_SERVICE;
         if (serviceClass == AlarmManager.class) return ALARM_SERVICE;
         if (serviceClass == NotificationManager.class) return NOTIFICATION_SERVICE;
         if (serviceClass == android.app.job.JobScheduler.class) return JOB_SCHEDULER_SERVICE;

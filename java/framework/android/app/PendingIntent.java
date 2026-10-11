@@ -185,7 +185,9 @@ public final class PendingIntent implements Parcelable {
             throw new IllegalArgumentException("Cannot set both FLAG_IMMUTABLE and FLAG_MUTABLE for PendingIntent");
         }
         ApplicationInfo app = ActivityThread.sAppInfo;
-        if (!immutable && !mutable && app != null && app.targetSdkVersion >= 31) {
+        // the S+ rule exists only on devices running S or later (apps gate FLAG_MUTABLE on SDK_INT)
+        if (!immutable && !mutable && app != null && app.targetSdkVersion >= 31
+                && android.os.Build.VERSION.SDK_INT >= 31) {
             throw new IllegalArgumentException(app.packageName + ": Targeting S+ (version 31 and above) requires"
                     + " that one of FLAG_IMMUTABLE or FLAG_MUTABLE be specified when creating a PendingIntent.\n"
                     + "Strongly consider using FLAG_IMMUTABLE, only use FLAG_MUTABLE if some functionality depends"

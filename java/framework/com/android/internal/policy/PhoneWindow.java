@@ -79,9 +79,12 @@ public class PhoneWindow extends Window {
     @Override
     public final void setContainer(Window container) { super.setContainer(container); }
 
+    private boolean mContentParentExplicitlySet;
+
     @Override
     public boolean requestFeature(int featureId) {
-        if (mContentParent != null) throw new android.util.AndroidRuntimeException("requestFeature() must be called before adding content");
+        // AOSP: only once content was set; a decor installed by getDecorView() does not count
+        if (mContentParentExplicitlySet) throw new android.util.AndroidRuntimeException("requestFeature() must be called before adding content");
         final int features = getFeatures();
         final int newFeatures = features | (1 << featureId);
         if ((newFeatures & (1 << FEATURE_CUSTOM_TITLE)) != 0 && (newFeatures & ~(1 << FEATURE_CUSTOM_TITLE)
@@ -101,6 +104,7 @@ public class PhoneWindow extends Window {
         if (mContentParent == null) installDecor();
         else mContentParent.removeAllViews();
         mLayoutInflater.inflate(layoutResID, mContentParent);
+        mContentParentExplicitlySet = true;
         mContentParent.requestApplyInsets();
         final Callback cb = getCallback();
         if (cb != null && !isDestroyed()) cb.onContentChanged();
@@ -117,6 +121,7 @@ public class PhoneWindow extends Window {
         if (mContentParent == null) installDecor();
         else mContentParent.removeAllViews();
         mContentParent.addView(view, params);
+        mContentParentExplicitlySet = true;
         mContentParent.requestApplyInsets();
         final Callback cb = getCallback();
         if (cb != null && !isDestroyed()) cb.onContentChanged();
@@ -126,6 +131,7 @@ public class PhoneWindow extends Window {
     public void addContentView(View view, ViewGroup.LayoutParams params) {
         if (mContentParent == null) installDecor();
         mContentParent.addView(view, params);
+        mContentParentExplicitlySet = true;
         mContentParent.requestApplyInsets();
         final Callback cb = getCallback();
         if (cb != null && !isDestroyed()) cb.onContentChanged();

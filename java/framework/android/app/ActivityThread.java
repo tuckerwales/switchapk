@@ -28,6 +28,7 @@ import android.view.WindowManagerGlobal;
 import android.view.WindowManagerImpl;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Set;
 import org.xmlpull.v1.XmlPullParser;
 
@@ -313,8 +314,8 @@ public final class ActivityThread {
     /** New instance, attach, onCreate. False if it finished (or threw away its record) during onCreate. */
     private static boolean createRecord(ActivityRecord rec, Bundle state, Activity.NonConfigurationInstances nci) {
         ActivityInfo info = rec.parsed.info;
-        Object obj = newComponent(info.name);
-        if (!(obj instanceof Activity)) throw new ClassCastException(info.name + " is not an Activity");
+        Object obj = newComponent(activityClass(info));
+        if (!(obj instanceof Activity)) throw new ClassCastException(activityClass(info) + " is not an Activity");
         Activity a = (Activity) obj;
         rec.activity = a;
         rec.started = false;
@@ -553,6 +554,7 @@ public final class ActivityThread {
         int diff = oldConfig.diff(newConfig);
         sResources.updateConfiguration(newConfig, metrics);
         WindowManagerGlobal.getInstance().onDisplayChanged();
+        android.hardware.display.DisplayManager.dispatchDisplayChanged(android.view.Display.DEFAULT_DISPLAY);
         if (diff == 0) return;
         Configuration config = new Configuration(sResources.getConfiguration());
         sApplication.onConfigurationChanged(new Configuration(config));
@@ -600,8 +602,29 @@ public final class ActivityThread {
         return info.name != null && info.name.equals(cls) && component.getPackageName().equals(info.packageName);
     }
 
+    /** PackageManager.setComponentEnabledSetting states, by component (not persisted across runs). */
+    static final HashMap<ComponentName, Integer> sComponentEnabled = new HashMap<ComponentName, Integer>();
+
+    /** The manifest's android:enabled unless PackageManager overrode it (AOSP ComponentInfo.isEnabled). */
+    static boolean isEnabled(android.content.pm.ComponentInfo info) {
+        Integer state;
+        synchronized (sComponentEnabled) {
+            state = sComponentEnabled.get(new ComponentName(info.packageName, info.name));
+        }
+        if (state == null || state.intValue() == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT) {
+            return info.enabled;
+        }
+        return state.intValue() == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+    }
+
+    /** The class an activity record instantiates: an alias runs its target. */
+    static String activityClass(ActivityInfo info) {
+        return info.targetActivity != null ? info.targetActivity : info.name;
+    }
+
     static boolean matches(ParsedActivity parsed, Intent intent) {
         if (parsed == null || intent == null) return false;
+        if (!isEnabled(parsed.info)) return false;
         ComponentName component = intent.getComponent();
         if (component != null) return sameComponent(parsed.info, component);
         if (intent.getPackage() != null && !intent.getPackage().equals(parsed.info.packageName)) return false;
@@ -697,7 +720,27 @@ public final class ActivityThread {
         return config;
     }
 
+    /** Manifest version and requested permissions (ApplicationPackageManager.getPackageInfo). */
+    static int sVersionCode;
+    static int sVersionCodeMajor;
+    static int sVersionNameRes;
+    static String sVersionName;
+    static final ArrayList<String> sRequestedPermissions = new ArrayList<String>();
+
+    /** framework-internal: android:versionName, resolving a string resource. */
+    static String versionName() {
+        if (sVersionNameRes != 0 && sResources != null) {
+            try {
+                return sResources.getString(sVersionNameRes);
+            } catch (RuntimeException e) {
+                return null;
+            }
+        }
+        return sVersionName;
+    }
+
     private static void parseManifest() throws Exception {
+        sRequestedPermissions.clear();
         sActivities.clear();
         sReceivers.clear();
         sServices.clear();
@@ -716,11 +759,54 @@ public final class ActivityThread {
                     if ("manifest".equals(name)) {
                         sPackageName = parser.getAttributeValue(null, "package");
                         if (sPackageName == null) sPackageName = parser.getAttributeValue("", "package");
+                        sVersionCode = attrInt(parser, android.R.attr.versionCode, "versionCode", 0);
+                        sVersionCodeMajor = attrInt(parser, android.R.attr.versionCodeMajor, "versionCodeMajor", 0);
+                        sVersionNameRes = attrRes(parser, android.R.attr.versionName, "versionName");
+                        sVersionName = sVersionNameRes != 0 ? null
+                                : attrString(parser, android.R.attr.versionName, "versionName");
+                    } else if ("uses-permission".equals(name) || "uses-permission-sdk-23".equals(name)) {
+                        String permission = attrString(parser, android.R.attr.name, "name");
+                        if (permission != null && !sRequestedPermissions.contains(permission)) {
+                            sRequestedPermissions.add(permission);
+                        }
                     } else if ("uses-sdk".equals(name)) {
                         readUsesSdk(parser);
                     } else if ("application".equals(name)) {
                         readApplication(parser);
-                    } else if ("activity".equals(name) || "activity-alias".equals(name) || "receiver".equals(name)) {
+                    } else if ("activity-alias".equals(name)) {
+                        // AOSP parseActivityAlias: the target (declared earlier) supplies everything but the
+                        // alias's name, label, icon, enabled/exported state, filters and meta-data
+                        String target = qualify(sPackageName,
+                                attrString(parser, android.R.attr.targetActivity, "targetActivity"));
+                        ParsedActivity targetParsed = null;
+                        for (int i = 0; i < sActivities.size() && targetParsed == null; i++) {
+                            if (sActivities.get(i).info.name.equals(target)) targetParsed = sActivities.get(i);
+                        }
+                        if (targetParsed == null) {
+                            Log.w(TAG, "activity-alias " + attrString(parser, android.R.attr.name, "name")
+                                    + ": target activity " + target + " not found");
+                            // skip its filters and meta-data
+                            int depth = parser.getDepth();
+                            while ((type = parser.next()) != XmlPullParser.END_DOCUMENT
+                                    && (type != XmlPullParser.END_TAG || parser.getDepth() > depth)) {}
+                            activity = null;
+                            filter = null;
+                            continue;
+                        }
+                        ActivityInfo info = new ActivityInfo(targetParsed.info);
+                        info.metaData = null;
+                        info.labelRes = 0;
+                        info.nonLocalizedLabel = null;
+                        info.targetActivity = target;
+                        fillComponent(info, parser);
+                        if (info.icon == 0) info.icon = targetParsed.info.icon;
+                        if (info.labelRes == 0 && info.nonLocalizedLabel == null) {
+                            info.labelRes = targetParsed.info.labelRes;
+                            info.nonLocalizedLabel = targetParsed.info.nonLocalizedLabel;
+                        }
+                        activity = new ParsedActivity(info, false);
+                        filter = null;
+                    } else if ("activity".equals(name) || "receiver".equals(name)) {
                         ActivityInfo info = new ActivityInfo();
                         fillComponent(info, parser);
                         info.theme = attrRes(parser, android.R.attr.theme, "theme");
@@ -908,7 +994,7 @@ public final class ActivityThread {
         info.name = qualify(sPackageName, attrString(parser, android.R.attr.name, "name"));
         info.icon = attrRes(parser, android.R.attr.icon, "icon");
         info.exported = attrBool(parser, android.R.attr.exported, "exported", false);
-        info.enabled = true;
+        info.enabled = attrBool(parser, android.R.attr.enabled, "enabled", true);
         applyLabel(info, parser);
     }
 
@@ -946,6 +1032,15 @@ public final class ActivityThread {
     }
 
     private static ParsedActivity findLauncher() {
+        // an enabled MAIN/LAUNCHER entry first (apps switch launcher aliases with enabled states)
+        for (int i = 0; i < sActivities.size(); i++) {
+            ParsedActivity parsed = sActivities.get(i);
+            if (!isEnabled(parsed.info)) continue;
+            for (int j = 0; j < parsed.filters.size(); j++) {
+                IntentFilter filter = parsed.filters.get(j);
+                if (filter.hasAction(Intent.ACTION_MAIN) && filter.hasCategory(Intent.CATEGORY_LAUNCHER)) return parsed;
+            }
+        }
         for (int i = 0; i < sActivities.size(); i++) {
             ParsedActivity parsed = sActivities.get(i);
             for (int j = 0; j < parsed.filters.size(); j++) {
@@ -976,8 +1071,8 @@ public final class ActivityThread {
      */
     static Activity startActivityNow(Activity parent, String id, Intent intent, ActivityInfo info, Bundle state,
             Activity.NonConfigurationInstances nci) {
-        final Object obj = newComponent(info.name);
-        if (!(obj instanceof Activity)) throw new ClassCastException(info.name + " is not an Activity");
+        final Object obj = newComponent(activityClass(info));
+        if (!(obj instanceof Activity)) throw new ClassCastException(activityClass(info) + " is not an Activity");
         final Activity a = (Activity) obj;
         a.attach(sContext.createComponentContext(a), info, intent, sApplication, parent, id, nci,
                 sResources.getConfiguration());

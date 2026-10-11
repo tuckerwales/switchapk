@@ -9,7 +9,7 @@ public final class Method extends Executable {
     }
 
     public Type getGenericReturnType() {
-        return returnType;
+        return GenericSignatures.returnType(this);
     }
 
     public boolean isDefault() {

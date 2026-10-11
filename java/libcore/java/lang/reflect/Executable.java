@@ -42,11 +42,11 @@ public abstract class Executable extends AccessibleObject implements Member, Gen
     }
 
     public Type[] getGenericParameterTypes() {
-        return getParameterTypes();
+        return GenericSignatures.parameterTypes(this);
     }
 
     public Class<?>[] getExceptionTypes() {
-        return new Class<?>[0];
+        return GenericSignatures.declaredExceptions(this);
     }
 
     public java.lang.annotation.Annotation[][] getParameterAnnotations() {
@@ -54,7 +54,7 @@ public abstract class Executable extends AccessibleObject implements Member, Gen
     }
 
     public TypeVariable<?>[] getTypeParameters() {
-        return new TypeVariable<?>[0];
+        return GenericSignatures.typeParameters(this);
     }
 
     String getSignatureKey() {
@@ -90,7 +90,7 @@ public abstract class Executable extends AccessibleObject implements Member, Gen
     }
 
     public Type[] getGenericExceptionTypes() {
-        return getExceptionTypes();
+        return GenericSignatures.genericExceptionTypes(this);
     }
 
     /* Generic signatures are not read, so this is toString(). */

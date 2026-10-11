@@ -34,6 +34,7 @@ public class UtilTest {
     public static void main(String[] args) throws Exception {
         immutables();
         atomicPairs();
+        streamFields();
         arrays();
         spliterators();
         collections();
@@ -352,6 +353,21 @@ public class UtilTest {
         Locale.setDefault(saved);
         p(Locale.getDefault(Locale.Category.DISPLAY) + " " + new Locale("en", "US").equals(Locale.US) + " "
                 + Locale.forLanguageTag("en-US-u-ca-x").equals(Locale.US) + " " + (Locale.getAvailableLocales().length > 100));
+    }
+
+    static void streamFields() {
+        p("-- streamFields");
+        java.io.ObjectStreamField[] f = {
+            new java.io.ObjectStreamField("table", Object[].class),
+            new java.io.ObjectStreamField("count", Integer.TYPE),
+            new java.io.ObjectStreamField("name", String.class, true),
+            new java.io.ObjectStreamField("alpha", Long.TYPE),
+        };
+        Arrays.sort(f);
+        for (java.io.ObjectStreamField x : f) {
+            p(x + " code=" + x.getTypeCode() + " prim=" + x.isPrimitive() + " str=" + x.getTypeString()
+                    + " unshared=" + x.isUnshared() + " type=" + x.getType().getName() + " off=" + x.getOffset());
+        }
     }
 
     static void atomicPairs() {

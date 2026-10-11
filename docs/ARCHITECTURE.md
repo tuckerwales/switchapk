@@ -134,6 +134,24 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
   also accepted. CLASS and SOURCE retention are not returned.
   Parameter annotations are not. `@Inherited` on a class annotation is
   visible through `getAnnotation` on subclasses.
+- Generic reflection: `java.lang.reflect.GenericSignatures` parses the
+  `dalvik.annotation.Signature` system annotations d8 writes (native
+  `readSystemNative` in java_annotation.c returns a system annotation's
+  `value`) for `Field.getGenericType`, `Method.getGenericReturnType`,
+  `get(Generic)ParameterTypes`, `getTypeParameters`, and
+  `Class.getGenericSuperclass/Interfaces`; `getExceptionTypes` reads
+  `dalvik.annotation.Throws`. ParameterizedType, WildcardType,
+  GenericArrayType and TypeVariable follow the JDK's toString, equals and
+  hashCode (tests/dex/GenericsTest matches OpenJDK). Type variables resolve
+  against the method, its class and enclosing classes; classes load without
+  initialization and a missing one throws TypeNotPresentException.
+- `sun.misc.Unsafe` (ART's hidden subset; desugared `j$.util.concurrent`
+  and libraries reach it through `theUnsafe`): field offsets are
+  `Field.offset` bytes from the object, array offsets are 16 plus index
+  times element size against the array's data pointer (bounds-checked),
+  and get/put/compareAndSwap are natives in java_unsafe.c, atomic because
+  they hold the GIL. Volatile and ordered forms are the plain ones; park
+  maps to LockSupport. No raw-memory calls (allocateMemory, address get/put).
 
 ### 4.3 Interpreter
 - Non-recursive switch interpreter over a per-thread register stack
@@ -263,6 +281,8 @@ JDK's Xerces does). SAX1 (`Parser`, `HandlerBase`) exists only for signatures:
 `SAXParser.getParser()` throws and `parse(..., HandlerBase)` throws SAXException.
 `getSchema`/`setSchema` are absent (no `javax.xml.validation`). `android.util.Xml.parse`
 overloads use the same reader.
+`java.io.ObjectStreamField` exists for `serialPersistentFields` declarations
+(desugared ConcurrentHashMap); ObjectOutputStream/ObjectInputStream do not.
 `ProcessBuilder.start()` and every `Runtime.exec` fail like a failed exec on Android, with an
 IOException "Cannot run program ...: error=38, Function not implemented": there are no child
 processes on the Switch and the host does not run bionic executables. Apps that start helper
@@ -785,6 +805,26 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   that fire during layout are posted (AdapterView SelectionNotifier), so
   listeners can change other views. Transitions and window animations
   are not run.
+- Activity aliases: an `<activity-alias>` copies its target's ActivityInfo
+  (declared earlier) and keeps its own name, label, icon, enabled/exported
+  state, filters and meta-data; `ActivityInfo.targetActivity` names the class
+  that runs. `android:enabled` is honoured, overridden by
+  `PackageManager.setComponentEnabledSetting` (process-wide, not persisted);
+  disabled activities never resolve, and the launcher is the first enabled
+  MAIN/LAUNCHER entry. PackageInfo carries the manifest versionCode(Major),
+  versionName (string resources resolved), install times from the APK's mtime
+  and, with GET_PERMISSIONS, the requested permissions (all granted).
+- DisplayManager has the one display; a docked/handheld change reaches
+  DisplayListeners as onDisplayChanged(DEFAULT_DISPLAY); createVirtualDisplay
+  returns null. InputManager lists InputDevice's fixed devices; its listeners
+  register but never fire.
+- `AssetManager.openFd` returns a real read-only descriptor on the APK, at
+  the entry's data offset, for stored (uncompressed) assets; compressed ones
+  keep a descriptor-less AssetFileDescriptor that our media APIs read
+  through AssetManager (Android would throw). MediaPlayer and SoundPool
+  read `(fd, offset, length)` by seeking the descriptor.
+- `Window.requestFeature` throws only after content was set (setContentView
+  or addContentView), as AOSP, not when getDecorView installed the decor.
 - Preferences (`android.preference`, AOSP ports on framework-res layouts
   and styles): Preference with its persistence to the default
   SharedPreferences (or a PreferenceDataStore), PreferenceGroup/Category/

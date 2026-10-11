@@ -893,3 +893,15 @@ what is left in flight.
   now draw (DroidFish's engine reports "Cannot run program"). New first
   blockers: Blockinger needs the Holo decor ActionBarView, Solitaire an
   AIOOBE in its own code; the rest are unchanged (COMPATIBILITY findings).
+- 2026-10-11, corpus push: activity-alias with android:enabled and
+  setComponentEnabledSetting; regex `\p{InBlock}`, `blk=`, `gc=` and the
+  general categories over Character.getType; DisplayManager and
+  InputManager; real APK descriptors from AssetManager.openFd; manifest
+  versionCode/versionName and requested permissions in PackageInfo;
+  requestFeature only throws after setContentView; WindowManagerGlobal
+  removes a window after its focus-loss callbacks; ObjectStreamField;
+  sun.misc.Unsafe natives (tests/dex/UnsafeTest); generic signatures for
+  reflection (tests/dex/GenericsTest); a stack overflow of the method
+  descriptor buffer in dex_proto_desc (Kotlin reflection aborted the host).
+  Shattered PD, Vector Pinball and Unciv now draw: 9 of the 13 open apps.
+  All dex tests and the 39 single-script sample checks plus prefs pass.

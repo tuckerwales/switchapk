@@ -8,8 +8,10 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Describes an asset inside the APK. There is no real file descriptor; media
- * APIs recognise AssetFileDescriptor and read the asset through AssetManager.
+ * Describes an asset inside the APK. An asset stored uncompressed gets a real read-only
+ * descriptor on the APK with the entry's data offset, as on Android. A compressed asset
+ * (where Android's openFd throws) keeps no descriptor; our media APIs recognise
+ * AssetFileDescriptor and read either kind through AssetManager.
  */
 public class AssetFileDescriptor implements Closeable, android.os.Parcelable {
     public static final long UNKNOWN_LENGTH = -1;
@@ -21,9 +23,13 @@ public class AssetFileDescriptor implements Closeable, android.os.Parcelable {
     private final long mLength;
 
     AssetFileDescriptor(AssetManager assets, String name, long offset, long length) {
+        this(assets, name, null, offset, length);
+    }
+
+    AssetFileDescriptor(AssetManager assets, String name, ParcelFileDescriptor fd, long offset, long length) {
         mAssets = assets;
         mAssetName = name;
-        mFd = null;
+        mFd = fd;
         mStartOffset = offset;
         mLength = length;
     }
@@ -43,10 +49,12 @@ public class AssetFileDescriptor implements Closeable, android.os.Parcelable {
     public long getStartOffset() { return mStartOffset < 0 ? 0 : mStartOffset; }
     public long getLength() { return mLength; }
     public long getDeclaredLength() { return mLength; }
-    public void close() throws IOException {}
+    public void close() throws IOException {
+        if (mFd != null) mFd.close();
+    }
 
     public java.io.FileInputStream createInputStream() throws IOException {
-        if (mAssetName != null) return new AutoCloseInputStream(mAssets.open(mAssetName));
+        if (mAssetName != null) return new AutoCloseInputStream(this);
         if (mFd != null) return new ParcelFileDescriptor.AutoCloseInputStream(mFd);
         return new AutoCloseInputStream(new ByteArrayInputStream(new byte[0]));
     }
@@ -58,14 +66,18 @@ public class AssetFileDescriptor implements Closeable, android.os.Parcelable {
     /** A FileInputStream over an in-memory asset. */
     public static class AutoCloseInputStream extends java.io.FileInputStream {
         private final InputStream mIn;
+        private final AssetFileDescriptor mOwner;
 
         AutoCloseInputStream(InputStream in) {
             super(new FileDescriptor());
             mIn = in;
+            mOwner = null;
         }
 
         public AutoCloseInputStream(AssetFileDescriptor fd) throws IOException {
-            this(fd.mAssetName != null ? fd.mAssets.open(fd.mAssetName) : new ByteArrayInputStream(new byte[0]));
+            super(new FileDescriptor());
+            mIn = fd.mAssetName != null ? fd.mAssets.open(fd.mAssetName) : new ByteArrayInputStream(new byte[0]);
+            mOwner = fd;
         }
 
         @Override public int read() throws IOException { return mIn.read(); }
@@ -73,7 +85,10 @@ public class AssetFileDescriptor implements Closeable, android.os.Parcelable {
         @Override public int read(byte[] b, int off, int len) throws IOException { return mIn.read(b, off, len); }
         @Override public long skip(long n) throws IOException { return mIn.skip(n); }
         @Override public int available() throws IOException { return mIn.available(); }
-        @Override public void close() throws IOException { mIn.close(); }
+        @Override public void close() throws IOException {
+            mIn.close();
+            if (mOwner != null) mOwner.close();
+        }
         @Override public boolean markSupported() { return mIn.markSupported(); }
         @Override public synchronized void mark(int readlimit) { mIn.mark(readlimit); }
         @Override public synchronized void reset() throws IOException { mIn.reset(); }

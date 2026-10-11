@@ -340,9 +340,54 @@ NATIVE(AnnotationParser_readDefault) {
     R_OBJ(v);
 }
 
+#define VIS_SYSTEM 2
+
+/* static native Object readSystemNative(Class owner, int kind, long token, String annotation, String expect):
+ * the value element of a build-time system annotation (dalvik.annotation.Signature, Throws, ...), or null. */
+NATIVE(AnnotationParser_readSystem) {
+    Object *owner = A_OBJ(0);
+    int kind = A_INT(1);
+    int64_t token = A_LONG(2);
+    char *want = nat_str(A_OBJ(4));
+    char *expect = nat_str(A_OBJ(5));
+    Class *c = NULL;
+    Class *mirror = (kind == 0 && owner) ? vm_class_from_mirror(owner) : NULL;
+    const uint8_t *set = want && expect ? set_for(kind, mirror, token, &c) : NULL;
+    Object *result = NULL;
+    if (set && c && c->dex) {
+        DexFile *d = c->dex;
+        uint32_t n = sa_rd32(set);
+        for (uint32_t i = 0; i < n && !result && !t->exception; i++) {
+            uint32_t off = sa_rd32(set + 4 + i * 4);
+            if (!off || off >= d->size) continue;
+            const uint8_t *item = d->base + off;
+            if (*item != VIS_SYSTEM) continue;
+            const uint8_t *q = item + 1;
+            uint32_t type_idx = dex_uleb128(&q);
+            if (strcmp(dex_type_desc(d, type_idx), want) != 0) continue;
+            uint32_t ne = dex_uleb128(&q);
+            for (uint32_t e = 0; e < ne; e++) {
+                const char *ename = dex_string(d, dex_uleb128(&q));
+                if (strcmp(ename, "value") != 0) {
+                    dex_skip_encoded_value(&q);
+                    continue;
+                }
+                result = encoded_to_java(t, d, &q, expect);
+                break;
+            }
+        }
+    }
+    free(want);
+    free(expect);
+    if (t->exception) return;
+    R_OBJ(result);
+}
+
 static const NativeMethodReg g_ann_regs[] = {
     {"Ljava/lang/reflect/AnnotationParser;", "readNative", "(Ljava/lang/Class;IJ)[Ljava/lang/Object;",
      AnnotationParser_readNative},
+    {"Ljava/lang/reflect/GenericSignatures;", "readSystemNative",
+     "(Ljava/lang/Class;IJLjava/lang/String;Ljava/lang/String;)Ljava/lang/Object;", AnnotationParser_readSystem},
     {"Ljava/lang/reflect/AnnotationParser;", "readDefaultNative", "(J)Ljava/lang/Object;",
      AnnotationParser_readDefault},
 };

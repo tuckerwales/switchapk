@@ -22,7 +22,6 @@ import java.util.List;
 
 /** framework-internal. Package queries for the single loaded APK. */
 public class ApplicationPackageManager extends PackageManager {
-    private final HashMap<ComponentName, Integer> mComponentEnabled = new HashMap<ComponentName, Integer>();
     private final HashMap<String, Integer> mAppEnabled = new HashMap<String, Integer>();
 
     @Override
@@ -31,6 +30,18 @@ public class ApplicationPackageManager extends PackageManager {
         PackageInfo pi = new PackageInfo();
         pi.packageName = packageName;
         pi.applicationInfo = ActivityThread.sAppInfo;
+        pi.versionCode = ActivityThread.sVersionCode;
+        pi.versionCodeMajor = ActivityThread.sVersionCodeMajor;
+        pi.versionName = ActivityThread.versionName();
+        long installed = ActivityThread.sApkPath != null ? new java.io.File(ActivityThread.sApkPath).lastModified() : 0;
+        pi.firstInstallTime = installed;
+        pi.lastUpdateTime = installed;
+        if ((flags & GET_PERMISSIONS) != 0 && !ActivityThread.sRequestedPermissions.isEmpty()) {
+            pi.requestedPermissions = ActivityThread.sRequestedPermissions.toArray(new String[0]);
+            // install-time grant: every requested permission is granted
+            pi.requestedPermissionsFlags = new int[pi.requestedPermissions.length];
+            java.util.Arrays.fill(pi.requestedPermissionsFlags, PackageInfo.REQUESTED_PERMISSION_GRANTED);
+        }
         if ((flags & GET_ACTIVITIES) != 0) pi.activities = activityInfos(false);
         if ((flags & GET_RECEIVERS) != 0) pi.receivers = activityInfos(true);
         if ((flags & GET_SERVICES) != 0) pi.services = serviceInfos();
@@ -281,12 +292,17 @@ public class ApplicationPackageManager extends PackageManager {
 
     @Override
     public void setComponentEnabledSetting(ComponentName componentName, int newState, int flags) {
-        mComponentEnabled.put(componentName, Integer.valueOf(newState));
+        synchronized (ActivityThread.sComponentEnabled) {
+            ActivityThread.sComponentEnabled.put(componentName, Integer.valueOf(newState));
+        }
     }
 
     @Override
     public int getComponentEnabledSetting(ComponentName componentName) {
-        Integer state = mComponentEnabled.get(componentName);
+        Integer state;
+        synchronized (ActivityThread.sComponentEnabled) {
+            state = ActivityThread.sComponentEnabled.get(componentName);
+        }
         return state != null ? state.intValue() : COMPONENT_ENABLED_STATE_DEFAULT;
     }
 

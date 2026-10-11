@@ -76,10 +76,11 @@ public final class WindowManagerGlobal {
     public void removeView(View view) {
         ViewRootImpl root = find(view);
         if (root == null) throw new IllegalArgumentException("View=" + view + " not attached to window manager");
+        // die() first: focus-loss and detach callbacks may still update this window's attributes
+        root.die();
         mRoots.remove(root);
         if (mTouchRoot == root) mTouchRoot = null;
         if (mFocusedRoot == root) mFocusedRoot = null;
-        root.die();
         updateFocusedWindow();
         scheduleCommit();
     }

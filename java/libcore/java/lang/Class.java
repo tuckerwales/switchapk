@@ -108,11 +108,11 @@ public final class Class<T> implements java.io.Serializable, GenericDeclaration,
     public native Class<? super T> getSuperclass();
 
     public Type getGenericSuperclass() {
-        return getSuperclass();
+        return java.lang.reflect.GenericSignatures.superclass(this);
     }
 
     public Type[] getGenericInterfaces() {
-        return getInterfaces();
+        return java.lang.reflect.GenericSignatures.interfaces(this);
     }
 
     public native Class<?>[] getInterfaces();
@@ -429,7 +429,8 @@ public final class Class<T> implements java.io.Serializable, GenericDeclaration,
 
     @SuppressWarnings("unchecked")
     public TypeVariable<Class<T>>[] getTypeParameters() {
-        return new TypeVariable[0];
+        if (isArray() || isPrimitive()) return new TypeVariable[0];
+        return java.lang.reflect.GenericSignatures.typeParameters(this);
     }
 
     public Class<?>[] getDeclaredClasses() {

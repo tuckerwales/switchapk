@@ -36,7 +36,9 @@ public class Typeface {
         DEFAULT_BOLD = DEFAULT.withStyle(BOLD);
         SANS_SERIF = DEFAULT;
         SERIF = new Typeface(sRegular, sBold, NORMAL, "serif");
-        MONOSPACE = new Typeface(sRegular, sBold, NORMAL, "monospace");
+        // Droid Sans Mono, as on Android; bold is synthesized (there is no bold cut).
+        long mono = nMonospace();
+        MONOSPACE = new Typeface(mono, 0, NORMAL, "monospace");
         sFamilies.put("sans-serif", DEFAULT);
         sFamilies.put("serif", SERIF);
         sFamilies.put("monospace", MONOSPACE);
@@ -194,16 +196,77 @@ public class Typeface {
         }
     }
 
+    /**
+     * A typeface from font families: the first family's closest font to the style is drawn, its
+     * closest bold font serves bold (else bold is synthesized). Glyphs missing from it come from the
+     * system fallback chain; extra custom fallback families are accepted and not consulted.
+     */
     public static final class CustomFallbackBuilder {
-        private Typeface mTf;
-        public CustomFallbackBuilder(android.graphics.fonts.FontFamily family) {}
-        public CustomFallbackBuilder setSystemFallback(String familyName) { mTf = create(familyName, NORMAL); return this; }
-        public CustomFallbackBuilder setStyle(android.graphics.fonts.FontStyle style) { return this; }
-        public CustomFallbackBuilder addCustomFallback(android.graphics.fonts.FontFamily family) { return this; }
-        public Typeface build() { return mTf != null ? mTf : DEFAULT; }
+        private final android.graphics.fonts.FontFamily mFamily;
+        private android.graphics.fonts.FontStyle mStyle = new android.graphics.fonts.FontStyle();
+        private String mSystemFallback;
+        private int mFallbacks;
+
+        public CustomFallbackBuilder(android.graphics.fonts.FontFamily family) {
+            if (family == null) throw new NullPointerException("family must not be null");
+            mFamily = family;
+        }
+
+        public static int getMaxCustomFallbackCount() { return 64; }
+
+        public CustomFallbackBuilder setSystemFallback(String familyName) {
+            if (familyName == null) throw new NullPointerException("familyName must not be null");
+            mSystemFallback = familyName;
+            return this;
+        }
+
+        public CustomFallbackBuilder setStyle(android.graphics.fonts.FontStyle style) {
+            mStyle = style;
+            return this;
+        }
+
+        public CustomFallbackBuilder addCustomFallback(android.graphics.fonts.FontFamily family) {
+            if (family == null) throw new NullPointerException("family must not be null");
+            if (++mFallbacks >= getMaxCustomFallbackCount()) throw new IllegalArgumentException("Custom fallback limit exceeded(64)");
+            return this;
+        }
+
+        public Typeface build() {
+            android.graphics.fonts.Font regular = mFamily.getClosestMatch(mStyle);
+            android.graphics.fonts.Font bold = mFamily.getClosestMatch(new android.graphics.fonts.FontStyle(
+                    Math.max(mStyle.getWeight(), 700), mStyle.getSlant()));
+            long r = regular != null ? regular.getNativePtr() : 0;
+            if (r == 0) return mSystemFallback != null ? create(mSystemFallback, NORMAL) : DEFAULT;
+            long b = bold != null && bold != regular && bold.getStyle().getWeight() >= 600 ? bold.getNativePtr() : 0;
+            Typeface t = new Typeface(r, b, NORMAL, mSystemFallback != null ? mSystemFallback : "custom");
+            int fontWeight = regular.getStyle().getWeight();
+            boolean italic = mStyle.getSlant() == android.graphics.fonts.FontStyle.FONT_SLANT_ITALIC;
+            // The drawn font already has its weight; only synthesize what it lacks.
+            int want = mStyle.getWeight();
+            t.applyStyle((want >= 600 ? BOLD : 0) | (italic ? ITALIC : 0), want);
+            if (want >= 600 && fontWeight >= 600) {
+                t.mNative = r;
+                t.mFakeBold = false;
+            }
+            if (italic && regular.getStyle().getSlant() == android.graphics.fonts.FontStyle.FONT_SLANT_ITALIC) t.mItalic = false;
+            return t;
+        }
+    }
+
+    /** framework-internal: loads font bytes for android.graphics.fonts.Font (0 if they do not parse). */
+    public static long loadNativeFont(byte[] data) {
+        if (data == null || data.length == 0) return 0;
+        return nLoad(data);
+    }
+
+    /** framework-internal: a plain typeface over one Font, for Font.getMetrics. */
+    public static Typeface createFromFontForMetrics(android.graphics.fonts.Font font) {
+        long h = font.getNativePtr();
+        return h == 0 ? DEFAULT : new Typeface(h, 0, NORMAL, "custom");
     }
 
     static native long nDefault(boolean bold);
+    static native long nMonospace();
     static native long nLoad(byte[] data);
     static native long nLoadFile(String path);
 }

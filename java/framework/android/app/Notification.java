@@ -143,6 +143,15 @@ public class Notification implements Parcelable {
     public PendingIntent deleteIntent;
     public PendingIntent fullScreenIntent;
     public CharSequence tickerText;
+    // Custom layouts are kept for apps that read them back; switchapk does not inflate them.
+    @Deprecated
+    public android.widget.RemoteViews contentView;
+    @Deprecated
+    public android.widget.RemoteViews bigContentView;
+    @Deprecated
+    public android.widget.RemoteViews headsUpContentView;
+    @Deprecated
+    public android.widget.RemoteViews tickerView;
     public Bitmap largeIcon;
     public Uri sound;
     public int audioStreamType = STREAM_DEFAULT;
@@ -797,6 +806,38 @@ public class Notification implements Parcelable {
         }
 
         public Builder setTicker(CharSequence tickerText) { mN.tickerText = safeCharSequence(tickerText); return this; }
+
+        @Deprecated
+        public Builder setTicker(CharSequence tickerText, android.widget.RemoteViews views) {
+            mN.tickerText = safeCharSequence(tickerText);
+            mN.tickerView = views;
+            return this;
+        }
+
+        @Deprecated
+        public Builder setContent(android.widget.RemoteViews views) { return setCustomContentView(views); }
+
+        public Builder setCustomContentView(android.widget.RemoteViews contentView) {
+            mN.contentView = contentView;
+            return this;
+        }
+
+        public Builder setCustomBigContentView(android.widget.RemoteViews contentView) {
+            mN.bigContentView = contentView;
+            return this;
+        }
+
+        public Builder setCustomHeadsUpContentView(android.widget.RemoteViews contentView) {
+            mN.headsUpContentView = contentView;
+            return this;
+        }
+
+        /** The custom view if one was set; switchapk builds no template RemoteViews. */
+        public android.widget.RemoteViews createContentView() { return mN.contentView; }
+
+        public android.widget.RemoteViews createBigContentView() { return mN.bigContentView; }
+
+        public android.widget.RemoteViews createHeadsUpContentView() { return mN.headsUpContentView; }
 
         public Builder setLargeIcon(Bitmap b) { return setLargeIcon(b != null ? Icon.createWithBitmap(b) : null); }
 

@@ -1022,6 +1022,32 @@ what is left in flight.
   `getInstalledAccessibilityServiceList` (both empty). Checked on the host
   with a view that does Compose's lookups from onAttachedToWindow; the
   Compose app itself has not been rerun.
+- Checked against the Seren apps' release APKs (github.com/tuckerwales/
+  seren, Actions artifacts: auth, edit, files, ssh, all Jetpack Compose).
+  A scanner over their dex method and field references listed what the
+  framework lacked; then each app was run on the host until it drew.
+  Fixed on the way: CursorAnchorInfo and EditorBoundsInfo plus the
+  InputMethodManager update calls (Compose's root view builds one); the
+  keyboard bridge reaches any text editor through onCreateInputConnection,
+  so Compose text fields take swkbd text; FileLock and the
+  AbstractInterruptibleChannel/SeekableByteChannel hierarchy (DataStore
+  locks and closes its file); MappedByteBuffer; BreakIterator's full API
+  with grapheme rules; StorageManager and StorageVolume.
+- WS17 claimed and started: the JCA (provider framework, built-in
+  provider with digests, HMAC, AES in four modes, PBKDF2) and a software
+  AndroidKeyStore. SecureRandom was java.util.Random seeded from the
+  clock; it now reads OS entropy (`platform_random_bytes`, also used by
+  the Switch SQLite VFS, which had a fixed-seed LCG). tests/dex/CryptoTest
+  matches OpenJDK; tests/apps/keystore passes over two runs.
+- Result on the host: all four Seren apps start and draw. Seren Auth adds
+  an account through "Enter setup key" (typing into Compose fields),
+  stores the secret encrypted with its AndroidKeyStore key, shows the
+  same TOTP codes as Python's reference, and reads the account back in a
+  new process. Not yet: Seren SSH needs RSA/EC/DH (next WS17 step);
+  nothing new was run on hardware. The Switch build (libnx `randomGet`,
+  the VFS change) was compiled only by the Package NRO workflow, which
+  passed.
+
 - 2026-10-11, in-process executables: ProcessBuilder runs bionic PIE
   executables inside switchapk (spawn.c: fresh image, kernel-style stack into
   _start, __libc_init, per-thread process context for stdio, fds 0-2, exit,
@@ -1056,3 +1082,16 @@ what is left in flight.
   now that NIO selectors let it get that far. A TrustManagerFactory whose
   getInstance throws NoSuchAlgorithmException makes it a caught connection
   failure; the tap now picks a language as it should.
+- 2026-10-11, PR 22 brought up to date with main (after PR 26 merged).
+  Main had landed parallel versions of this branch's java.util.logging,
+  FileLock/FileChannel/MappedByteBuffer and autofill/CursorAnchorInfo
+  work; main's were kept (with its HeapByteBuffer), and the now unused
+  libcore.io.Logcat bridge was dropped. This branch still brings WS17
+  (JCA providers, AES/HMAC/PBKDF2, RSA, EC, DH, the software
+  AndroidKeyStore), native BigInteger arithmetic, piped streams, custom
+  font families and the monospace face, StatFs over statvfs,
+  ThumbnailUtils, StorageManager and the Notification view fields. After
+  the merge all 19 dex tests (CryptoTest, PublicKeyTest, BigIntegerTest
+  and PipeLogTest included), the C tests and the samples (keystore
+  included) pass on the host, all 14 corpus apps draw (OSRS and Unciv as
+  on main), and the Switch build links.

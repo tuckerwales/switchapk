@@ -147,6 +147,7 @@ typedef struct GfxFont GfxFont;
 bool gfx_font_init_default(void);           /* finds a system font */
 GfxFont *gfx_font_load(const uint8_t *data, size_t len, bool take_ownership);
 GfxFont *gfx_font_default(bool bold);
+GfxFont *gfx_font_monospace(void);       /* Droid Sans Mono (or a system monospace font, else the default) */
 void gfx_font_register_default(GfxFont *regular, GfxFont *bold);
 /* Metrics at a given pixel size: ascent (negative, Android convention), descent, leading. */
 void gfx_font_metrics(GfxFont *f, float size, float *ascent, float *descent, float *leading);

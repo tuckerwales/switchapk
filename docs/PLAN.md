@@ -399,6 +399,21 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     blocking and non-blocking (tests/dex/SelectorTest against OpenJDK)
   - [ ] connection pooling, CookieManager, proxies
   - [ ] sockets and nifm on hardware
+- [ ] WS17 crypto (JCA)
+  - [x] provider framework (Provider, Service, Security, SPIs, engines,
+    Cipher transformation lookup and delayed provider choice), keys and
+    specs, KeyStore API
+  - [x] built-in provider: MD5, SHA-1/2, HMAC, AES ECB/CBC/CTR/GCM,
+    PBKDF2, KeyGenerators, AlgorithmParameters; SecureRandom on OS
+    entropy (tests/dex/CryptoTest against OpenJDK)
+  - [x] AndroidKeyStore: AES and HMAC keys, KeyGenParameterSpec,
+    KeyProtection import, KeyInfo, authorizations, kept in the app data
+    directory (tests/apps/keystore, two runs)
+  - [ ] RSA, EC (P-256/384/521), DH/ECDH, X25519, Ed25519: KeyFactory,
+    KeyPairGenerator, Signature, KeyAgreement (Seren SSH through JSch);
+    keystore key pairs
+  - [ ] ChaCha20-Poly1305, 3DES; certificates and CertificateFactory
+    (with WS11 TLS)
 - [ ] WS12 VM performance
 - [ ] WS14 AndroidX compatibility
 - [ ] docs/COMPATIBILITY.md with a tested APK corpus
@@ -566,6 +581,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-09 (WS17, touches WS10, WS6, WS4): new
+  `platform_random_bytes(buf, len)` in platform.h (getrandom on the host,
+  libnx `randomGet` on the Switch). The Switch SQLite VFS `xRandomness`
+  uses it instead of a fixed-seed LCG. New static native
+  `libcore.crypto.NativePrng.nativeRandomBytes([BII)V`; no Java fields
+  read from C. `ActivityThread.boot` installs the AndroidKeyStore
+  provider with the app's data directory (keys under
+  `data/<pkg>/keystore`). `libcore.crypto.KeyMaterial` is the contract
+  for keys whose bytes are not exported. ARCHITECTURE 5.5 and 7.
 - 2026-10-11 (after the merge, OSRS re-run): three regressions from taking
   main's side fixed. `java.vm.vendor` is ART's "The Android Project" again
   (Old School RuneScape loads its Windows library for any other vendor);

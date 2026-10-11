@@ -12,6 +12,7 @@
 #ifdef __SWITCH__
 
 #include "sqlite/sqlite3.h"
+#include "../platform/platform.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -324,12 +325,8 @@ static int vfs_full_path(sqlite3_vfs *vfs, const char *name, int n_out, char *ou
 
 static int vfs_random(sqlite3_vfs *vfs, int n, char *out) {
     (void)vfs;
-    static unsigned s = 0x6d2b79f5u;
-    for (int i = 0; i < n; i++) {
-        s = s * 1664525u + 1013904223u;
-        out[i] = (char)(s >> 16);
-    }
-    return n;
+    if (n <= 0) return 0;
+    return platform_random_bytes(out, (size_t)n) ? n : 0;
 }
 
 static int vfs_sleep(sqlite3_vfs *vfs, int microseconds) {

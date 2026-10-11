@@ -607,6 +607,21 @@ bool vm_init_class(VMThread *t, Class *c) {
     if (!ok) {
         Object *exc = t->exception;
         LOGW("initialization of %s failed", c->name);
+        if (exc) {
+            /* Say why: later uses only see "Could not initialize class". */
+            SaBuf b = {0};
+            vm_describe_exception(t, exc, &b);
+            char *s = sa_buf_cstr(&b);
+            int lines = 0;
+            for (char *line = s; line && *line && lines < 12; lines++) {
+                char *nl = strchr(line, '\n');
+                if (nl) *nl = 0;
+                LOGW("  %s", line);
+                line = nl ? nl + 1 : NULL;
+            }
+            sa_buf_free(&b);
+            t->exception = exc;
+        }
         c->state = CLASS_ERROR;
         if (exc && !vm_instance_of(exc, vm_find_class_noexc(t, "Ljava/lang/Error;"))) {
             t->exception = NULL;

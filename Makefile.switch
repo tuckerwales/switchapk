@@ -44,8 +44,10 @@ FRAMEWORK_RES := build/toolchains/framework-res.apk
 
 all: $(BUILD)/switchapk.nro
 
+MONO_FONT := build/toolchains/fonts/DroidSansMono.ttf
+
 $(BUILD)/switchapk.nro: $(BUILD)/switchapk.elf $(BUILD)/switchapk.nacp $(BUILD)/icon.jpg $(ROMFS)/framework.dex \
-                        $(ROMFS)/framework-res.apk
+                        $(ROMFS)/framework-res.apk $(ROMFS)/fonts/DroidSansMono.ttf
 	$(TOOLS)/elf2nro $< $@ --icon=$(BUILD)/icon.jpg --nacp=$(BUILD)/switchapk.nacp --romfsdir=$(ROMFS)
 
 # The hbmenu icon: the project logo's central part, scaled by the host build (ui_draw_app_icon, which draws
@@ -90,6 +92,13 @@ $(ROMFS)/framework.dex: $(FRAMEWORK_DEX)
 $(ROMFS)/framework-res.apk: $(FRAMEWORK_RES)
 	@mkdir -p $(ROMFS)
 	cp $< $@
+
+$(ROMFS)/fonts/DroidSansMono.ttf: $(MONO_FONT)
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+$(MONO_FONT):
+	python3 tools/fetch_toolchains.py sdk
 
 $(FRAMEWORK_DEX):
 	@echo "build/java/framework.dex is missing: run make (the host build) first" && false

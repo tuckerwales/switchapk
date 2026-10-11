@@ -9,9 +9,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Builds processes the way the JDK does, but the console cannot start programs: start() fails with the
- * IOException a failed exec gives on Android (here error=38, ENOSYS). Apps that run a helper binary
- * (chess engines, ffmpeg) get the same error path as on a device that forbids it.
+ * Builds processes the way the JDK does. There is no fork on the Switch: start() runs a bionic
+ * executable (an app's own engine or helper binary) inside switchapk, see ProcessImpl. Anything
+ * else (a shell, /system/bin tools) fails as a missing program does on Android: with an
+ * IOException naming it.
  */
 public final class ProcessBuilder {
     private List<String> command;
@@ -59,6 +60,19 @@ public final class ProcessBuilder {
             environment = new HashMap<String, String>(System.getenv());
         }
         return environment;
+    }
+
+    /** Runtime.exec's envp: "NAME=value" strings replace the inherited environment (null keeps it). */
+    ProcessBuilder environment(String[] envp) {
+        if (envp != null) {
+            environment = new HashMap<String, String>();
+            for (String envstring : envp) {
+                if (envstring.indexOf('\u0000') != -1) envstring = envstring.replaceFirst("\u0000.*", "");
+                int eqlsign = envstring.indexOf('=', 1);
+                if (eqlsign != -1) environment.put(envstring.substring(0, eqlsign), envstring.substring(eqlsign + 1));
+            }
+        }
+        return this;
     }
 
     public File directory() {
@@ -149,9 +163,8 @@ public final class ProcessBuilder {
         if (cmdarray.length == 0) {
             throw new IndexOutOfBoundsException();
         }
-        throw new IOException("Cannot run program \"" + cmdarray[0] + "\""
-                + (directory == null ? "" : " (in directory \"" + directory + "\")")
-                + ": error=38, Function not implemented");
+        // bionic executables run inside switchapk (ProcessImpl, src/nativeloader/spawn.c); nothing else exists
+        return ProcessImpl.start(cmdarray, environment, directory, redirects(), redirectErrorStream);
     }
 
     public static List<Process> startPipeline(List<ProcessBuilder> builders) throws IOException {

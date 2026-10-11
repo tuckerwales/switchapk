@@ -48,6 +48,8 @@ char *platform_map_path(const char *p) {
         return sa_sprintf("%s/sdcard%s", g_data_root, rest ? rest : "");
     }
     if (starts_with(p, "/data/local/tmp")) return sa_sprintf("%s/tmp%s", g_data_root, p + 15);
+    /* /data/app/<pkg>/lib/<abi>: the app's nativeLibraryDir, where its libraries are extracted at start */
+    if (starts_with(p, "/data/app/")) return sa_sprintf("%s/app/%s", g_data_root, p + 10);
 #ifdef __SWITCH__
     if (p[0] == '/') return sa_sprintf("sdmc:%s", p);
 #endif
@@ -260,7 +262,7 @@ NATIVE(Os_stat) {
     UNUSED_ARGS();
     char *path = mapped_arg(t, A_OBJ(0));
     if (!path) return;
-    ArrayObject *r = vm_alloc_prim_array(t, 'J', 7);
+    ArrayObject *r = vm_alloc_prim_array(t, 'J', 8);
     if (!r) {
         free(path);
         return;
@@ -275,6 +277,11 @@ NATIVE(Os_stat) {
         d[4] = (int64_t)st.st_mtime * 1000;
         d[5] = 1;
         d[6] = 1;
+#ifdef __SWITCH__
+        d[7] = 1; /* no execute permission on the SD card: any file may be started (spawn.c checks it is an ELF) */
+#else
+        d[7] = (st.st_mode & 0111) != 0;
+#endif
     }
     free(path);
     R_OBJ(r);
@@ -352,6 +359,26 @@ NATIVE(Os_setLastModified) {
     R_BOOL(ok);
 }
 
+/* static native boolean setExecutable(String path, boolean executable, boolean ownerOnly) */
+NATIVE(Os_setExecutable) {
+    UNUSED_ARGS();
+    char *path = mapped_arg(t, A_OBJ(0));
+    if (!path) return;
+#ifdef __SWITCH__
+    bool ok = sa_file_exists(path);
+#else
+    struct stat st;
+    bool ok = stat(path, &st) == 0;
+    if (ok) {
+        mode_t bits = A_BOOL(2) ? 0100 : 0111;
+        mode_t mode = A_BOOL(1) ? (st.st_mode | bits) : (st.st_mode & ~bits);
+        ok = chmod(path, mode & 07777) == 0;
+    }
+#endif
+    free(path);
+    R_BOOL(ok);
+}
+
 NATIVE(Os_hostPath) {
     UNUSED_ARGS();
     char *path = mapped_arg(t, A_OBJ(0));
@@ -391,6 +418,7 @@ static const NativeMethodReg g_regs[] = {
     {"Llibcore/io/Os;", "remove", "(Ljava/lang/String;)Z", Os_remove},
     {"Llibcore/io/Os;", "rename", "(Ljava/lang/String;Ljava/lang/String;)Z", Os_rename},
     {"Llibcore/io/Os;", "setLastModified", "(Ljava/lang/String;J)Z", Os_setLastModified},
+    {"Llibcore/io/Os;", "setExecutable", "(Ljava/lang/String;ZZ)Z", Os_setExecutable},
     {"Llibcore/io/Os;", "hostPath", "(Ljava/lang/String;)Ljava/lang/String;", Os_hostPath},
     {"Llibcore/io/Os;", "freeSpace", "(Ljava/lang/String;)J", Os_freeSpace},
 };

@@ -103,9 +103,9 @@ public class Runtime {
         return exec(cmdarray, envp, null);
     }
 
-    /** No processes on the console: ProcessBuilder.start reports the failed exec. */
+    /** Runs through ProcessBuilder.start (bionic executables only; see ProcessImpl). */
     public Process exec(String[] cmdarray, String[] envp, java.io.File dir) throws java.io.IOException {
-        return new ProcessBuilder(cmdarray).directory(dir).start();
+        return new ProcessBuilder(cmdarray).environment(envp).directory(dir).start();
     }
 
     @Deprecated

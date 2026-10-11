@@ -225,7 +225,7 @@ public class MediaPlayer {
         checkIdle();
         FileInputStream in = new FileInputStream(fd);
         try {
-            if (offset > 0) in.skip(offset);
+            in.getChannel().position(Math.max(0, offset));
             mBytes = readAll(in, length);
         } finally {
             in.close();

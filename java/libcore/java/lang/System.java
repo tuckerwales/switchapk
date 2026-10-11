@@ -19,7 +19,9 @@ public final class System {
         props = new Properties();
         props.setProperty("java.vm.name", "Dalvik");
         props.setProperty("java.vm.version", "2.1.0");
-        props.setProperty("java.vm.vendor", "switchapk");
+        // ART's identity: apps test it (Old School RuneScape loads its Android library only for this vendor)
+        props.setProperty("java.vm.vendor", "The Android Project");
+        props.setProperty("java.vm.vendor.url", "http://www.android.com/");
         props.setProperty("java.version", "0");
         props.setProperty("java.vendor", "The Android Project");
         props.setProperty("java.specification.version", "0.9");

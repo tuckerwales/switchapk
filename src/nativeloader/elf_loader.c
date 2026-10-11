@@ -23,6 +23,7 @@
  */
 #include "nativeloader.h"
 #include "../core/zip.h"
+#include <sys/stat.h>
 
 #ifndef __SWITCH__
 #include <sys/mman.h>
@@ -849,6 +850,80 @@ static SaLib *load_locked(const char *name, char *err, size_t errlen, int depth)
     l = load_image(name, data, len, err, errlen, depth);
     free(data);
     return l;
+}
+
+/* ---- executables (spawn.c) ------------------------------------------------------------------------------------ */
+
+void *loader_load_executable(const char *path, char *err, size_t errlen) {
+    static int serial;
+    size_t len = 0;
+    uint8_t *data = read_library(path, &len);
+    if (!data) {
+        snprintf(err, errlen, "cannot read \"%s\"", path);
+        return NULL;
+    }
+    const Elf64Ehdr *eh = (const Elf64Ehdr *)data;
+    if (len < sizeof *eh || memcmp(eh->e_ident, "\x7f" "ELF", 4) != 0 || eh->e_type != ET_DYN || !eh->e_entry) {
+        snprintf(err, errlen, "\"%s\" is not a position-independent executable", path);
+        free(data);
+        return NULL;
+    }
+    /* a fresh image per start: each run gets its own globals, as a new process would */
+    lock();
+    char name[300];
+    snprintf(name, sizeof name, "%s#%d", base_name(path), ++serial);
+    SaLib *lib = load_image(name, data, len, err, errlen, 0);
+    unlock();
+    void *entry = lib ? (void *)(lib->bias + eh->e_entry) : NULL;
+    free(data);
+    return entry;
+}
+
+void loader_extract_native_libs(const char *android_dir) {
+    if (!g_app_zip || !android_dir) return;
+    char *dir = platform_map_path(android_dir);
+    if (!dir) return;
+    char prefix[64];
+    snprintf(prefix, sizeof prefix, "lib/%s/", SA_NATIVE_ABI);
+    size_t plen = strlen(prefix);
+    bool made = false;
+    int written = 0;
+    for (size_t i = 0; i < zip_count(g_app_zip); i++) {
+        const ZipEntry *e = zip_entry_at(g_app_zip, i);
+        if (strncmp(e->name, prefix, plen) != 0 || strchr(e->name + plen, '/') || !e->name[plen]) continue;
+        if (!made) {
+            /* mkdir -p */
+            for (char *q = dir + 1; *q; q++) {
+                if (*q != '/') continue;
+                *q = 0;
+                mkdir(dir, 0755);
+                *q = '/';
+            }
+            mkdir(dir, 0755);
+            made = true;
+        }
+        char *out = sa_sprintf("%s/%s", dir, e->name + plen);
+        struct stat st;
+        if (stat(out, &st) == 0 && (uint64_t)st.st_size == e->uncomp_size) {
+            free(out);
+            continue;
+        }
+        size_t n = 0;
+        uint8_t *bytes = zip_extract(g_app_zip, e, &n);
+        FILE *f = bytes ? fopen(out, "wb") : NULL;
+        if (f) {
+            fwrite(bytes, 1, n, f);
+            fclose(f);
+#ifndef __SWITCH__
+            chmod(out, 0755);
+#endif
+            written++;
+        }
+        free(bytes);
+        free(out);
+    }
+    if (written) LOGI("extracted %d native libraries to %s", written, android_dir);
+    free(dir);
 }
 
 /* ---- dl* for the shim -------------------------------------------------------------------------------------- */

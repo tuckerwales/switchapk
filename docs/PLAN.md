@@ -288,7 +288,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     touch and key repeat, recently played order, icon cache, launch
     splash, error screen with Try again, generated NRO icon
     (tests/launcher/check_launcher.sh)
-  - [ ] audio (audren/audout), rumble, 1080p docked
+  - [ ] audio (audout output written 2026-10-10, not heard on hardware), rumble, 1080p docked
 
 ### M4
 - [x] WS5 animation
@@ -408,6 +408,21 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] first blockers fixed: 12 of 13 apps draw their first screen on
     the host (session 25; COMPATIBILITY.md "Findings")
   - [ ] corpus runs in CI; per-app scripts that get past the title screen
+  - [x] proprietary apps supplied locally (`"source": "local"`,
+    `tools/corpus.py import`, Play split merge); Old School RuneScape added
+  - [x] first Old School RuneScape scan and smoke run recorded (241.3:
+    stops at android.os.UserManager; game library needs native sockets)
+  - [x] Old School RuneScape reaches its own rendered client screen on the
+    host (GameActivity, GLES3 from a native render thread, posix shim);
+    stops at "Error connecting to server"
+  - [x] android.preference, ListActivity, SAX2 and ProcessBuilder: Andor's
+    Trail, Frozen Bubble and DroidFish draw (2026-10-10)
+  - [x] activity-alias, regex blocks, DisplayManager, Unsafe and generic
+    reflection: Shattered PD, Vector Pinball and Unciv draw (2026-10-11)
+  - [x] deep style chains, key-0 array bags, Holo ActionBarView: Simple
+    Calculator, Simple Solitaire and Blockinger draw (2026-10-11)
+  - [x] in-process executables, ServiceLoader, fortified sprintf fix:
+    DroidFish runs Stockfish, Simon Tatham's Puzzles draws (2026-10-11)
 
 ## Next steps (in order)
 
@@ -471,15 +486,20 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    areas: java.time, ResourceBundle, org.w3c.dom and DocumentBuilder,
    MulticastChannel and pipes, a default serialVersionUID hash.
 
-9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`). 12 of
-   13 apps draw their first screen. Next, by what each unblocks: drive
+9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`). All 13
+   open apps draw their first screen (2026-10-11, after the merge).
+   Next, by what each unblocks: drive
    the apps past the first screen (a per-app smoke script that starts a
    game), the AppCompat/AndroidX surface the static scan ranks highest
    (accessibility, android.transition, android.icu, AppOpsManager,
    window insets; WS14), Mindustry's map preview decode error (zip and
    DataInputStream ruled out), and ActionBarView for Holo decors (they
-   use the Toolbar decor now). Simon Tatham's Puzzles needs to run a bundled executable,
-   which the console cannot do. Then run the drawing apps on hardware.
+   use the Toolbar decor now). DroidFish (Stockfish) and Simon Tatham's
+   Puzzles (its generator) run their bundled executables in-process
+   (spawn.c). Old School RuneScape draws its own "Error connecting to
+   server" screen; its next step is the game connection (WS11). Then run
+   the drawing apps on hardware (the arm64 build of tests/apps/procs
+   needs NDK_ARM64).
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -546,6 +566,60 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-11 (after the merge, OSRS re-run): three regressions from taking
+  main's side fixed. `java.vm.vendor` is ART's "The Android Project" again
+  (Old School RuneScape loads its Windows library for any other vendor);
+  `<meta-data android:value="@...">` references resolve to their values
+  once resources load (`ActivityThread.resolveMetaDataRefs`; Play services
+  checks google_play_services_version that way); `Runtime.exec` passes envp
+  through the package-private `ProcessBuilder.environment(String[])`.
+  ARCHITECTURE 5.
+- 2026-10-11 (merge of main into this branch): both lines had built the
+  corpus fixes in parallel; main's implementations were kept (preference,
+  SAX in libcore with xmlpull staying in the framework, reflection
+  generics in libcore.reflect, Unsafe, ServiceLoader, sem_*, DisplayManager,
+  InputManager, alias handling). Kept from this branch: the shim tables
+  `shim_posix`, `shim_bsd`, `shim_newlib` and `spawn`, joined after main's
+  `shim_runtime` (so shim_posix wins where both define a symbol);
+  `loader_load_executable`, `loader_extract_native_libs`; the
+  AUTOFILL_MANAGER_SERVICE and USER_SERVICE services; SAXException.getCause.
+  The loader's dl_iterate_phdr is main's `loader_iterate_phdr`.
+  ARCHITECTURE 2, 5, 6.7.
+- 2026-10-11 (WS9 with WS16): in-process executables. New files
+  src/nativeloader/spawn.c, spawn.h, spawn_entry.S (Makefile.switch now builds
+  src/nativeloader/*.S) and src/native/java_process.c; new shim table
+  `shim_spawn_symbols` joined after all others plus `shim_spawn_bind`
+  (nativeloader.h); `loader_load_executable` and `loader_extract_native_libs`
+  in elf_loader.c; `XF()`, `pthread_create`, `shim_map_path` and the assert
+  shims consult the process context. `platform_map_path` maps `/data/app/` to
+  `<data root>/app/`; `Os.stat` returns an eighth element (execute) and
+  `Os.setExecutable` is new. Java: `java.lang.ProcessImpl` (natives) behind
+  `ProcessBuilder.start`, `ActivityThread.nExtractNativeLibs` (android_os.c).
+  Fortified sprintf no longer truncates. No Java fields are read from C.
+  ARCHITECTURE 5, 6.7.
+- 2026-10-10 (WS9, touches WS10): new `src/nativeloader/vfd.c` (virtual
+  pipes and `vfd_poll`) used by native_looper.c and native_input.c on the
+  Switch, so ALooper, the main looper and AInputQueue exist there; new shim
+  table `shim_newlib_symbols` (shim_newlib.c) for bionic's file, time and
+  thread ABI on newlib. The host keeps real pipes and poll. ARCHITECTURE 6.7.
+- 2026-10-10 (WS9 with WS11): new shim table `shim_bsd_symbols`
+  (src/nativeloader/shim_bsd.c, shim_bsd.h), printed by `--shim-symbols`; on
+  the Switch it provides the socket calls and replaces `__errno` with a
+  Linux-numbered errno. Native file calls go through `shim_map_path`
+  (nativeloader.h), which fails relative paths. ARCHITECTURE 6.7.
+- 2026-10-10 (WS9 with WS4, WS8, WS10, WS16; for the Old School RuneScape
+  corpus run): `platform.h` gains `platform_set_wake_hook(void (*)(void))`,
+  implemented by both platforms and called after every `platform_wake` and
+  `platform_push_event`. The main thread gets a native ALooper before
+  `ActivityThread.main` (`nativeloader_prepare_main_looper`, called by
+  `app_runner`), and `MessageQueue.nativePollOnce` blocks in it
+  (`nativeloader_poll_main`) when it exists, so native fd callbacks run on
+  the Java main loop. New shim table `shim_posix_symbols`. Native EGL window
+  swaps attach non-VM threads with `nl_vm_enter`. libcore:
+  `ClassLoader.getSystemClassLoader()` is a `dalvik.system.PathClassLoader`
+  (new `dalvik.system` BaseDexClassLoader, PathClassLoader, DexClassLoader)
+  and `ActivityThread` adds the app's native library paths to it. No Java
+  fields are read from C. ARCHITECTURE 5, 6.4, 6.5, 6.6.1, 6.7, 6.8, 7, 8.
 - 2026-10-10 (WS10): the launcher moved out of main_switch.c into
   `src/app/launcher.c` behind libnx-free `launcher.h` (UiInput, UiStatus),
   shared with new `switchapk-host --launcher/--splash/--error-screen/

@@ -347,7 +347,7 @@ static const ShimSym g_syms[] = {
     {"SL_IID_OUTPUTMIX", (void *)&SL_IID_OUTPUTMIX},
     {"SL_IID_ANDROIDSIMPLEBUFFERQUEUE", (void *)&SL_IID_ANDROIDSIMPLEBUFFERQUEUE},
     /* libz */
-    S(zlibVersion), S(inflateInit_), S(inflateInit2_), S(inflate), S(inflateEnd), S(inflateReset),
+    S(zlibVersion), S(inflateInit_), S(inflateInit2_), S(inflate), S(inflateEnd), S(inflateReset), S(inflateReset2), S(zError),
     S(deflateInit_), S(deflateInit2_), S(deflate), S(deflateEnd), S(deflateReset), S(deflateBound), S(crc32),
     S(adler32), S(compress), S(compress2), S(compressBound), S(uncompress),
 };
@@ -373,6 +373,8 @@ bool shim_is_library(const char *soname) {
 static SaMap g_shim;
 static pthread_once_t g_shim_once = PTHREAD_ONCE_INIT;
 
+static void *prev_entry(const char *name) { return sa_map_get(&g_shim, name); }
+
 static void build_shim(void) {
     size_t n;
     const ShimSym *t = shim_libc_symbols(&n);
@@ -380,6 +382,18 @@ static void build_shim(void) {
     t = shim_android_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
     t = shim_runtime_symbols(&n);
+    for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    /* shim_posix after shim_runtime: where both define a symbol, the posix (and Switch) entries win */
+    t = shim_posix_symbols(&n);
+    for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    /* last: the Switch tables replace entries above */
+    t = shim_bsd_symbols(&n);
+    for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    t = shim_newlib_symbols(&n);
+    for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
+    /* the process-context wrappers go on top of whatever the tables above chose */
+    shim_spawn_bind(prev_entry);
+    t = shim_spawn_symbols(&n);
     for (size_t i = 0; i < n; i++) sa_map_put(&g_shim, t[i].name, t[i].addr);
 }
 

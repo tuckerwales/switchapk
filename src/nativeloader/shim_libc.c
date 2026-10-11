@@ -4,7 +4,8 @@
  *
  * Most functions have the same ABI and map directly. Wrappers cover what
  * differs from bionic:
- * - paths: open/fopen/stat/... translate Android paths (platform_map_path);
+ * - paths: open/fopen/stat/... translate Android paths (shim_map_path: platform_map_path, relative paths fail
+ *   as under Android's read-only "/");
  * - sysconf constants, which are numbered differently;
  * - pthread mutexes, condition variables and attributes: bionic's objects
  *   are fixed-size and zero-initialized; the wrappers keep a pointer to a
@@ -22,6 +23,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <fcntl.h>
 #ifdef __SWITCH__
 #include <malloc.h>
@@ -35,13 +37,42 @@
 #ifndef __SWITCH__
 #include <malloc.h>
 #include <sys/mman.h>
+#include <sys/auxv.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #endif
 
+#include "spawn.h"
+
 #define LOG_TAG "libc"
 
 char *platform_map_path(const char *android_path);
+
+/*
+ * An Android path to open from native code: platform_map_path, except that a relative path resolves against the
+ * app's working directory, "/", as on Android, where the root is read-only and holds no app files. Such a path fails
+ * with ENOENT, or EROFS for a write, instead of reaching the host's working directory. NULL with errno set on
+ * failure; the caller frees the result.
+ */
+char *shim_map_path(const char *path, bool write) {
+    if (!path) {
+        errno = EFAULT;
+        return NULL;
+    }
+    if (path[0] && path[0] != '/') {
+        /* an executable started through ProcessBuilder has the working directory it was given */
+        const char *cwd = nl_proc_cwd();
+        if (cwd) return sa_sprintf("%s/%s", cwd, path);
+        static bool warned;
+        if (!warned) {
+            warned = true;
+            LOGW("native code opened the relative path \"%s\"; Android resolves it under \"/\" (read-only)", path);
+        }
+        errno = write ? EROFS : ENOENT;
+        return NULL;
+    }
+    return platform_map_path(path);
+}
 
 /* ---- errno, stack protector, exit hooks ----------------------------------------------------------------- */
 
@@ -86,17 +117,28 @@ static int sh_register_atfork(void (*prepare)(void), void (*parent)(void), void 
 
 static void sh_assert2(const char *file, int line, const char *function, const char *expr) {
     LOGE("%s:%d: %s: assertion \"%s\" failed", file, line, function, expr);
+    nl_proc_abort(); /* inside a ProcessBuilder executable only that process ends */
     abort();
 }
 
 static void sh_assert(const char *file, int line, const char *expr) {
     LOGE("%s:%d: assertion \"%s\" failed", file, line, expr);
+    nl_proc_abort();
     abort();
 }
 
+/* CPU feature bits for libraries that pick NEON or ARMv8 crypto code paths (OpenSSL, codecs), and the page size */
 static unsigned long sh_getauxval(unsigned long type) {
-    SA_UNUSED(type);
+    if (type == 6 /* AT_PAGESZ */) return 0x1000;
+#if defined(__SWITCH__)
+    /* the Switch's Cortex-A57: fp, asimd, aes, pmull, sha1, sha2, crc32 (HWCAP_*); no AT_HWCAP2 features */
+    if (type == 16 /* AT_HWCAP */) return 0x1 | 0x2 | 0x8 | 0x10 | 0x20 | 0x40 | 0x80;
     return 0;
+#elif defined(__linux__)
+    return getauxval(type);
+#else
+    return 0;
+#endif
 }
 
 static int sh_gettid(void) {
@@ -171,29 +213,39 @@ static char *sh_strrchr_chk(const char *s, int c, size_t n) {
     SA_UNUSED(n);
     return strrchr(s, c);
 }
+/*
+ * Fortified printf: blen is __builtin_object_size of the destination, (size_t)-1 when the compiler cannot
+ * tell. glibc's vsnprintf must not see such a size: buf + size wraps around and it truncates the output
+ * (snprintf(b, SIZE_MAX, "%d", 42) writes "4"), so an unknown or huge bound formats unbounded, as
+ * bionic's sprintf does.
+ */
+static int bounded_vsnprintf(char *buf, size_t n, const char *fmt, va_list ap) {
+    if (n > (size_t)INT_MAX) return vsprintf(buf, fmt, ap);
+    return vsnprintf(buf, n, fmt, ap);
+}
 static int sh_vsnprintf_chk(char *buf, size_t len, int flags, size_t blen, const char *fmt, va_list ap) {
     SA_UNUSED(flags);
     SA_UNUSED(blen);
-    return vsnprintf(buf, len, fmt, ap);
+    return bounded_vsnprintf(buf, len, fmt, ap);
 }
 static int sh_snprintf_chk(char *buf, size_t len, int flags, size_t blen, const char *fmt, ...) {
     SA_UNUSED(flags);
     SA_UNUSED(blen);
     va_list ap;
     va_start(ap, fmt);
-    int r = vsnprintf(buf, len, fmt, ap);
+    int r = bounded_vsnprintf(buf, len, fmt, ap);
     va_end(ap);
     return r;
 }
 static int sh_vsprintf_chk(char *buf, int flags, size_t blen, const char *fmt, va_list ap) {
     SA_UNUSED(flags);
-    return vsnprintf(buf, blen, fmt, ap);
+    return bounded_vsnprintf(buf, blen, fmt, ap);
 }
 static int sh_sprintf_chk(char *buf, int flags, size_t blen, const char *fmt, ...) {
     SA_UNUSED(flags);
     va_list ap;
     va_start(ap, fmt);
-    int r = vsnprintf(buf, blen, fmt, ap);
+    int r = bounded_vsnprintf(buf, blen, fmt, ap);
     va_end(ap);
     return r;
 }
@@ -210,16 +262,22 @@ FILE *sh_stdin, *sh_stdout, *sh_stderr;
 
 static FILE *XF(FILE *f) {
     uint8_t *p = (uint8_t *)f;
-    if (p >= sh_sF[0] && p < sh_sF[0] + sizeof sh_sF) {
-        size_t i = (size_t)(p - sh_sF[0]) / BIONIC_FILE_SIZE;
-        return i == 0 ? stdin : i == 1 ? stdout : stderr;
-    }
-    return f;
+    int which = -1;
+    if (p >= sh_sF[0] && p < sh_sF[0] + sizeof sh_sF) which = (int)((size_t)(p - sh_sF[0]) / BIONIC_FILE_SIZE);
+    else if (f == stdin) which = 0;
+    else if (f == stdout) which = 1;
+    else if (f == stderr) which = 2;
+    if (which < 0) return f;
+    /* inside an executable started through ProcessBuilder the standard streams are its pipes */
+    FILE *proc = nl_proc_stdio(which);
+    if (proc) return proc;
+    return which == 0 ? stdin : which == 1 ? stdout : stderr;
 }
 
 static FILE *sh_fopen(const char *path, const char *mode) {
-    char *host = platform_map_path(path);
-    FILE *f = fopen(host ? host : path, mode);
+    char *host = shim_map_path(path, mode && (strchr(mode, 'w') || strchr(mode, 'a') || strchr(mode, '+')));
+    if (!host) return NULL;
+    FILE *f = fopen(host, mode);
     free(host);
     return f;
 }
@@ -264,14 +322,19 @@ static char *sh_fgets_chk(char *s, int n, FILE *f, size_t blen) {
     return fgets(s, n, XF(f));
 }
 static int sh_remove(const char *path) {
-    char *host = platform_map_path(path);
-    int r = remove(host ? host : path);
+    char *host = shim_map_path(path, true);
+    if (!host) return -1;
+    int r = remove(host);
     free(host);
     return r;
 }
 static int sh_rename(const char *a, const char *b) {
-    char *ha = platform_map_path(a), *hb = platform_map_path(b);
-    int r = rename(ha ? ha : a, hb ? hb : b);
+    char *ha = shim_map_path(a, true), *hb = ha ? shim_map_path(b, true) : NULL;
+    if (!hb) {
+        free(ha);
+        return -1;
+    }
+    int r = rename(ha, hb);
     free(ha);
     free(hb);
     return r;
@@ -287,8 +350,9 @@ static int sh_open(const char *path, int flags, ...) {
         mode = va_arg(ap, int);
         va_end(ap);
     }
-    char *host = platform_map_path(path);
-    int fd = open(host ? host : path, flags, mode);
+    char *host = shim_map_path(path, (flags & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC | O_APPEND)) != 0);
+    if (!host) return -1;
+    int fd = open(host, flags, mode);
     free(host);
     return fd;
 }
@@ -296,43 +360,49 @@ static int sh_open(const char *path, int flags, ...) {
 static int sh_open_2(const char *path, int flags) { return sh_open(path, flags); }
 
 static int sh_access(const char *path, int mode) {
-    char *host = platform_map_path(path);
-    int r = access(host ? host : path, mode);
+    char *host = shim_map_path(path, false);
+    if (!host) return -1;
+    int r = access(host, mode);
     free(host);
     return r;
 }
 
 static int sh_unlink(const char *path) {
-    char *host = platform_map_path(path);
-    int r = unlink(host ? host : path);
+    char *host = shim_map_path(path, true);
+    if (!host) return -1;
+    int r = unlink(host);
     free(host);
     return r;
 }
 
 static int sh_mkdir(const char *path, mode_t mode) {
-    char *host = platform_map_path(path);
-    int r = mkdir(host ? host : path, mode);
+    char *host = shim_map_path(path, true);
+    if (!host) return -1;
+    int r = mkdir(host, mode);
     free(host);
     return r;
 }
 
 static int sh_stat(const char *path, struct stat *st) {
-    char *host = platform_map_path(path);
-    int r = stat(host ? host : path, st);
+    char *host = shim_map_path(path, false);
+    if (!host) return -1;
+    int r = stat(host, st);
     free(host);
     return r;
 }
 
 static int sh_lstat(const char *path, struct stat *st) {
-    char *host = platform_map_path(path);
-    int r = lstat(host ? host : path, st);
+    char *host = shim_map_path(path, false);
+    if (!host) return -1;
+    int r = lstat(host, st);
     free(host);
     return r;
 }
 
 static DIR *sh_opendir(const char *path) {
-    char *host = platform_map_path(path);
-    DIR *d = opendir(host ? host : path);
+    char *host = shim_map_path(path, false);
+    if (!host) return NULL;
+    DIR *d = opendir(host);
     free(host);
     return d;
 }
@@ -450,6 +520,55 @@ static int sh_mutex_lock(void *m) { return pthread_mutex_lock(mutex_of(m)); }
 static int sh_mutex_trylock(void *m) { return pthread_mutex_trylock(mutex_of(m)); }
 static int sh_mutex_unlock(void *m) { return pthread_mutex_unlock(mutex_of(m)); }
 
+/* bionic 64-bit pthread_rwlock_t is 56 bytes, zero when static (PTHREAD_RWLOCK_INITIALIZER) */
+static pthread_rwlock_t *rwlock_of(void *rw) {
+    ShObj *o = rw;
+    if (__atomic_load_n(&o->magic, __ATOMIC_ACQUIRE) == SH_MAGIC) return o->host;
+    pthread_mutex_lock(&g_lazy_lock);
+    if (o->magic != SH_MAGIC) {
+        pthread_rwlock_t *h = sa_malloc(sizeof *h);
+        pthread_rwlock_init(h, NULL);
+        o->host = h;
+        __atomic_store_n(&o->magic, SH_MAGIC, __ATOMIC_RELEASE);
+    }
+    pthread_mutex_unlock(&g_lazy_lock);
+    return o->host;
+}
+static int sh_rwlock_init(void *rw, const void *attr) {
+    SA_UNUSED(attr);
+    memset(rw, 0, 56);
+    rwlock_of(rw);
+    return 0;
+}
+static int sh_rwlock_destroy(void *rw) {
+    ShObj *o = rw;
+    if (o->magic == SH_MAGIC) {
+        pthread_rwlock_destroy(o->host);
+        free(o->host);
+    }
+    memset(rw, 0, 56);
+    return 0;
+}
+static int sh_rwlock_rdlock(void *rw) { return pthread_rwlock_rdlock(rwlock_of(rw)); }
+static int sh_rwlock_wrlock(void *rw) { return pthread_rwlock_wrlock(rwlock_of(rw)); }
+static int sh_rwlock_tryrdlock(void *rw) { return pthread_rwlock_tryrdlock(rwlock_of(rw)); }
+static int sh_rwlock_trywrlock(void *rw) { return pthread_rwlock_trywrlock(rwlock_of(rw)); }
+static int sh_rwlock_unlock(void *rw) { return pthread_rwlock_unlock(rwlock_of(rw)); }
+/* bionic pthread_rwlockattr_t is a long; sharing and kind preferences do not matter in one process */
+static int sh_rwlockattr_init(long *a) {
+    *a = 0;
+    return 0;
+}
+static int sh_rwlockattr_noop(long *a, int v) {
+    SA_UNUSED(a);
+    SA_UNUSED(v);
+    return 0;
+}
+static int sh_rwlockattr_destroy(long *a) {
+    SA_UNUSED(a);
+    return 0;
+}
+
 static pthread_cond_t *cond_of(void *c) {
     ShObj *o = c;
     if (__atomic_load_n(&o->magic, __ATOMIC_ACQUIRE) == SH_MAGIC) return o->host;
@@ -543,6 +662,7 @@ static int sh_pthread_create(pthread_t *out, const BionicAttr *attr, void *(*fn)
     if (stack < 256 * 1024) stack = 256 * 1024; /* our JNI and log paths want some room */
     pthread_attr_setstacksize(&a, stack);
     if (attr && (attr->flags & 1)) pthread_attr_setdetachstate(&a, PTHREAD_CREATE_DETACHED);
+    nl_proc_wrap_thread(&fn, &arg); /* threads of a ProcessBuilder executable stay in its process */
     int r = pthread_create(out, &a, fn, arg);
     pthread_attr_destroy(&a);
     return r;
@@ -657,6 +777,12 @@ static const ShimSym g_syms[] = {
     W(pthread_attr_setstacksize, sh_attr_setstacksize), W(pthread_attr_getstacksize, sh_attr_getstacksize),
     W(pthread_attr_setschedparam, sh_attr_noop), W(pthread_attr_setschedpolicy, sh_attr_noop),
     W(pthread_attr_setguardsize, sh_attr_noop),
+    W(pthread_rwlock_init, sh_rwlock_init), W(pthread_rwlock_destroy, sh_rwlock_destroy),
+    W(pthread_rwlock_rdlock, sh_rwlock_rdlock), W(pthread_rwlock_wrlock, sh_rwlock_wrlock),
+    W(pthread_rwlock_tryrdlock, sh_rwlock_tryrdlock), W(pthread_rwlock_trywrlock, sh_rwlock_trywrlock),
+    W(pthread_rwlock_unlock, sh_rwlock_unlock), W(pthread_rwlockattr_init, sh_rwlockattr_init),
+    W(pthread_rwlockattr_destroy, sh_rwlockattr_destroy), W(pthread_rwlockattr_setpshared, sh_rwlockattr_noop),
+    W(pthread_rwlockattr_setkind_np, sh_rwlockattr_noop),
     /* setjmp: glibc's _setjmp saves no signal mask, so it fits bionic's smaller jmp_buf; newlib's setjmp
      * saves no mask either (176 bytes on AArch64) */
 #ifdef __SWITCH__

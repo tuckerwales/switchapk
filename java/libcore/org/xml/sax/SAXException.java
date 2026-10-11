@@ -122,6 +122,17 @@ public class SAXException extends Exception {
 
 
     /**
+     * Return the cause of the exception: the embedded exception (AOSP and the JDK).
+     *
+     * @return The embedded exception, or null if there is none.
+     */
+    public Throwable getCause ()
+    {
+    return exception;
+    }
+
+
+    /**
      * Override toString to pick up any embedded exception.
      *
      * @return A string representation of this exception.

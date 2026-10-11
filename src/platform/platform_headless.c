@@ -25,6 +25,7 @@
 #include "../gfx/gfx.h"
 
 #include <pthread.h>
+#include <stdatomic.h>
 #include <time.h>
 #include <errno.h>
 
@@ -36,6 +37,7 @@ static pthread_cond_t g_cond = PTHREAD_COND_INITIALIZER;
 static PlatformEvent *g_queue;
 static int g_qlen, g_qcap;
 static bool g_woken;
+static _Atomic(void (*)(void)) g_wake_hook; /* platform_set_wake_hook */
 
 static uint32_t *g_frame;
 static int g_frame_w, g_frame_h;
@@ -80,6 +82,8 @@ void platform_push_event(const PlatformEvent *ev) {
     g_qlen++;
     pthread_cond_broadcast(&g_cond);
     pthread_mutex_unlock(&g_lock);
+    void (*hook)(void) = atomic_load(&g_wake_hook);
+    if (hook) hook();
 }
 
 void platform_wake(void) {
@@ -87,7 +91,11 @@ void platform_wake(void) {
     g_woken = true;
     pthread_cond_broadcast(&g_cond);
     pthread_mutex_unlock(&g_lock);
+    void (*hook)(void) = atomic_load(&g_wake_hook);
+    if (hook) hook();
 }
+
+void platform_set_wake_hook(void (*hook)(void)) { atomic_store(&g_wake_hook, hook); }
 
 bool platform_wait_event(PlatformEvent *ev, int timeout_ms) {
     pthread_mutex_lock(&g_lock);

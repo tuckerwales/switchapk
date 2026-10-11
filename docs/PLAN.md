@@ -396,6 +396,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     Trail, Frozen Bubble and DroidFish draw (2026-10-10)
   - [x] activity-alias, regex blocks, DisplayManager, Unsafe and generic
     reflection: Shattered PD, Vector Pinball and Unciv draw (2026-10-11)
+  - [x] deep style chains, key-0 array bags, Holo ActionBarView: Simple
+    Calculator, Simple Solitaire and Blockinger draw (2026-10-11)
 
 ## Next steps (in order)
 
@@ -461,17 +463,14 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    auto-stubs silently today.
 
 9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`).
-   Pixel Dungeon, Replica Island, Andor's Trail, Frozen Bubble, DroidFish,
-   Shattered PD, Vector Pinball and Unciv draw on the host. First blockers
-   for the rest: the Holo decor `ActionBarView` (Blockinger, WS4); a
-   layout_height inflation error (Simple Calculator, WS4); an AIOOBE in
-   Solitaire's own GameSelector (WS4); Mindustry's black screen (WS8/WS9);
-   Puzzles' missing helper (WS9). Known gaps past the first screen:
-   DroidFish's engine needs an in-process exec of a bionic executable
-   (WS9), Unciv's multiplayer check needs NIO selectors (WS11). Old School
-   RuneScape draws its own "Error connecting to server" screen on the host;
-   its next step is the game connection (WS11). Re-run the corpus after
-   each fix and update the findings table.
+   11 of the 13 open apps draw on the host. Left: Mindustry's black screen
+   (WS8/WS9) and Puzzles' missing-file exit (WS9). Known gaps past the
+   first screen: DroidFish's engine needs an in-process exec of a bionic
+   executable (WS9), Unciv's multiplayer check needs NIO selectors (WS11),
+   java.io object streams (WS16). Old School RuneScape draws its own
+   "Error connecting to server" screen on the host; its next step is the
+   game connection (WS11). Next after that: run the apps that draw on a
+   console, and grow the corpus.
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -541,6 +540,12 @@ and update ARCHITECTURE.md in the same commit.
   ApplicationPackageManager. `dex_proto_desc` no longer overflows on very
   long descriptors. No Java fields are read from C. ARCHITECTURE 4.2, 5,
   6.4.1 updated.
+  Later the same day: style bags follow parents to depth 128 and keep an
+  entry's own items (res.c bag_merge, affects every theme and array);
+  app-specific external directories moved under
+  `/storage/emulated/0/Android/...`; new hidden class
+  `com.android.internal.widget.ActionBarView`; `PackageManager` gained
+  `queryIntentContentProviders`. ARCHITECTURE 6.2, 6.4.1 updated.
 
 - 2026-10-10 (WS4 with WS9; corpus apps): `org.xmlpull.v1` moved from
   java/framework to java/libcore (package unchanged) so libcore's SAX2

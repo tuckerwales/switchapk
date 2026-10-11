@@ -411,7 +411,10 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - AssetManager natives (src/android/android_res.c) answer:
   value lookup with reference following (`nGetValue`, fills TypedValue
   fields `type data resourceId assetCookie density string`), flattened style
-  bags with parents merged (`nGetBag` -> `{int[] (attr,type,data)*, String[]}`),
+  bags with parents merged (`nGetBag` -> `{int[] (attr,type,data)*, String[]}`;
+  as AssetManager2, an entry keeps all of its own items and a key only replaces
+  an inherited one, since some tool chains write every array item with key 0;
+  parent chains are followed to depth 128, as Material3 themes reach about 30),
   names/identifiers, asset bytes, directory listing, and binary XML
   flattened into arrays (`nOpenXml` -> `{int[] events, int[] attrs, String[] strings}`)
   consumed by `XmlBlock.Parser`. Asset cookies: 1 = framework, 2 = app,
@@ -805,6 +808,20 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   that fire during layout are posted (AdapterView SelectionNotifier), so
   listeners can change other views. Transitions and window animations
   are not run.
+- Holo decor action bar: framework-res's `screen_action_bar` inflates
+  `com.android.internal.widget.ActionBarView`, here a Toolbar styled from the
+  theme's `actionBarStyle` (background, height, title/subtitle text styles)
+  that WindowDecorActionBar drives through `Toolbar.getWrapper()`, like
+  Material's `screen_toolbar`. Holo list/tab navigation in the bar and the
+  split action bar are not reproduced. `Activity.setTaskDescription` keeps
+  the ActivityManager.TaskDescription (there is no recents screen).
+- App-specific external storage follows the device layout:
+  `getExternalFilesDir`/`getExternalCacheDir`/`getObbDir`/`getExternalMediaDirs`
+  are under `/storage/emulated/0/Android/{data,obb,media}/<pkg>` (the
+  platform sdcard directory); apps cut these paths at `Android/data`.
+  `MediaScannerConnection` has no service: scanning an existing image,
+  video or audio file inserts it into MediaStore and reports its Uri; other
+  files report null. Callbacks run on a background thread.
 - Activity aliases: an `<activity-alias>` copies its target's ActivityInfo
   (declared earlier) and keeps its own name, label, icon, enabled/exported
   state, filters and meta-data; `ActivityInfo.targetActivity` names the class

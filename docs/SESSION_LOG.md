@@ -905,3 +905,12 @@ what is left in flight.
   descriptor buffer in dex_proto_desc (Kotlin reflection aborted the host).
   Shattered PD, Vector Pinball and Unciv now draw: 9 of the 13 open apps.
   All dex tests and the 39 single-script sample checks plus prefs pass.
+- 2026-10-11, continued: res.c bag_merge followed only 20 parents, so
+  Material3 themes (about 30 levels over MaterialComponents and AppCompat)
+  lost android:windowNoTitle and every framework default; it also merged an
+  entry's own items by key, collapsing arrays whose tool chain writes key 0.
+  Both now follow AssetManager2. Added ActionBarView (a Toolbar for the Holo
+  decor), ActivityManager.TaskDescription, queryIntentContentProviders,
+  MediaScannerConnection, and the device layout for app external dirs.
+  Simple Calculator, Simple Solitaire and Blockinger now draw: 11 of the 13
+  open apps (Mindustry black, Puzzles exits). Samples and prefs pass.

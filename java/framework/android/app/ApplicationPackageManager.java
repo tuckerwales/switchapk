@@ -151,6 +151,12 @@ public class ApplicationPackageManager extends PackageManager {
     }
 
     @Override
+    public List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags) {
+        // manifest providers are parsed without intent filters, so none matches
+        return new ArrayList<ResolveInfo>();
+    }
+
+    @Override
     public List<ResolveInfo> queryIntentServices(Intent intent, int flags) {
         ArrayList<ResolveInfo> out = new ArrayList<ResolveInfo>();
         if (intent == null) return out;

@@ -232,4 +232,138 @@ public class ActivityManager {
             public RunningAppProcessInfo[] newArray(int size) { return new RunningAppProcessInfo[size]; }
         };
     }
+
+    /** How an activity's task looks in recents (label, icon, colors); kept, never shown here. */
+    public static class TaskDescription implements Parcelable {
+        private String mLabel;
+        private android.graphics.Bitmap mIcon;
+        private int mIconRes;
+        private int mColorPrimary;
+        private int mColorBackground;
+        private int mStatusBarColor;
+        private int mNavigationBarColor;
+
+        public TaskDescription(String label, int iconRes, int colorPrimary) {
+            if (colorPrimary != 0 && android.graphics.Color.alpha(colorPrimary) != 255) {
+                throw new RuntimeException("A TaskDescription's primary color should be opaque");
+            }
+            mLabel = label;
+            mIconRes = iconRes;
+            mColorPrimary = colorPrimary;
+        }
+
+        public TaskDescription(String label, int iconRes) { this(label, iconRes, 0); }
+
+        public TaskDescription(String label) { this(label, 0, 0); }
+
+        public TaskDescription() { this(null, 0, 0); }
+
+        @Deprecated
+        public TaskDescription(String label, android.graphics.Bitmap icon, int colorPrimary) {
+            this(label, 0, colorPrimary);
+            mIcon = icon;
+        }
+
+        @Deprecated
+        public TaskDescription(String label, android.graphics.Bitmap icon) { this(label, icon, 0); }
+
+        public TaskDescription(TaskDescription td) { copyFrom(td); }
+
+        private void copyFrom(TaskDescription other) {
+            mLabel = other.mLabel;
+            mIcon = other.mIcon;
+            mIconRes = other.mIconRes;
+            mColorPrimary = other.mColorPrimary;
+            mColorBackground = other.mColorBackground;
+            mStatusBarColor = other.mStatusBarColor;
+            mNavigationBarColor = other.mNavigationBarColor;
+        }
+
+        public String getLabel() { return mLabel; }
+        @Deprecated public android.graphics.Bitmap getIcon() { return mIcon; }
+        public int getPrimaryColor() { return mColorPrimary; }
+        public int getBackgroundColor() { return mColorBackground; }
+        public int getStatusBarColor() { return mStatusBarColor; }
+        public int getNavigationBarColor() { return mNavigationBarColor; }
+
+        public int describeContents() { return 0; }
+
+        public void writeToParcel(Parcel dest, int flags) {
+            dest.writeString(mLabel);
+            dest.writeInt(mIconRes);
+            dest.writeInt(mColorPrimary);
+            dest.writeInt(mColorBackground);
+            dest.writeInt(mStatusBarColor);
+            dest.writeInt(mNavigationBarColor);
+        }
+
+        public void readFromParcel(Parcel source) {
+            mLabel = source.readString();
+            mIconRes = source.readInt();
+            mColorPrimary = source.readInt();
+            mColorBackground = source.readInt();
+            mStatusBarColor = source.readInt();
+            mNavigationBarColor = source.readInt();
+        }
+
+        public static final Creator<TaskDescription> CREATOR = new Creator<TaskDescription>() {
+            public TaskDescription createFromParcel(Parcel source) {
+                TaskDescription td = new TaskDescription();
+                td.readFromParcel(source);
+                return td;
+            }
+
+            public TaskDescription[] newArray(int size) { return new TaskDescription[size]; }
+        };
+
+        public String toString() {
+            return "TaskDescription Label: " + mLabel + " Icon: " + mIcon + " IconRes: " + mIconRes
+                    + " colorPrimary: " + mColorPrimary + " colorBackground: " + mColorBackground
+                    + " statusBarColor: " + mStatusBarColor + " navigationBarColor: " + mNavigationBarColor;
+        }
+
+        public int hashCode() {
+            int result = 17;
+            if (mLabel != null) result = result * 31 + mLabel.hashCode();
+            result = result * 31 + mIconRes;
+            result = result * 31 + mColorPrimary;
+            result = result * 31 + mColorBackground;
+            result = result * 31 + mStatusBarColor;
+            result = result * 31 + mNavigationBarColor;
+            return result;
+        }
+
+        public boolean equals(Object obj) {
+            if (!(obj instanceof TaskDescription)) return false;
+            TaskDescription o = (TaskDescription) obj;
+            return java.util.Objects.equals(mLabel, o.mLabel) && mIconRes == o.mIconRes && mIcon == o.mIcon
+                    && mColorPrimary == o.mColorPrimary && mColorBackground == o.mColorBackground
+                    && mStatusBarColor == o.mStatusBarColor && mNavigationBarColor == o.mNavigationBarColor;
+        }
+
+        public static final class Builder {
+            private String mLabel;
+            private int mIconRes;
+            private int mPrimaryColor;
+            private int mBackgroundColor;
+            private int mStatusBarColor;
+            private int mNavigationBarColor;
+
+            public Builder() {}
+            public Builder setLabel(String label) { mLabel = label; return this; }
+            public Builder setIcon(int iconRes) { mIconRes = iconRes; return this; }
+            public Builder setPrimaryColor(int color) { mPrimaryColor = color; return this; }
+            public Builder setBackgroundColor(int color) { mBackgroundColor = color; return this; }
+            public Builder setStatusBarColor(int color) { mStatusBarColor = color; return this; }
+            public Builder setNavigationBarColor(int color) { mNavigationBarColor = color; return this; }
+
+            public TaskDescription build() {
+                TaskDescription td = new TaskDescription(mLabel, mIconRes, mPrimaryColor);
+                td.mColorBackground = mBackgroundColor;
+                td.mStatusBarColor = mStatusBarColor;
+                td.mNavigationBarColor = mNavigationBarColor;
+                return td;
+            }
+        }
+    }
 }

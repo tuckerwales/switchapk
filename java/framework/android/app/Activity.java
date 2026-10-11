@@ -1079,6 +1079,13 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public void setRecentsScreenshotEnabled(boolean enabled) {}
 
+    private ActivityManager.TaskDescription mTaskDescription = new ActivityManager.TaskDescription();
+
+    /** Kept for getTaskDescription-style reads; there is no recents screen to show it. */
+    public void setTaskDescription(ActivityManager.TaskDescription taskDescription) {
+        if (taskDescription != null) mTaskDescription = new ActivityManager.TaskDescription(taskDescription);
+    }
+
     public void reportFullyDrawn() {}
 
     public void postponeEnterTransition() {}

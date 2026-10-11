@@ -183,9 +183,6 @@ First blockers, in the order that unblocks the most apps:
 
 | Gap | Apps blocked at start | Evidence | Workstream |
 |---|---|---|---|
-| Holo decor action bar: `com.android.internal.widget.ActionBarView` (framework-res's `screen_action_bar` layout inflates it; our decor uses its own action bar) | Blockinger | run: ClassNotFoundException | WS4 |
-| "You must supply a layout_height attribute" inflating one of the app's layouts (AndroidX/Material, cause not yet traced) | Simple Calculator | run: UnsupportedOperationException | WS4 |
-| ArrayIndexOutOfBoundsException (length=1, index=1) in the app's own code from `GameSelector.onCreate`, cause not yet traced | Simple Solitaire | run: uncaught exception | WS4 |
 | Mindustry still renders black with every native import resolved (cause unknown) | Mindustry | run: blank screen | WS8/WS9 |
 | Simon Tatham's Puzzles quits after its own "missing a required file" check, probably the `libpuzzlesgen.so` helper it expects in nativeLibraryDir (not yet confirmed) | Simon Tatham's Puzzles | run: Toast, then System.exit | WS9 |
 | No game-server connection: in the sandbox where this ran, TLS is re-terminated and port 43594 blocked (environment); the Switch socket layer is new and not run on hardware | Old School RuneScape | run: the client's own "Error connecting to server" screen | WS9/WS11 |
@@ -208,12 +205,17 @@ requestFeature rule (Shattered PD), activity-alias and android:enabled
 signatures in reflection (Vector Pinball, Unciv; desugared
 ConcurrentHashMap and libGDX Json), the S+ PendingIntent rule on an API 29
 device (WorkManager), and a VM overflow on long method descriptors
-(Kotlin reflection).
+(Kotlin reflection). Then: style chains deeper than 20 levels lost their
+framework root (Material3 themes; Simple Calculator), array bags whose
+items all carry key 0 collapsed to one item (Simple Solitaire), the Holo
+decor `ActionBarView` (Blockinger), ActivityManager.TaskDescription,
+device-layout external app directories and MediaScannerConnection.
 
 Already working on the host: **Pixel Dungeon** and **Replica Island** reach
 their title screens with no stubs hit; **Andor's Trail**, **Frozen Bubble**,
-**DroidFish**, **Shattered Pixel Dungeon**, **Vector Pinball** and **Unciv**
-draw their first screens (Replica Island is GLES1, which
+**DroidFish**, **Shattered Pixel Dungeon**, **Vector Pinball**, **Unciv**,
+**Simple Calculator**, **Simple Solitaire** and **Blockinger** draw their
+first screens (Replica Island is GLES1, which
 renders on Mesa 25.2). They are the first candidates for screenshot
 goldens (WS13) and for a device demo.
 
@@ -232,17 +234,17 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 |---|---|---|---|---|---|---|---|---|
 | Pixel Dungeon | 0 | 9/20 | framework only | 1 | 0 | 0 | none | draws |
 | Replica Island | 0 | 3/8 | framework only | 1 | 0 | 0 | none | draws |
-| Blockinger | 0 | 8/17 | support library | 3 | 1 | 8 | none | fails at start: ClassNotFoundException: com.android.internal.widget.ActionBarView |
+| Blockinger | 0 | 8/17 | support library | 3 | 1 | 8 | none | draws |
 | Frozen Bubble | 0 | 12/12 | framework only | 11 | 0 | 1 | arm64, 1 libs, 2 unresolved | draws |
 | Shattered Pixel Dungeon | 1 | 21/36 | libgdx, androidx (other), androidx.core | 7 | 0 | 2 | arm64, 2 libs, 0 unresolved | draws |
 | Vector Pinball | 1 | 4/37 | libgdx, support library | 9 | 21 | 3 | arm64, 1 libs, 0 unresolved | draws |
 | Mindustry | 1 | 21/36 | arc | 18 | 21 | 0 | arm64, 2 libs, 0 unresolved | blank screen |
 | Unciv | 1 | 21/36 | libgdx, androidx (other), androidx.core, kotlinx.coroutines, support library (Kotlin) | 207 | 95 | 129 | arm64, 1 libs, 0 unresolved | draws |
 | Andor's Trail | 2 | 21/36 | androidx (other), androidx.core, support library, androidx.fragment (Kotlin) | 144 | 47 | 43 | none | draws |
-| Simple Solitaire Collection | 2 | 11/25 | support library | 9 | 0 | 7 | none | fails at start: ArrayIndexOutOfBoundsException: length=1; index=1 |
+| Simple Solitaire Collection | 2 | 11/25 | support library | 9 | 0 | 7 | none | draws |
 | Simon Tatham's Puzzles | 2 | 21/36 | androidx.compose, androidx (other), androidx.appcompat, material, androidx.core, kotlinx.coroutines, androidx.recyclerview, androidx.constraintlayout, androidx.fragment (Kotlin) | 100 | 3 | 90 | arm64, 3 libs, 1 unresolved | exits at start (rc 0) |
 | DroidFish | 2 | 16/28 | androidx (other), material, androidx.core, androidx.appcompat, androidx.recyclerview, androidx.fragment, androidx.constraintlayout, support library | 80 | 4 | 43 | arm64, 3 libs, 0 unresolved | draws |
-| Simple Calculator | 3 | 23/34 | androidx.appcompat, material, androidx (other), androidx.compose, androidx.recyclerview, androidx.fragment, kotlinx.coroutines, androidx.core, rxjava (Kotlin) | 121 | 9 | 104 | none | fails at start: UnsupportedOperationException: Binary XML file line #32: You must supply a layout_height at... |
+| Simple Calculator | 3 | 23/34 | androidx.appcompat, material, androidx (other), androidx.compose, androidx.recyclerview, androidx.fragment, kotlinx.coroutines, androidx.core, rxjava (Kotlin) | 121 | 9 | 104 | none | draws |
 | Old School RuneScape (local, 241.3) | 3 | 26/35 | play services, androidx (other), androidx.core, androidx.appcompat, material, firebase, androidx.recyclerview, androidx.fragment, support library, androidx.constraintlayout (Kotlin) | 118 | 7 | 77 | arm64, 6 libs, 1 unresolved | draws |
 
 ### Most-needed packages (static, by number of apps)
@@ -394,15 +396,9 @@ Generated 2026-10-11 from 14 apps. Static counts include only members and classe
 
 | Signal | Apps |
 |---|---|
-| exception java.lang.ArrayIndexOutOfBoundsException: length=1; index=1 | 1 (solitaire) |
-| exception java.lang.ClassNotFoundException: com.android.internal.widget.ActionBarView | 1 (blockinger) |
-| exception java.lang.IllegalStateException: Can't make a decor toolbar out of null | 1 (blockinger) |
-| exception java.lang.NoClassDefFoundError: android.app.ActivityManager$TaskDescription | 1 (calculator) |
 | exception java.lang.NoClassDefFoundError: android.bluetooth.BluetoothAdapter | 1 (frozenbubble) |
 | exception java.lang.NoClassDefFoundError: javax.net.ssl.HttpsURLConnection | 1 (osrs) |
-| exception java.lang.StringIndexOutOfBoundsException: begin 0, end -1, length 52 | 1 (calculator) |
 | exception java.lang.UnsatisfiedLinkError: No implementation found for com.jagex.android.ApplicationContext.onUpdateInternetAvailable(ZZ)V | 1 (osrs) |
-| exception java.lang.UnsupportedOperationException: Binary XML file line #32: You must supply a layout_height attribute. | 1 (calculator) |
 | exception java.util.concurrent.TimeoutException: Timed out waiting for Task | 1 (osrs) |
 | stub method android.content.pm.PackageManager.queryIntentContentProviders(Landroid/content/Intent;I)Ljava/util/List; | 1 (osrs) |
 | stub method android.media.AudioManager.unloadSoundEffects()V | 1 (vectorpinball) |

@@ -112,6 +112,7 @@ public abstract class PackageManager {
     public abstract ResolveInfo resolveActivity(Intent intent, int flags);
     public abstract List<ResolveInfo> queryIntentActivities(Intent intent, int flags);
     public abstract List<ResolveInfo> queryIntentServices(Intent intent, int flags);
+    public abstract List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags);
     public abstract List<ResolveInfo> queryBroadcastReceivers(Intent intent, int flags);
     public abstract ResolveInfo resolveService(Intent intent, int flags);
     public abstract ProviderInfo resolveContentProvider(String authority, int flags);

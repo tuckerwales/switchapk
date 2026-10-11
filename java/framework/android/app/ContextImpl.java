@@ -198,20 +198,25 @@ public class ContextImpl extends Context {
     @Override public File getNoBackupFilesDir() { return ensure(new File(getDataDir(), "no_backup")); }
     @Override public File getCacheDir() { return ensure(new File(getDataDir(), "cache")); }
     @Override public File getCodeCacheDir() { return ensure(new File(getDataDir(), "code_cache")); }
-    @Override public File getObbDir() { return ensure(new File(getDataDir(), "obb")); }
+    /** App-specific external storage as on a device: /storage/emulated/0/Android/{data,obb,media}/<pkg>. */
+    private File externalAppDir(String kind) {
+        return new File("/storage/emulated/0/Android/" + kind + "/" + mPackageName);
+    }
+
+    @Override public File getObbDir() { return ensure(externalAppDir("obb")); }
     @Override public File[] getObbDirs() { return new File[] { getObbDir() }; }
 
     @Override
     public File getExternalFilesDir(String type) {
-        File base = ensure(new File(getDataDir(), "external"));
+        File base = ensure(new File(externalAppDir("data"), "files"));
         return type == null ? base : ensure(new File(base, type));
     }
 
     @Override public File[] getExternalFilesDirs(String type) { return new File[] { getExternalFilesDir(type) }; }
-    @Override public File getExternalCacheDir() { return ensure(new File(getDataDir(), "external-cache")); }
+    @Override public File getExternalCacheDir() { return ensure(new File(externalAppDir("data"), "cache")); }
     @Override public File[] getExternalCacheDirs() { return new File[] { getExternalCacheDir() }; }
     @Override
-    public File[] getExternalMediaDirs() { return new File[] { ensure(new File(getDataDir(), "external-media")) }; }
+    public File[] getExternalMediaDirs() { return new File[] { ensure(externalAppDir("media")) }; }
 
     @Override
     public String[] fileList() {

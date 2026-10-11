@@ -86,11 +86,13 @@ public class SslContextImpl extends javax.net.ssl.SSLContextSpi {
     }
 
     protected SSLEngine engineCreateSSLEngine() {
-        throw new UnsupportedOperationException("SSLEngine is not supported yet");
+        checkInitialized();
+        return new SslEngineImpl(this, null, -1);
     }
 
     protected SSLEngine engineCreateSSLEngine(String host, int port) {
-        throw new UnsupportedOperationException("SSLEngine is not supported yet");
+        checkInitialized();
+        return new SslEngineImpl(this, host, port);
     }
 
     protected SSLSessionContext engineGetServerSessionContext() {

@@ -530,9 +530,15 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   handshake (default `libcore.ssl.HostnameVerifierImpl`, OkHostnameVerifier's
   rules: subjectAltName DNS and IP entries, one-label wildcards, no
   common name), and throws SSLPeerUnverifiedException like Android.
-- Not yet: TLS 1.3 (mbedtls 2.28), server sockets, SSLEngine
-  (`createSSLEngine` throws UnsupportedOperationException), session
-  resumption, client certificates.
+- `SSLEngine` (`SslEngineImpl`, client mode) drives the same session:
+  `unwrap` takes one whole record per call (BUFFER_UNDERFLOW, nothing
+  consumed, until one is there; BUFFER_OVERFLOW unless the destination
+  holds the record) so no plaintext waits inside the engine, `wrap`
+  turns at most 16 KiB of application data into records, certificates
+  are checked synchronously in `unwrap` (no delegated tasks), and
+  FINISHED is reported once.
+- Not yet: TLS 1.3 (mbedtls 2.28), server sockets and server-mode
+  engines, session resumption, client certificates.
 - Tests: `tests/tls/run_tls_test.sh` starts `tests/tls/server.py`
   (Python ssl, fixed local ports 47441-47444, test PKI from
   `tests/tls/gen_certs.py`) and runs `tests/dex/TlsTest.java` against the

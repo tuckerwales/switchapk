@@ -128,7 +128,7 @@ Not yet: GL on the Switch (Mesa linked but not run on hardware), device
 audio output (audren/audout), running a native library on hardware (code
 memory is mapped; newlib struct translation remains), ALooper and the
 input queue on the Switch (no pipe/poll in newlib) and AAudio,
-SSLEngine and running the sockets and TLS on hardware (WS11), AndroidX
+running the sockets and TLS on hardware (WS11), AndroidX
 (WS14), and running the sensors, rumble and battery on a console
 (WS15). Photo-picker and
 cloud-media helpers on MediaStore (createDeleteRequest, getVersion,
@@ -396,7 +396,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     Android 15's CA set; X.509 certificates, CertificateFactory,
     X500Principal, BKS/PKCS12/AndroidCAStore keystores
     (tests/dex/X509Test, tests/tls/run_tls_test.sh with TlsTest)
-  - [ ] TLS: SSLEngine, session resumption, client certificates, server
+  - [x] SSLEngine, client mode (TlsTest drives one over a SocketChannel)
+  - [ ] TLS: session resumption, client certificates, server
     sockets, TLS 1.3 (needs mbedtls 3), a handshake on hardware
   - [x] java.util.zip and java.util.jar (zlib natives; tests/dex/ZipTest
     against OpenJDK); HttpURLConnection asks for gzip and decodes it

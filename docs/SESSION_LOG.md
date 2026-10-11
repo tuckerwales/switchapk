@@ -1114,3 +1114,8 @@ what is left in flight.
   anchor for certification path not found."), as a phone would. Not yet:
   SSLEngine, session resumption, client certificates, server sockets,
   TLS 1.3, a run on hardware.
+- 2026-10-11, SSLEngine (WS11): a client-mode SSLEngine over the same
+  native session (one record per unwrap, synchronous certificate
+  checks). TlsTest drives it over a blocking SocketChannel (handshake,
+  ALPN, an HTTP request, close_notify both ways, a wrong-host rejection)
+  and matches the reference JVM. PR #28 opened for the TLS work.

@@ -70,6 +70,8 @@ public class TlsTest {
                 + tm.getAcceptedIssuers()[0].getSubjectX500Principal().getName());
 
         socketHandshake(f);
+        engine(ctx, GOOD, true);
+        expectFailure("wrong host, SSLEngine with HTTPS identification", () -> engine(ctx, WRONGHOST, false));
         bulkEcho(f);
         readTimeout(f);
         https(f, "https://" + HOST + ":" + GOOD + "/hello");
@@ -135,6 +137,100 @@ public class TlsTest {
             return "ok " + s.getSession().getProtocol();
         } finally {
             s.close();
+        }
+    }
+
+    /** An HTTP request through an SSLEngine over a blocking SocketChannel, the way NIO clients drive one. */
+    static void engine(SSLContext ctx, int port, boolean print) throws Exception {
+        java.nio.channels.SocketChannel ch = java.nio.channels.SocketChannel.open(
+                new java.net.InetSocketAddress("127.0.0.1", port));
+        try {
+            javax.net.ssl.SSLEngine e = ctx.createSSLEngine(HOST, port);
+            e.setUseClientMode(true);
+            SSLParameters p = e.getSSLParameters();
+            p.setEndpointIdentificationAlgorithm("HTTPS");
+            p.setApplicationProtocols(new String[] {"http/1.1"});
+            e.setSSLParameters(p);
+            java.nio.ByteBuffer net = java.nio.ByteBuffer.allocate(e.getSession().getPacketBufferSize());
+            java.nio.ByteBuffer in = java.nio.ByteBuffer.allocate(e.getSession().getPacketBufferSize());
+            java.nio.ByteBuffer app = java.nio.ByteBuffer.allocate(e.getSession().getApplicationBufferSize() + 64);
+            java.nio.ByteBuffer empty = java.nio.ByteBuffer.allocate(0);
+            e.beginHandshake();
+            javax.net.ssl.SSLEngineResult.HandshakeStatus hs = e.getHandshakeStatus();
+            boolean finished = false;
+            while (hs != javax.net.ssl.SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING
+                    && hs != javax.net.ssl.SSLEngineResult.HandshakeStatus.FINISHED) {
+                switch (hs) {
+                    case NEED_WRAP: {
+                        net.clear();
+                        javax.net.ssl.SSLEngineResult r = e.wrap(empty, net);
+                        net.flip();
+                        while (net.hasRemaining()) ch.write(net);
+                        hs = r.getHandshakeStatus();
+                        break;
+                    }
+                    case NEED_UNWRAP: {
+                        javax.net.ssl.SSLEngineResult r;
+                        in.flip();
+                        r = e.unwrap(in, app);
+                        in.compact();
+                        if (r.getStatus() == javax.net.ssl.SSLEngineResult.Status.BUFFER_UNDERFLOW) {
+                            if (ch.read(in) < 0) throw new IOException("closed during handshake");
+                        }
+                        hs = r.getHandshakeStatus();
+                        break;
+                    }
+                    case NEED_TASK: {
+                        Runnable t;
+                        while ((t = e.getDelegatedTask()) != null) t.run();
+                        hs = e.getHandshakeStatus();
+                        break;
+                    }
+                    default:
+                        throw new IllegalStateException(hs.toString());
+                }
+                if (hs == javax.net.ssl.SSLEngineResult.HandshakeStatus.FINISHED) finished = true;
+            }
+            if (print) {
+                System.out.println("engine: handshake finished " + finished + ", " + e.getSession().getProtocol() + " "
+                        + e.getSession().getCipherSuite() + ", ALPN " + e.getApplicationProtocol()
+                        + ", peer " + ((X509Certificate) e.getSession().getPeerCertificates()[0])
+                        .getSubjectX500Principal().getName());
+            }
+            byte[] req = ("GET /hello HTTP/1.1\r\nHost: " + HOST + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII);
+            net.clear();
+            javax.net.ssl.SSLEngineResult w = e.wrap(java.nio.ByteBuffer.wrap(req), net);
+            net.flip();
+            while (net.hasRemaining()) ch.write(net);
+            ByteArrayOutputStream resp = new ByteArrayOutputStream();
+            boolean closed = false;
+            while (!closed) {
+                in.flip();
+                app.clear();
+                javax.net.ssl.SSLEngineResult r = e.unwrap(in, app);
+                in.compact();
+                app.flip();
+                byte[] got = new byte[app.remaining()];
+                app.get(got);
+                resp.write(got);
+                if (r.getStatus() == javax.net.ssl.SSLEngineResult.Status.CLOSED) {
+                    closed = true;
+                } else if (r.getStatus() == javax.net.ssl.SSLEngineResult.Status.BUFFER_UNDERFLOW) {
+                    if (ch.read(in) < 0) closed = true;
+                }
+            }
+            String text = resp.toString("US-ASCII");
+            if (print) {
+                System.out.println("engine: wrapped " + w.bytesConsumed() + " bytes; response "
+                        + text.substring(0, text.indexOf('\r')) + " / " + text.substring(text.indexOf("\r\n\r\n") + 4).trim()
+                        + "; inbound done " + e.isInboundDone());
+            }
+            e.closeOutbound();
+            net.clear();
+            javax.net.ssl.SSLEngineResult c = e.wrap(empty, net);
+            System.out.println("engine: close " + (print ? c.getStatus() + ", outbound done " + e.isOutboundDone() : ""));
+        } finally {
+            ch.close();
         }
     }
 

@@ -4,7 +4,6 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.BiFunction;
 
-/** API only so far: SSLContext.createSSLEngine throws UnsupportedOperationException until an engine exists. */
 public abstract class SSLEngine {
     private final String peerHost;
     private final int peerPort;

@@ -8,15 +8,17 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Describes an asset inside the APK. There is no real file descriptor; media
- * APIs recognise AssetFileDescriptor and read the asset through AssetManager.
+ * Describes an asset inside the APK. As on Android, a stored (uncompressed) asset has a real file
+ * descriptor: the APK opened read-only, with the start offset of the asset's data, so code that passes
+ * (fd, offset, length) along works. AssetManager.openFd refuses compressed assets, as Android does; raw
+ * resources (Resources.openRawResourceFd) may still be compressed, and media APIs read those by name.
  */
 public class AssetFileDescriptor implements Closeable, android.os.Parcelable {
     public static final long UNKNOWN_LENGTH = -1;
 
     private final AssetManager mAssets;
     private final String mAssetName;
-    private final ParcelFileDescriptor mFd;
+    private ParcelFileDescriptor mFd;
     private final long mStartOffset;
     private final long mLength;
 
@@ -38,12 +40,37 @@ public class AssetFileDescriptor implements Closeable, android.os.Parcelable {
 
     /** Name of the asset (relative to assets/) when this describes an APK asset. */
     public String getAssetName() { return mAssetName; }
-    public ParcelFileDescriptor getParcelFileDescriptor() { return mFd; }
-    public FileDescriptor getFileDescriptor() { return mFd != null ? mFd.getFileDescriptor() : new FileDescriptor(); }
+    public ParcelFileDescriptor getParcelFileDescriptor() {
+        openApkFd();
+        return mFd;
+    }
+
+    /** A stored asset gets the APK itself, read-only, as its descriptor. */
+    private synchronized void openApkFd() {
+        if (mFd != null || mAssetName == null || mStartOffset < 0) return;
+        String apk = AssetManager.getApkPath();
+        if (apk == null) return;
+        try {
+            mFd = ParcelFileDescriptor.open(new java.io.File(apk), ParcelFileDescriptor.MODE_READ_ONLY);
+        } catch (IOException e) {
+            mFd = null;
+        }
+    }
+    public FileDescriptor getFileDescriptor() {
+        openApkFd();
+        return mFd != null ? mFd.getFileDescriptor() : new FileDescriptor();
+    }
     public long getStartOffset() { return mStartOffset < 0 ? 0 : mStartOffset; }
     public long getLength() { return mLength; }
     public long getDeclaredLength() { return mLength; }
-    public void close() throws IOException {}
+    public void close() throws IOException {
+        ParcelFileDescriptor fd;
+        synchronized (this) {
+            fd = mAssetName != null ? mFd : null;
+            if (fd != null) mFd = null;
+        }
+        if (fd != null) fd.close();
+    }
 
     public java.io.FileInputStream createInputStream() throws IOException {
         if (mAssetName != null) return new AutoCloseInputStream(mAssets.open(mAssetName));

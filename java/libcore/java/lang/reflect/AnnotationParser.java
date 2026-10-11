@@ -28,6 +28,13 @@ public final class AnnotationParser {
 
     private static native Object readDefaultNative(long token);
 
+    private static native String readSignature(Class<?> owner, int kind, long token);
+
+    /** The generic signature (dalvik.annotation.Signature) of a class, field or method, or null. */
+    public static String signature(Class<?> owner, int kind, long token) {
+        return readSignature(owner, kind, token);
+    }
+
     public static <T extends Annotation> T findClass(Class<?> owner, Class<T> type) {
         if (type == null) throw new NullPointerException("annotationClass");
         return findIn(readNative(owner, KIND_CLASS, 0), type);

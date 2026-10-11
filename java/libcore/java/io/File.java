@@ -156,7 +156,16 @@ public class File implements Serializable, Comparable<File> {
     }
 
     public boolean canExecute() {
-        return isDirectory();
+        long[] s = stat();
+        return s[0] != 0 && (s[1] != 0 || s[7] != 0);
+    }
+
+    public boolean setExecutable(boolean executable, boolean ownerOnly) {
+        return Os.setExecutable(path, executable, ownerOnly);
+    }
+
+    public boolean setExecutable(boolean executable) {
+        return setExecutable(executable, true);
     }
 
     public boolean exists() {
@@ -288,14 +297,6 @@ public class File implements Serializable, Comparable<File> {
     }
 
     public boolean setReadable(boolean readable) {
-        return true;
-    }
-
-    public boolean setExecutable(boolean executable, boolean ownerOnly) {
-        return true;
-    }
-
-    public boolean setExecutable(boolean executable) {
         return true;
     }
 

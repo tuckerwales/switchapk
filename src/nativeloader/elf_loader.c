@@ -23,6 +23,7 @@
  */
 #include "nativeloader.h"
 #include "../core/zip.h"
+#include <sys/stat.h>
 
 #ifndef __SWITCH__
 #include <sys/mman.h>
@@ -138,6 +139,8 @@ struct SaLib {
     const uint32_t *gnu_hash;
     SaLib **needed;
     int nneeded;
+    Elf64Phdr *phdr; /* copy of the program headers, for dl_iterate_phdr */
+    int phnum;
     uint8_t *stubs; /* unresolved-import stubs */
     size_t stubs_size, stubs_used;
     int refcount;
@@ -148,6 +151,7 @@ struct SaLib {
 static pthread_mutex_t g_lock;
 static pthread_once_t g_lock_once = PTHREAD_ONCE_INIT;
 static SaLib *g_libs;
+static unsigned long long g_adds; /* libraries loaded so far, for dl_phdr_info.dlpi_adds */
 
 static void init_lock(void) {
     pthread_mutexattr_t a;
@@ -647,6 +651,7 @@ static void free_lib(SaLib *lib) {
     if (lib->map) unmap(lib->map, lib->map_size);
     if (lib->stubs) unmap(lib->stubs, lib->stubs_size);
     free(lib->needed);
+    free(lib->phdr);
     free(lib->name);
     free(lib);
 }
@@ -707,6 +712,9 @@ static SaLib *load_image(const char *name, const uint8_t *data, size_t len, char
         return NULL;
     }
     lib->bias = lib->map - lo;
+    lib->phnum = eh->e_phnum;
+    lib->phdr = sa_malloc((size_t)eh->e_phnum * sizeof(Elf64Phdr));
+    memcpy(lib->phdr, ph, (size_t)eh->e_phnum * sizeof(Elf64Phdr));
     for (int i = 0; i < eh->e_phnum; i++)
         if (ph[i].p_type == PT_LOAD) memcpy(lib->bias + ph[i].p_vaddr, data + ph[i].p_offset, ph[i].p_filesz);
 
@@ -746,6 +754,7 @@ static SaLib *load_image(const char *name, const uint8_t *data, size_t len, char
     lib->refcount = 1;
     lib->next = g_libs;
     g_libs = lib;
+    g_adds++;
 
     lib->needed = sa_calloc((size_t)nneeded + 1, sizeof(SaLib *));
     for (const Elf64Dyn *d = dyn; d->d_tag != DT_NULL; d++) {
@@ -843,6 +852,80 @@ static SaLib *load_locked(const char *name, char *err, size_t errlen, int depth)
     return l;
 }
 
+/* ---- executables (spawn.c) ------------------------------------------------------------------------------------ */
+
+void *loader_load_executable(const char *path, char *err, size_t errlen) {
+    static int serial;
+    size_t len = 0;
+    uint8_t *data = read_library(path, &len);
+    if (!data) {
+        snprintf(err, errlen, "cannot read \"%s\"", path);
+        return NULL;
+    }
+    const Elf64Ehdr *eh = (const Elf64Ehdr *)data;
+    if (len < sizeof *eh || memcmp(eh->e_ident, "\x7f" "ELF", 4) != 0 || eh->e_type != ET_DYN || !eh->e_entry) {
+        snprintf(err, errlen, "\"%s\" is not a position-independent executable", path);
+        free(data);
+        return NULL;
+    }
+    /* a fresh image per start: each run gets its own globals, as a new process would */
+    lock();
+    char name[300];
+    snprintf(name, sizeof name, "%s#%d", base_name(path), ++serial);
+    SaLib *lib = load_image(name, data, len, err, errlen, 0);
+    unlock();
+    void *entry = lib ? (void *)(lib->bias + eh->e_entry) : NULL;
+    free(data);
+    return entry;
+}
+
+void loader_extract_native_libs(const char *android_dir) {
+    if (!g_app_zip || !android_dir) return;
+    char *dir = platform_map_path(android_dir);
+    if (!dir) return;
+    char prefix[64];
+    snprintf(prefix, sizeof prefix, "lib/%s/", SA_NATIVE_ABI);
+    size_t plen = strlen(prefix);
+    bool made = false;
+    int written = 0;
+    for (size_t i = 0; i < zip_count(g_app_zip); i++) {
+        const ZipEntry *e = zip_entry_at(g_app_zip, i);
+        if (strncmp(e->name, prefix, plen) != 0 || strchr(e->name + plen, '/') || !e->name[plen]) continue;
+        if (!made) {
+            /* mkdir -p */
+            for (char *q = dir + 1; *q; q++) {
+                if (*q != '/') continue;
+                *q = 0;
+                mkdir(dir, 0755);
+                *q = '/';
+            }
+            mkdir(dir, 0755);
+            made = true;
+        }
+        char *out = sa_sprintf("%s/%s", dir, e->name + plen);
+        struct stat st;
+        if (stat(out, &st) == 0 && (uint64_t)st.st_size == e->uncomp_size) {
+            free(out);
+            continue;
+        }
+        size_t n = 0;
+        uint8_t *bytes = zip_extract(g_app_zip, e, &n);
+        FILE *f = bytes ? fopen(out, "wb") : NULL;
+        if (f) {
+            fwrite(bytes, 1, n, f);
+            fclose(f);
+#ifndef __SWITCH__
+            chmod(out, 0755);
+#endif
+            written++;
+        }
+        free(bytes);
+        free(out);
+    }
+    if (written) LOGI("extracted %d native libraries to %s", written, android_dir);
+    free(dir);
+}
+
 /* ---- dl* for the shim -------------------------------------------------------------------------------------- */
 
 /* Handle for a shim library: dlsym on it searches the shim tables. */
@@ -877,6 +960,38 @@ int loader_dlclose(void *handle) {
     /* libraries stay loaded (Android rarely unloads either; static destructors are not run) */
     SA_UNUSED(handle);
     return 0;
+}
+
+/* dl_iterate_phdr over the libraries we loaded (unwinders find .eh_frame_hdr this way). Layout matches
+ * bionic's and glibc's struct dl_phdr_info on 64-bit. */
+typedef struct {
+    uint64_t dlpi_addr;
+    const char *dlpi_name;
+    const Elf64Phdr *dlpi_phdr;
+    uint16_t dlpi_phnum;
+    unsigned long long dlpi_adds;
+    unsigned long long dlpi_subs;
+    size_t dlpi_tls_modid;
+    void *dlpi_tls_data;
+} LoaderPhdrInfo;
+
+int loader_iterate_phdr(int (*cb)(void *info, size_t size, void *data), void *data) {
+    lock();
+    int r = 0;
+    for (SaLib *l = g_libs; l && r == 0; l = l->next) {
+        if (!l->phdr) continue;
+        LoaderPhdrInfo info;
+        memset(&info, 0, sizeof info);
+        info.dlpi_addr = (uint64_t)(uintptr_t)l->bias;
+        info.dlpi_name = l->name;
+        info.dlpi_phdr = l->phdr;
+        info.dlpi_phnum = (uint16_t)l->phnum;
+        info.dlpi_adds = g_adds;
+        info.dlpi_subs = 0;
+        r = cb(&info, sizeof info, data);
+    }
+    unlock();
+    return r;
 }
 
 bool loader_dladdr(const void *addr, const char **fname, void **fbase, const char **sname, void **saddr) {

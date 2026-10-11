@@ -9,7 +9,7 @@
  * The queue is read from a thread of the app's choosing (the glue thread):
  * a pipe holds one byte per queued event, and attachLooper registers its
  * read end with the app's ALooper. Plain C over pthread and pipe, so it needs
- * no VM access; see native_looper.c for the Switch caveat.
+ * no VM access. On the Switch the pipe is virtual (vfd.c).
  */
 #include "native_input.h"
 #include "../core/common.h"
@@ -19,10 +19,28 @@
 
 #define LOG_TAG "input"
 
-#ifndef __SWITCH__
 #include <errno.h>
+#ifdef __SWITCH__
+/* no pipe in newlib: the shim's virtual pipes, which the Switch ALooper polls */
+#include "vfd.h"
+#define in_pipe(fds) vfd_pipe(fds, VFD_NONBLOCK)
+#define in_read vfd_read
+#define in_write vfd_write
+#define in_close vfd_close
+#else
 #include <fcntl.h>
 #include <unistd.h>
+static int in_pipe(int fds[2]) {
+    if (pipe(fds) != 0) return -1;
+    for (int i = 0; i < 2; i++) {
+        fcntl(fds[i], F_SETFL, fcntl(fds[i], F_GETFL) | O_NONBLOCK);
+        fcntl(fds[i], F_SETFD, FD_CLOEXEC);
+    }
+    return 0;
+}
+#define in_read read
+#define in_write write
+#define in_close close
 #endif
 
 #define NI_MAX_POINTERS 10
@@ -55,71 +73,14 @@ struct AInputQueue {
 
 /* ---- queue ------------------------------------------------------------------------------------------------ */
 
-#ifdef __SWITCH__
-
-AInputQueue *native_input_queue_new(void (*unhandled)(void *, const AInputEvent *), void *user) {
-    SA_UNUSED(unhandled);
-    SA_UNUSED(user);
-    return NULL;
-}
-void native_input_queue_free(AInputQueue *q) { SA_UNUSED(q); }
-bool native_input_queue_attached(AInputQueue *q) {
-    SA_UNUSED(q);
-    return false;
-}
-bool native_input_enqueue_key(AInputQueue *q, int32_t action, int32_t key_code, int32_t scan_code, int32_t meta_state,
-                              int32_t repeat, int32_t flags, int32_t source, int32_t device_id, int64_t down_time,
-                              int64_t event_time) {
-    SA_UNUSED(q), SA_UNUSED(action), SA_UNUSED(key_code), SA_UNUSED(scan_code), SA_UNUSED(meta_state);
-    SA_UNUSED(repeat), SA_UNUSED(flags), SA_UNUSED(source), SA_UNUSED(device_id), SA_UNUSED(down_time);
-    SA_UNUSED(event_time);
-    return false;
-}
-bool native_input_enqueue_motion(AInputQueue *q, int32_t action, int32_t source, int32_t device_id, int32_t flags,
-                                 int32_t meta_state, int32_t button_state, int32_t edge_flags, int64_t down_time,
-                                 int64_t event_time, int32_t pointer_count, const int32_t *ids, const float *axes) {
-    SA_UNUSED(q), SA_UNUSED(action), SA_UNUSED(source), SA_UNUSED(device_id), SA_UNUSED(flags);
-    SA_UNUSED(meta_state), SA_UNUSED(button_state), SA_UNUSED(edge_flags), SA_UNUSED(down_time);
-    SA_UNUSED(event_time), SA_UNUSED(pointer_count), SA_UNUSED(ids), SA_UNUSED(axes);
-    return false;
-}
-void AInputQueue_attachLooper(AInputQueue *q, ALooper *l, int ident, ALooper_callbackFunc cb, void *data) {
-    SA_UNUSED(q), SA_UNUSED(l), SA_UNUSED(ident), SA_UNUSED(cb), SA_UNUSED(data);
-}
-void AInputQueue_detachLooper(AInputQueue *q) { SA_UNUSED(q); }
-int32_t AInputQueue_hasEvents(AInputQueue *q) {
-    SA_UNUSED(q);
-    return -1;
-}
-int32_t AInputQueue_getEvent(AInputQueue *q, AInputEvent **out) {
-    SA_UNUSED(q);
-    SA_UNUSED(out);
-    return -1;
-}
-int32_t AInputQueue_preDispatchEvent(AInputQueue *q, AInputEvent *e) {
-    SA_UNUSED(q);
-    SA_UNUSED(e);
-    return 0;
-}
-void AInputQueue_finishEvent(AInputQueue *q, AInputEvent *e, int handled) {
-    SA_UNUSED(q);
-    SA_UNUSED(handled);
-    free(e);
-}
-
-#else
 
 AInputQueue *native_input_queue_new(void (*unhandled)(void *, const AInputEvent *), void *user) {
     AInputQueue *q = sa_calloc(1, sizeof *q);
     pthread_mutex_init(&q->lock, NULL);
-    if (pipe(q->fds) != 0) {
+    if (in_pipe(q->fds) != 0) {
         LOGE("cannot create the input pipe: %s", strerror(errno));
         free(q);
         return NULL;
-    }
-    for (int i = 0; i < 2; i++) {
-        fcntl(q->fds[i], F_SETFL, fcntl(q->fds[i], F_GETFL) | O_NONBLOCK);
-        fcntl(q->fds[i], F_SETFD, FD_CLOEXEC);
     }
     q->unhandled = unhandled;
     q->user = user;
@@ -136,8 +97,8 @@ void native_input_queue_free(AInputQueue *q) {
         free(e);
     }
     pthread_mutex_unlock(&q->lock);
-    close(q->fds[0]);
-    close(q->fds[1]);
+    in_close(q->fds[0]);
+    in_close(q->fds[1]);
     pthread_mutex_destroy(&q->lock);
     free(q);
 }
@@ -166,7 +127,7 @@ static bool enqueue(AInputQueue *q, AInputEvent *e) {
     char c = 1;
     ssize_t r;
     do {
-        r = write(q->fds[1], &c, 1);
+        r = in_write(q->fds[1], &c, 1);
     } while (r < 0 && errno == EINTR);
     return true;
 }
@@ -257,7 +218,7 @@ int32_t AInputQueue_getEvent(AInputQueue *q, AInputEvent **out) {
     char c;
     ssize_t r;
     do {
-        r = read(q->fds[0], &c, 1);
+        r = in_read(q->fds[0], &c, 1);
     } while (r < 0 && errno == EINTR);
     *out = e;
     return 0;
@@ -275,9 +236,6 @@ void AInputQueue_finishEvent(AInputQueue *q, AInputEvent *e, int handled) {
     if (!handled && q && q->unhandled) q->unhandled(q->user, e);
     free(e);
 }
-
-#endif
-
 /* ---- events ----------------------------------------------------------------------------------------------- */
 
 int32_t AInputEvent_getType(const AInputEvent *e) { return e->type; }

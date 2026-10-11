@@ -3,7 +3,8 @@ package java.util.logging;
 import java.util.ArrayList;
 
 public class Level implements java.io.Serializable {
-    private static final ArrayList<Level> known = new ArrayList<Level>();
+    private static final long serialVersionUID = -8176160795706313070L;
+    private static final ArrayList<Level> KNOWN = new ArrayList<Level>();
 
     public static final Level OFF = new Level("OFF", Integer.MAX_VALUE);
     public static final Level SEVERE = new Level("SEVERE", 1000);
@@ -24,12 +25,14 @@ public class Level implements java.io.Serializable {
     }
 
     protected Level(String name, int value, String resourceBundleName) {
-        if (name == null) throw new NullPointerException();
+        if (name == null) {
+            throw new NullPointerException();
+        }
         this.name = name;
         this.value = value;
         this.resourceBundleName = resourceBundleName;
-        synchronized (known) {
-            known.add(this);
+        synchronized (KNOWN) {
+            KNOWN.add(this);
         }
     }
 
@@ -55,26 +58,30 @@ public class Level implements java.io.Serializable {
 
     public static synchronized Level parse(String name) throws IllegalArgumentException {
         name.length();
-        synchronized (known) {
-            for (Level l : known) {
-                if (l.name.equals(name)) return l;
+        synchronized (KNOWN) {
+            for (Level l : KNOWN) {
+                if (l.name.equals(name)) {
+                    return l;
+                }
             }
         }
         try {
-            int v = Integer.parseInt(name);
-            synchronized (known) {
-                for (Level l : known) {
-                    if (l.value == v) return l;
+            int x = Integer.parseInt(name);
+            synchronized (KNOWN) {
+                for (Level l : KNOWN) {
+                    if (l.value == x) {
+                        return l;
+                    }
                 }
             }
-            return new Level(name, v);
-        } catch (NumberFormatException ignored) {
+            return new Level(name, x);
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("Bad level \"" + name + "\"");
         }
-        throw new IllegalArgumentException("Bad level \"" + name + "\"");
     }
 
-    public boolean equals(Object o) {
-        return o instanceof Level && ((Level) o).value == value;
+    public boolean equals(Object ox) {
+        return ox instanceof Level && ((Level) ox).value == value;
     }
 
     public int hashCode() {

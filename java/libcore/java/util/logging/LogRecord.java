@@ -3,27 +3,29 @@ package java.util.logging;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class LogRecord implements java.io.Serializable {
-    private static final AtomicLong nextSequence = new AtomicLong();
+    private static final long serialVersionUID = 5372048053134512534L;
+    private static final AtomicLong globalSequenceNumber = new AtomicLong();
 
     private Level level;
     private long sequenceNumber;
     private String sourceClassName;
     private String sourceMethodName;
     private String message;
-    private int threadID;
+    private long threadID;
     private long millis;
     private Throwable thrown;
     private String loggerName;
     private String resourceBundleName;
-    private Object[] parameters;
+    private transient Object[] parameters;
+    private transient boolean needToInferCaller = true;
 
     public LogRecord(Level level, String msg) {
-        if (level == null) throw new NullPointerException();
+        level.getClass();
         this.level = level;
-        this.message = msg;
-        this.sequenceNumber = nextSequence.getAndIncrement();
-        this.threadID = (int) Thread.currentThread().getId();
-        this.millis = System.currentTimeMillis();
+        message = msg;
+        sequenceNumber = globalSequenceNumber.getAndIncrement();
+        threadID = Thread.currentThread().getId();
+        millis = System.currentTimeMillis();
     }
 
     public String getLoggerName() {
@@ -47,7 +49,9 @@ public class LogRecord implements java.io.Serializable {
     }
 
     public void setLevel(Level level) {
-        if (level == null) throw new NullPointerException();
+        if (level == null) {
+            throw new NullPointerException();
+        }
         this.level = level;
     }
 
@@ -60,19 +64,44 @@ public class LogRecord implements java.io.Serializable {
     }
 
     public String getSourceClassName() {
+        if (needToInferCaller) {
+            inferCaller();
+        }
         return sourceClassName;
     }
 
     public void setSourceClassName(String sourceClassName) {
         this.sourceClassName = sourceClassName;
+        needToInferCaller = false;
     }
 
     public String getSourceMethodName() {
+        if (needToInferCaller) {
+            inferCaller();
+        }
         return sourceMethodName;
     }
 
     public void setSourceMethodName(String sourceMethodName) {
         this.sourceMethodName = sourceMethodName;
+        needToInferCaller = false;
+    }
+
+    /** The first frame after the logging classes, as the JDK infers it. */
+    private void inferCaller() {
+        needToInferCaller = false;
+        StackTraceElement[] stack = new Throwable().getStackTrace();
+        boolean inLogger = false;
+        for (StackTraceElement e : stack) {
+            boolean logging = e.getClassName().startsWith("java.util.logging.");
+            if (logging) {
+                inLogger = true;
+            } else if (inLogger) {
+                sourceClassName = e.getClassName();
+                sourceMethodName = e.getMethodName();
+                return;
+            }
+        }
     }
 
     public String getMessage() {
@@ -91,12 +120,23 @@ public class LogRecord implements java.io.Serializable {
         this.parameters = parameters;
     }
 
+    @Deprecated
     public int getThreadID() {
+        return (int) threadID;
+    }
+
+    @Deprecated
+    public void setThreadID(int threadID) {
+        this.threadID = threadID;
+    }
+
+    public long getLongThreadID() {
         return threadID;
     }
 
-    public void setThreadID(int threadID) {
-        this.threadID = threadID;
+    public LogRecord setLongThreadID(long longThreadID) {
+        threadID = longThreadID;
+        return this;
     }
 
     public long getMillis() {

@@ -52,6 +52,11 @@ public final class AssetManager implements AutoCloseable {
     public final AssetFileDescriptor openFd(String fileName) throws IOException {
         long[] info = new long[2];
         if (!nAssetInfo(fileName, info)) throw new FileNotFoundException(fileName);
+        // As Android: only stored assets have a descriptor (the APK at the data offset).
+        if (info[0] < 0) {
+            throw new FileNotFoundException("This file can not be opened as a file descriptor; it is probably "
+                    + "compressed");
+        }
         return new AssetFileDescriptor(this, fileName, info[0], info[1]);
     }
 

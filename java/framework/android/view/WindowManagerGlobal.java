@@ -76,6 +76,10 @@ public final class WindowManagerGlobal {
     public void removeView(View view) {
         ViewRootImpl root = find(view);
         if (root == null) throw new IllegalArgumentException("View=" + view + " not attached to window manager");
+        // As on Android, the window loses focus while it is still added: apps update their window
+        // (setFlags, updateViewLayout) from onWindowFocusChanged(false).
+        root.windowFocusChanged(false);
+        if (!mRoots.contains(root)) return; // removed from the callback
         mRoots.remove(root);
         if (mTouchRoot == root) mTouchRoot = null;
         if (mFocusedRoot == root) mFocusedRoot = null;

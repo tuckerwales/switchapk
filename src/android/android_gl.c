@@ -20,6 +20,7 @@
  */
 #include "android_gl.h"
 #include "nativeloader/native_window.h"
+#include "nativeloader/nativeloader.h"
 
 #if defined(__SWITCH__) && defined(SA_HAVE_EGL)
 #include <EGL/egl.h>
@@ -1293,20 +1294,29 @@ static uint32_t wrap_eglSwapBuffers(void *dpy, void *surface) {
     SaSurf *s = as_surf(surface);
     if (!s) return sa_egl.eglSwapBuffers ? sa_egl.eglSwapBuffers(dpy, surface) : 0;
     if (!s->anw) return !s->real || (sa_egl.eglSwapBuffers && sa_egl.eglSwapBuffers(dpy, s->real));
+    /* Posting reaches the Java surface. Native render threads (GameActivity, android_native_app_glue) are not VM
+     * threads or run without the GIL: attach them for the post, as JNI callers are. */
     VMThread *t = vm_current_thread();
+    NlVm vm;
+    bool entered = false;
     if (!t || !t->has_gil) {
-        LOGE("posting a native window frame requires the VM thread");
-        set_egl_error(EGL_BAD_ACCESS);
-        return 0;
+        if (!nl_vm_enter(&vm)) {
+            LOGE("cannot attach the rendering thread to post a native window frame");
+            set_egl_error(EGL_BAD_ACCESS);
+            return 0;
+        }
+        entered = true;
+        t = vm.t;
     }
     size_t n = (size_t)s->w * (size_t)s->h;
     uint32_t *argb = malloc(n * 4);
+    bool ok = argb && read_surf_argb(t, s, argb, anw_opaque(s->anw));
+    if (ok) ok = anw_post_argb(s->anw, argb, s->w, s->h);
+    if (entered) nl_vm_leave(&vm);
     if (!argb) {
         set_egl_error(EGL_BAD_ALLOC);
         return 0;
     }
-    bool ok = read_surf_argb(t, s, argb, anw_opaque(s->anw));
-    if (ok) ok = anw_post_argb(s->anw, argb, s->w, s->h);
     free(argb);
     if (!ok) {
         set_egl_error(EGL_BAD_SURFACE);

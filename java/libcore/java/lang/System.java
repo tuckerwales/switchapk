@@ -19,10 +19,23 @@ public final class System {
         props = new Properties();
         props.setProperty("java.vm.name", "Dalvik");
         props.setProperty("java.vm.version", "2.1.0");
-        props.setProperty("java.vm.vendor", "switchapk");
+        // ART's identity: apps test it (Old School RuneScape loads its Android library only for this vendor)
+        props.setProperty("java.vm.vendor", "The Android Project");
+        props.setProperty("java.vm.vendor.url", "http://www.android.com/");
         props.setProperty("java.version", "0");
         props.setProperty("java.vendor", "The Android Project");
         props.setProperty("java.specification.version", "0.9");
+        props.setProperty("java.specification.name", "Dalvik Core Library");
+        props.setProperty("java.specification.vendor", "The Android Project");
+        props.setProperty("java.vm.specification.name", "Dalvik Virtual Machine Specification");
+        props.setProperty("java.vm.specification.vendor", "The Android Project");
+        props.setProperty("java.vm.specification.version", "0.9");
+        // libGDX and others check this to tell Android from a desktop JVM.
+        props.setProperty("java.runtime.name", "Android Runtime");
+        props.setProperty("java.runtime.version", "0.9");
+        props.setProperty("java.vendor.url", "http://www.android.com/");
+        props.setProperty("java.class.version", "50.0");
+        props.setProperty("android.vm.dexfile", "true");
         props.setProperty("java.class.path", ".");
         props.setProperty("java.home", "/system");
         props.setProperty("java.io.tmpdir", "/data/local/tmp");

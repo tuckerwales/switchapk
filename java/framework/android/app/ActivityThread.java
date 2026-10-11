@@ -40,6 +40,10 @@ public final class ActivityThread {
     private static final String ANDROID_NS = "http://schemas.android.com/apk/res/android";
 
     static String sPackageName;
+    /** From the manifest element; versionName may be a string resource, resolved when asked. */
+    static int sVersionCode, sVersionCodeMajor, sVersionNameRes;
+    static String sVersionName;
+    static final ArrayList<String> sPermissions = new ArrayList<String>();
     static String sApkPath;
     static String sAppClass;
     static ApplicationInfo sAppInfo;
@@ -144,6 +148,19 @@ public final class ActivityThread {
                 rec.activity.mFinished = true;
                 finishActivity(rec.activity, Activity.RESULT_CANCELED, null);
             }
+        }
+    }
+
+    /** @hide AOSP's hidden accessor: the process is named after the package. */
+    public static String currentProcessName() { return sPackageName; }
+
+    /** @hide */
+    public static String currentPackageName() { return sPackageName; }
+
+    /** ActivityManager.AppTask.finishAndRemoveTask: every activity of the one task. */
+    static void finishAllActivities() {
+        if (!sStack.isEmpty() && sStack.get(sStack.size() - 1).activity != null) {
+            finishAffinity(sStack.get(sStack.size() - 1).activity);
         }
     }
 
@@ -313,8 +330,9 @@ public final class ActivityThread {
     /** New instance, attach, onCreate. False if it finished (or threw away its record) during onCreate. */
     private static boolean createRecord(ActivityRecord rec, Bundle state, Activity.NonConfigurationInstances nci) {
         ActivityInfo info = rec.parsed.info;
-        Object obj = newComponent(info.name);
-        if (!(obj instanceof Activity)) throw new ClassCastException(info.name + " is not an Activity");
+        String cls = info.targetActivity != null ? info.targetActivity : info.name;
+        Object obj = newComponent(cls);
+        if (!(obj instanceof Activity)) throw new ClassCastException(cls + " is not an Activity");
         Activity a = (Activity) obj;
         rec.activity = a;
         rec.started = false;
@@ -553,6 +571,7 @@ public final class ActivityThread {
         int diff = oldConfig.diff(newConfig);
         sResources.updateConfiguration(newConfig, metrics);
         WindowManagerGlobal.getInstance().onDisplayChanged();
+        android.hardware.display.DisplayManager.notifyDisplayChanged();
         if (diff == 0) return;
         Configuration config = new Configuration(sResources.getConfiguration());
         sApplication.onConfigurationChanged(new Configuration(config));
@@ -626,8 +645,12 @@ public final class ActivityThread {
         sApkPath = apk;
         parseManifest();
         Process.ActivityThreadHook.setProcessName(sPackageName);
+        // As DexPathList: the library directory first, then the uncompressed libraries in the APK.
+        ((dalvik.system.BaseDexClassLoader) ClassLoader.getSystemClassLoader()).addNativePath(java.util.Arrays.asList(
+                sAppInfo.nativeLibraryDir, sApkPath + "!/lib/" + android.os.Build.CPU_ABI));
         sResources = buildResources();
         Resources.setSystem(sResources);
+        resolveMetaDataRefs();
         sContext = new ContextImpl(sPackageName, sAppInfo, sApkPath, sResources);
         android.security.keystore.AndroidKeyStoreProvider.install(sContext.getDataDir());
         String appClass = sAppClass != null ? sAppClass : "android.app.Application";
@@ -674,6 +697,7 @@ public final class ActivityThread {
         display.getMetrics(metrics);
         Configuration config = new Configuration();
         config.setToDefaults();
+        config.setLocales(android.os.LocaleList.getDefault());
         config.densityDpi = metrics.densityDpi;
         config.touchscreen = Configuration.TOUCHSCREEN_FINGER;
         config.keyboard = Configuration.KEYBOARD_NOKEYS;
@@ -692,8 +716,11 @@ public final class ActivityThread {
         return config;
     }
 
+    private static native void nExtractNativeLibs(String nativeLibraryDir);
+
     private static void parseManifest() throws Exception {
         sActivities.clear();
+        sPermissions.clear();
         sReceivers.clear();
         sServices.clear();
         sProviders.clear();
@@ -711,6 +738,15 @@ public final class ActivityThread {
                     if ("manifest".equals(name)) {
                         sPackageName = parser.getAttributeValue(null, "package");
                         if (sPackageName == null) sPackageName = parser.getAttributeValue("", "package");
+                        sVersionCode = attrInt(parser, android.R.attr.versionCode, "versionCode", 0);
+                        sVersionCodeMajor = attrInt(parser, android.R.attr.versionCodeMajor, "versionCodeMajor", 0);
+                        int versionNameRes = attrRes(parser, android.R.attr.versionName, "versionName");
+                        sVersionName = versionNameRes != 0 ? null
+                                : attrString(parser, android.R.attr.versionName, "versionName");
+                        sVersionNameRes = versionNameRes;
+                    } else if ("uses-permission".equals(name) || "uses-permission-sdk-23".equals(name)) {
+                        String perm = attrString(parser, android.R.attr.name, "name");
+                        if (perm != null && !sPermissions.contains(perm)) sPermissions.add(perm);
                     } else if ("uses-sdk".equals(name)) {
                         readUsesSdk(parser);
                     } else if ("application".equals(name)) {
@@ -729,6 +765,10 @@ public final class ActivityThread {
                         info.uiOptions = attrInt(parser, android.R.attr.uiOptions, "uiOptions", 0);
                         info.parentActivityName = qualify(sPackageName,
                                 attrString(parser, android.R.attr.parentActivityName, "parentActivityName"));
+                        if ("activity-alias".equals(name)) {
+                            info.targetActivity = qualify(sPackageName,
+                                    attrString(parser, android.R.attr.targetActivity, "targetActivity"));
+                        }
                         activity = new ParsedActivity(info, "receiver".equals(name));
                         filter = null;
                     } else if ("service".equals(name)) {
@@ -785,6 +825,7 @@ public final class ActivityThread {
             try { parser.close(); } catch (Exception ignored) {}
         }
         if (sPackageName == null || sPackageName.isEmpty()) throw new RuntimeException("Manifest has no package");
+        resolveAliases();
         if (sAppInfo.targetSdkVersion == 0) sAppInfo.targetSdkVersion = Math.max(1, sAppInfo.minSdkVersion);
         sAppInfo.packageName = sPackageName;
         sAppInfo.processName = sPackageName;
@@ -797,10 +838,44 @@ public final class ActivityThread {
         // Android's layout; the native loader serves lib<name>.so under it from the APK's lib/<abi>/
         sAppInfo.nativeLibraryDir = "/data/app/" + sPackageName + "/lib/"
                 + ("x86_64".equals(android.os.Build.CPU_ABI) ? "x86_64" : "arm64");
+        // as the package installer does (extractNativeLibs): apps read, copy and exec files in it
+        nExtractNativeLibs(sAppInfo.nativeLibraryDir);
         sAppInfo.uid = Process.myUid();
         sAppInfo.enabled = true;
         sAppInfo.flags |= ApplicationInfo.FLAG_HAS_CODE;
         stamp(sAppInfo);
+    }
+
+    /** An activity-alias runs its target's class with the target's attributes (PackageParser.parseActivityAlias). */
+    private static void resolveAliases() {
+        for (int i = 0; i < sActivities.size(); i++) {
+            ActivityInfo alias = sActivities.get(i).info;
+            if (alias.targetActivity == null) continue;
+            ActivityInfo target = null;
+            for (int j = 0; j < sActivities.size(); j++) {
+                ActivityInfo t = sActivities.get(j).info;
+                if (t.targetActivity == null && alias.targetActivity.equals(t.name)) {
+                    target = t;
+                    break;
+                }
+            }
+            if (target == null) {
+                Log.w(TAG, "activity-alias " + alias.name + " has no target " + alias.targetActivity);
+                continue;
+            }
+            alias.theme = target.theme;
+            alias.screenOrientation = target.screenOrientation;
+            alias.configChanges = target.configChanges;
+            alias.softInputMode = target.softInputMode;
+            alias.launchMode = target.launchMode;
+            alias.uiOptions = target.uiOptions;
+            if (alias.parentActivityName == null) alias.parentActivityName = target.parentActivityName;
+            if (alias.icon == 0) alias.icon = target.icon;
+            if (alias.labelRes == 0 && alias.nonLocalizedLabel == null) {
+                alias.labelRes = target.labelRes;
+                alias.nonLocalizedLabel = target.nonLocalizedLabel;
+            }
+        }
     }
 
     /** android:minSdkVersion / targetSdkVersion; a codename counts as the newest level, as on Android. */
@@ -859,9 +934,47 @@ public final class ActivityThread {
         } else if (type == android.util.TypedValue.TYPE_FLOAT) {
             owner.metaData.putFloat(key, Float.intBitsToFloat(data));
         } else if (type == android.util.TypedValue.TYPE_REFERENCE) {
+            // The id until resolveMetaDataRefs replaces it with the value, as PackageParser resolves
+            // android:value="@integer/..." (Play services checks google_play_services_version this way).
             owner.metaData.putInt(key, data);
+            sMetaDataRefs.add(new Object[] {owner.metaData, key, data});
         }
     }
+
+    private static final ArrayList<Object[]> sMetaDataRefs = new ArrayList<Object[]>();
+
+    private static void resolveMetaDataRefs() {
+        android.util.TypedValue v = new android.util.TypedValue();
+        for (Object[] ref : sMetaDataRefs) {
+            Bundle b = (Bundle) ref[0];
+            String key = (String) ref[1];
+            try {
+                sResources.getValue((Integer) ref[2], v, true);
+            } catch (Resources.NotFoundException e) {
+                continue;
+            }
+            b.remove(key);
+            CharSequence str = v.type == android.util.TypedValue.TYPE_STRING ? v.coerceToString() : null;
+            putMetaDataValue(b, key, v.type, v.data, str);
+        }
+        sMetaDataRefs.clear();
+    }
+
+    private static void putMetaDataValue(Bundle b, String key, int type, int data, CharSequence string) {
+        if (type == android.util.TypedValue.TYPE_STRING) {
+            b.putString(key, string != null ? string.toString() : null);
+        } else if (type == android.util.TypedValue.TYPE_INT_BOOLEAN) {
+            b.putBoolean(key, data != 0);
+        } else if (type >= android.util.TypedValue.TYPE_FIRST_INT && type <= android.util.TypedValue.TYPE_LAST_INT) {
+            b.putInt(key, data);
+        } else if (type == android.util.TypedValue.TYPE_FLOAT) {
+            b.putFloat(key, Float.intBitsToFloat(data));
+        } else {
+            Log.w(TAG, "<meta-data> only supports string, integer, float, color, boolean, and resource reference "
+                    + "types: " + key);
+        }
+    }
+
 
     private static void fillComponent(ComponentInfo info, XmlResourceParser parser) {
         info.packageName = sPackageName;
@@ -936,8 +1049,9 @@ public final class ActivityThread {
      */
     static Activity startActivityNow(Activity parent, String id, Intent intent, ActivityInfo info, Bundle state,
             Activity.NonConfigurationInstances nci) {
-        final Object obj = newComponent(info.name);
-        if (!(obj instanceof Activity)) throw new ClassCastException(info.name + " is not an Activity");
+        String cls = info.targetActivity != null ? info.targetActivity : info.name;
+        final Object obj = newComponent(cls);
+        if (!(obj instanceof Activity)) throw new ClassCastException(cls + " is not an Activity");
         final Activity a = (Activity) obj;
         a.attach(sContext.createComponentContext(a), info, intent, sApplication, parent, id, nci,
                 sResources.getConfiguration());

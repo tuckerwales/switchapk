@@ -2,34 +2,57 @@ package java.util.logging;
 
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 
 public class StreamHandler extends Handler {
     private OutputStream output;
     private boolean doneHeader;
-    private Writer writer;
+    private volatile Writer writer;
 
     public StreamHandler() {
-        setFormatter(new SimpleFormatter());
         setLevel(Level.INFO);
+        setFormatter(new SimpleFormatter());
     }
 
     public StreamHandler(OutputStream out, Formatter formatter) {
-        setFormatter(formatter);
         setLevel(Level.INFO);
+        setFormatter(formatter);
         setOutputStream(out);
     }
 
     protected synchronized void setOutputStream(OutputStream out) throws SecurityException {
-        if (out == null) throw new NullPointerException();
+        if (out == null) {
+            throw new NullPointerException();
+        }
         flushAndClose();
         output = out;
         doneHeader = false;
-        writer = new OutputStreamWriter(output);
+        String encoding = getEncoding();
+        if (encoding == null) {
+            writer = new OutputStreamWriter(output);
+        } else {
+            try {
+                writer = new OutputStreamWriter(output, encoding);
+            } catch (UnsupportedEncodingException ex) {
+                throw new Error("Unexpected exception " + ex);
+            }
+        }
+    }
+
+    public synchronized void setEncoding(String encoding) throws SecurityException, UnsupportedEncodingException {
+        super.setEncoding(encoding);
+        if (output == null) {
+            return;
+        }
+        flush();
+        writer = encoding == null ? new OutputStreamWriter(output) : new OutputStreamWriter(output, encoding);
     }
 
     public synchronized void publish(LogRecord record) {
-        if (!isLoggable(record)) return;
+        if (!isLoggable(record)) {
+            return;
+        }
         String msg;
         try {
             msg = getFormatter().format(record);
@@ -49,7 +72,10 @@ public class StreamHandler extends Handler {
     }
 
     public boolean isLoggable(LogRecord record) {
-        return writer != null && record != null && super.isLoggable(record);
+        if (writer == null || record == null) {
+            return false;
+        }
+        return super.isLoggable(record);
     }
 
     public synchronized void flush() {
@@ -62,7 +88,7 @@ public class StreamHandler extends Handler {
         }
     }
 
-    private synchronized void flushAndClose() {
+    private synchronized void flushAndClose() throws SecurityException {
         if (writer != null) {
             try {
                 if (!doneHeader) {

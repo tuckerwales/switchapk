@@ -8,6 +8,9 @@ public class FileOutputStream extends OutputStream {
     private final boolean owned;
     private final boolean isStd;
     private final StringBuilder lineBuf;
+    private final String path;
+    private final boolean append;
+    private java.nio.channels.FileChannel channel;
 
     public FileOutputStream(String name) throws FileNotFoundException {
         this(name != null ? new File(name) : null, false);
@@ -30,6 +33,8 @@ public class FileOutputStream extends OutputStream {
         owned = true;
         isStd = false;
         lineBuf = null;
+        path = file.getPath();
+        this.append = append;
     }
 
     public FileOutputStream(FileDescriptor fdObj) {
@@ -37,6 +42,8 @@ public class FileOutputStream extends OutputStream {
         owned = false;
         isStd = fdObj.fd == 1 || fdObj.fd == 2;
         lineBuf = null;
+        path = null;
+        append = false;
     }
 
     public void write(int b) throws IOException {
@@ -61,6 +68,9 @@ public class FileOutputStream extends OutputStream {
         if (owned) {
             Os.close(fd.fd);
         }
+        if (channel != null) {
+            channel.close();
+        }
     }
 
     public final FileDescriptor getFD() throws IOException {
@@ -68,6 +78,11 @@ public class FileOutputStream extends OutputStream {
     }
 
     public java.nio.channels.FileChannel getChannel() {
-        return java.nio.channels.FileChannel.forFd(fd.fd, false, true);
+        synchronized (this) {
+            if (channel == null) {
+                channel = sun.nio.ch.FileChannelImpl.open(fd.fd, path, this, false, true, append);
+            }
+            return channel;
+        }
     }
 }

@@ -37,7 +37,14 @@ public final class Field extends AccessibleObject implements Member {
     }
 
     public Type getGenericType() {
-        return type;
+        String sig = AnnotationParser.signature(null, AnnotationParser.KIND_FIELD, vmField);
+        if (sig == null) {
+            return type;
+        }
+        libcore.reflect.GenericSignatureParser parser =
+                new libcore.reflect.GenericSignatureParser(declaringClass.getClassLoader());
+        parser.parseForField(declaringClass, sig);
+        return parser.fieldType != null ? parser.fieldType : type;
     }
 
     private void checkReceiver(Object obj) {

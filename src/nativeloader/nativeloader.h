@@ -28,6 +28,8 @@ void *loader_dlsym(void *handle, const char *name); /* handle NULL or RTLD_DEFAU
 int loader_dlclose(void *handle);
 /* Finds the library containing addr; fills the dladdr fields. */
 bool loader_dladdr(const void *addr, const char **fname, void **fbase, const char **sname, void **saddr);
+/* dl_iterate_phdr over loaded libraries; info is a struct dl_phdr_info. */
+int loader_iterate_phdr(int (*cb)(void *info, size_t size, void *data), void *data);
 
 /* ---- shim (shim_*.c) ---- */
 
@@ -35,6 +37,9 @@ typedef struct {
     const char *name;
     void *addr;
 } ShimSym;
+
+/* An Android path for native file calls (relative paths fail as on Android); NULL with errno set. Free it. */
+char *shim_map_path(const char *path, bool write);
 
 /* True for the system libraries the shim provides (libc.so, liblog.so, libEGL.so, ...). */
 bool shim_is_library(const char *soname);
@@ -44,6 +49,19 @@ void *shim_lookup(const char *name);
 /* Per-file symbol tables, joined by shim_lookup. */
 const ShimSym *shim_libc_symbols(size_t *n);
 const ShimSym *shim_android_symbols(size_t *n);
+const ShimSym *shim_runtime_symbols(size_t *n);
+const ShimSym *shim_posix_symbols(size_t *n);  /* sockets, DNS, locales, ...; joined after shim_runtime */
+const ShimSym *shim_bsd_symbols(size_t *n); /* Switch sockets and errno; empty on the host */
+const ShimSym *shim_newlib_symbols(size_t *n); /* Switch file, time and thread ABI; empty on the host */
+const ShimSym *shim_spawn_symbols(size_t *n);  /* process context wrappers (spawn.c), joined after all others */
+void shim_spawn_bind(void *(*prev)(const char *name)); /* gives spawn.c the entries it wraps */
+
+/* Loads a PIE executable as a fresh image (never shared with a previous load) and returns its entry point, or
+ * NULL with err set. */
+void *loader_load_executable(const char *path, char *err, size_t errlen);
+/* Writes the APK's lib/<abi>/ libraries into the directory android_dir maps to, when missing or changed. */
+void loader_extract_native_libs(const char *android_dir);
+char *platform_map_path(const char *android_path);
 
 /*
  * Runs VM code from any thread. Native code runs without the GIL, and the app's own threads (the

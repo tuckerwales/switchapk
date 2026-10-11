@@ -808,7 +808,208 @@ what is left in flight.
   COMPATIBILITY.md "Findings" and PLAN next steps item 9.
 - `make` and VmTest pass. Nothing was run on hardware.
 
-### Session 25 (2026-10-09, branch claude/new-session-9cbq38)
+
+### Session 25 (2026-10-09/10, branch ccr-0c4b5dc0-hmtab0)
+
+- Worked down the corpus first blockers (WS4, WS9, WS11, WS16). 12 of 13
+  corpus apps now reach a drawn screen on the host, up from 2;
+  COMPATIBILITY.md "Findings" lists what each fix unblocked.
+- Framework: android.preference, ListActivity and FragmentBreadCrumbs
+  ported from AOSP with a generated com.android.internal.R
+  (tools/gen_internal_r.py); tests/apps/prefs checks inflation, defaults,
+  dependencies, list and EditText dialogs and persistence over two runs.
+  activity-alias, ActivityManager, DisplayManager, InputManager,
+  MediaScannerConnection, RingtoneManager, real Intent.parseIntent,
+  versionName in PackageInfo, asset and ParcelFileDescriptor descriptors,
+  OverScroller Interpolator constructors, Holo decors via the Toolbar
+  decor, requestFeature after an early getDecorView.
+- Two resource/config bugs with wide reach: bag merging dropped array items
+  that share a key (all arrays from newer aapt2 collapsed to one item), and
+  Configuration.locale was null.
+- libcore: FileChannel (locks, mapping, MappedByteBuffer), regex Unicode
+  blocks/scripts/categories, runtime properties, SAX and
+  javax.xml.parsers, java.util.logging, ServiceLoader, generic
+  signatures, sun.misc.Unsafe, ProcessBuilder (refused), ObjectStreamField,
+  java.nio selectors and socket channels. New JDK-compared dex tests:
+  RegexTest, NioTest, XmlTest, UnsafeTest, LoggingTest, GenericsTest,
+  SelectorTest.
+- VM: dex_proto_desc overflowed a stack buffer on long Kotlin return
+  types; Log messages are written line by line so causes are not cut off;
+  SWITCHAPK_TRACE_THROW=1 logs every throw.
+- Native shim: shim_runtime.c (C++ runtime entry points, locale and wide
+  chars, syslog, semaphores, rwlocks, sincos, vasprintf) and
+  dl_iterate_phdr from the loader.
+- `make`, all tests/dex tests and the sample app checks pass (gles needs
+  host Mesa; it passed on a rerun after a cold-start timeout). `make -f
+  Makefile.switch` builds the NRO without warnings (devkitPro fetched with
+  tools/fetch_toolchains.py devkitpro). Nothing was run on hardware.
+
+### Session 26 (2026-10-10, branch ccr-0c4b5dc0-hmtab0)
+
+- Resources: style bags stopped merging parents after 20 levels, which cut
+  Material3 themes off from the framework theme (no windowNoTitle, so the
+  titled decor was chosen and failed on windowTitleSize). The guard is now
+  128 and only stops cycles.
+- External storage follows Android's layout (`/storage/emulated/0`,
+  `Android/data/<pkg>/files`, `Android/obb/<pkg>`), fixing Simple Commons
+  path parsing. PackageManager gained queryIntentContentProviders,
+  queryContentProviders and the API 33 typed-flag overloads.
+- AssetManager.openFd throws FileNotFoundException for compressed assets,
+  as Android does.
+- android.bluetooth answers as absent (BluetoothManager with a null
+  adapter, classic socket classes) and OrientationEventListener is ported
+  from AOSP: Frozen Bubble starts clean with Bluetooth play greyed out.
+- WindowManagerGlobal.removeView takes window focus away before it
+  unregisters the window, so updates from onWindowFocusChanged(false)
+  still reach it (Shattered PD).
+- AudioManager was missing 177 members: constants, ringer and mode,
+  AudioFocusRequest, AudioDeviceInfo (one built-in speaker), routing and
+  property queries, sound effects (off). 19 niche ones remain stubbed.
+- Simple Calculator now starts with no uncaught or unexpected errors.
+  Mindustry's preview error is still open: concurrent and single-threaded
+  decoding of the same save match the JDK.
+- `make`, all tests/dex tests, the sample app checks (curves passed on a
+  rerun after an animation-timing miss) and the corpus run pass. Nothing
+  was run on hardware.
+
+### Session 27 (2026-10-10, branch ccr-854a3d8f-8aqeix)
+
+- WS10 home screen rewrite. The launcher moved from main_switch.c into
+  `src/app/launcher.c`, which draws with gfx into a buffer and takes
+  libnx-free input, so the host runs it too (`switchapk-host --launcher`,
+  `--splash`, `--error-screen`, `--nro-icon`).
+- New look: dark gradient background, status bar with clock, Wi-Fi and
+  battery, a carousel of large icon tiles with an accent glow on the
+  selected one, a details panel (label, package, version, size, last
+  played) with a Play button, button hints that also take taps, and a
+  NEW badge on apps never started. APKs without a bitmap icon get a
+  colored tile with their initial.
+- Easier launching: remembers the last app and opens on it after the app
+  ends, sorts by recently played (Y for A to Z), key repeat on hold, L/R
+  and ZL/ZR jumps, swipe to scroll, tap a tile then tap again or Play, X
+  rescans. Labels and icons are cached per APK in
+  `sdmc:/switch/switchapk/launcher/icons`, so the reload after each app
+  does not reopen every APK. A splash with the app icon shows while the VM
+  boots, and the error screen scrolls and offers Try again.
+- The palette follows the project logo: deep navy from the console
+  outline, Joy-Con blue and red glows on the left and right, a
+  blue-to-red selection ring like the hexagon border, "apk" and Android
+  greens for Play, and a hexagon header mark. Letter tiles use logo
+  tones only.
+- The NRO shows the project logo in hbmenu: cropped and scaled from
+  `docs/assets/logo.jpg` by the host build at build time and encoded by
+  `tools/ppm_to_jpeg.py` (no new binary committed).
+- `make`, `make -f Makefile.switch` (no warnings), VmTest,
+  tests/launcher/check_launcher.sh and tests/apps/labeled/check_info.sh
+  pass. Nothing was run on hardware.
+
+### Session 25 (2026-10-10, branch ccr-d683819b-nm914p)
+
+- WS13: the corpus tracks proprietary apps. A `"source": "local"` entry
+  is never downloaded; `tools/corpus.py import <id> files...` takes the
+  owner's APK, Play splits or an .apks/.xapk bundle into
+  `build/corpus/local/<id>`, and `fetch` merges the splits' `lib/` and
+  `assets/` into the base APK, since the VM loads one zip. Unsupplied
+  apps show as "APK not supplied" in the report; supplied ones are
+  labelled with the scanned version, as they are not pinned.
+- Old School RuneScape (`com.jagex.oldscape.android`, tier 3) added. The
+  user supplied APKMirror's 241.3 bundle (.apkm, now accepted by
+  `import`); all splits carry Jagex's signing certificate. First run stops
+  at `android.os.UserManager` in FirebaseInitProvider; the C++ game
+  library (GameActivity) needs 122 shim symbols, sockets and DNS first.
+  Details in COMPATIBILITY.md.
+- The split merge was checked with synthetic APKs and the real bundle.
+  `import` now creates build/corpus/apks itself. Only the OSRS row of the
+  generated table was refreshed (the other apps were not re-run).
+- Then worked through the OSRS start-up blockers until the C++ client drew
+  its own screen on the host ("Error connecting to server"). Touched
+  WS15 (UserManager, ActivityManager, ApplicationExitInfo), WS16
+  (java.util.logging, Atomic{Markable,Stamped}Reference, dalvik.system
+  class loaders with findLibrary, ART's java.vm.vendor/java.runtime.name),
+  WS4 (meta-data references resolved after resources load), WS9 (main
+  ALooper under MessageQueue, shim_posix.c, rwlocks, dl_iterate_phdr),
+  WS8 (native-thread eglSwapBuffers) and WS10 (platform_set_wake_hook).
+  Interface changes are in PLAN's log; details in COMPATIBILITY.md.
+- Tests: tests/dex/LoggingTest.java (new) and an AtomicMarkable/Stamped
+  case in UtilTest; all six dex tests and every tests/apps sample with a
+  check script pass on the host (net, sensors and store with their own
+  commands). `make -f Makefile.switch` builds; nothing ran on hardware.
+  Host Mesa (libegl1, libgles2) had to be installed in this container.
+- Switch sockets for native code: `shim_bsd.c` translates bionic's Linux
+  socket ABI to libnx's FreeBSD one (sockaddrs, option numbers, flags,
+  fcntl/ioctl, select through poll, addrinfo) and gives bionic code a
+  Linux-numbered errno. Found by disassembling libnx that Horizon's bsd
+  service reports Linux errno numbers (libnx's `_convert_errno` is indexed
+  by them), so SO_ERROR passes through. Constants are static-asserted
+  against libnx's headers; tests/c/shim_bsd_test.c checks the translations
+  on the host (passes). Builds for the Switch; not run on hardware.
+- Native relative paths fail as under Android's "/" (`shim_map_path`);
+  OSRS's `imgui.ini` no longer lands in the host's working directory.
+- Corpus re-run with everything above: Vector Pinball is past libGDX's
+  loader (java.runtime.name) and stops at java.io serialization; native
+  unresolved imports fell across the corpus (Mindustry 11 to 0, DroidFish
+  61 to 4), but Mindustry still renders black. Added libstdc++'s
+  new/delete, __cxa_pure_virtual and __cxa_guard_* to shim_posix.c.
+- WS16: FileChannel lock/tryLock (FileLock, the channel exceptions) and
+  map (MappedByteBuffer as a heap copy, write-back on force); streams
+  return one cached channel. tests/dex/ChannelTest.java matches OpenJDK.
+  Unciv now stops at DisplayManager instead of FileChannel.lock.
+- WS6: ParcelFileDescriptor holds a real descriptor (open, getFd,
+  detachFd, close, adoptFd, the auto-close streams over it); Firebase's
+  datastore no longer fails with "Bad file descriptor" in OSRS.
+- All dex tests pass, tests/apps/store passes; Switch build links.
+- Switch native runtime (not run on hardware): virtual pipes and a poll
+  over them plus libnx sockets (vfd.c), so ALooper, the main looper,
+  AInputQueue and native pipe() work on the console; shim_newlib.c for
+  bionic's arm64 open flags, stat, dirent, clocks, tm, pthread_once, mmap
+  over the heap, common syscall() numbers and libnx random bytes. Host
+  tests tests/c/vfd_test.c and shim_newlib_test.c pass, and the constants
+  are static-asserted against devkitA64. Host samples (native, input, ndk,
+  gles) still pass. OSRS was not re-run after these changes: the session's
+  permission checks refused running it once the TLS experiment was declined.
+- Switch audio through audout instead of draining (WS10), and getauxval
+  reporting AT_HWCAP (the A57's NEON, AES, PMULL, SHA and CRC32 on the
+  Switch; the real values on Linux hosts) so OpenSSL and codecs take their
+  fast paths. Both builds clean; not run on hardware.
+- WS4: android.preference ported from AOSP on framework-res layouts
+  (Preference and its persistence, groups and screens, TwoState/CheckBox/
+  Switch, Dialog/EditText/List/MultiSelectList, PreferenceManager with XML
+  inflation and setDefaultValues, PreferenceFragment, single-pane
+  PreferenceActivity with headers) and ListActivity; tests/apps/prefs
+  checks inflation, a toggle that persists across two runs, and a list
+  dialog. The default Configuration carries the device locale.
+- libcore: SAX2 (org.xml.sax, ext, helpers), javax.xml.parsers and
+  libcore.xml.PullSaxReader over the pull parser (moved to libcore);
+  android.util.Xml.parse. tests/dex/SaxTest.java matches OpenJDK.
+  ProcessBuilder (start fails like a failed exec) and Runtime.exec through
+  it. Native shim: unnamed POSIX semaphores (tests/c/shim_sem_test.c).
+  OverScroller gained its Interpolator constructors.
+- Corpus re-run (all but OSRS): Andor's Trail, Frozen Bubble and DroidFish
+  now draw (DroidFish's engine reports "Cannot run program"). New first
+  blockers: Blockinger needs the Holo decor ActionBarView, Solitaire an
+  AIOOBE in its own code; the rest are unchanged (COMPATIBILITY findings).
+- 2026-10-11, corpus push: activity-alias with android:enabled and
+  setComponentEnabledSetting; regex `\p{InBlock}`, `blk=`, `gc=` and the
+  general categories over Character.getType; DisplayManager and
+  InputManager; real APK descriptors from AssetManager.openFd; manifest
+  versionCode/versionName and requested permissions in PackageInfo;
+  requestFeature only throws after setContentView; WindowManagerGlobal
+  removes a window after its focus-loss callbacks; ObjectStreamField;
+  sun.misc.Unsafe natives (tests/dex/UnsafeTest); generic signatures for
+  reflection (tests/dex/GenericsTest); a stack overflow of the method
+  descriptor buffer in dex_proto_desc (Kotlin reflection aborted the host).
+  Shattered PD, Vector Pinball and Unciv now draw: 9 of the 13 open apps.
+  All dex tests and the 39 single-script sample checks plus prefs pass.
+- 2026-10-11, continued: res.c bag_merge followed only 20 parents, so
+  Material3 themes (about 30 levels over MaterialComponents and AppCompat)
+  lost android:windowNoTitle and every framework default; it also merged an
+  entry's own items by key, collapsing arrays whose tool chain writes key 0.
+  Both now follow AssetManager2. Added ActionBarView (a Toolbar for the Holo
+  decor), ActivityManager.TaskDescription, queryIntentContentProviders,
+  MediaScannerConnection, and the device layout for app external dirs.
+  Simple Calculator, Simple Solitaire and Blockinger now draw: 11 of the 13
+  open apps (Mindustry black, Puzzles exits). Samples and prefs pass.
+### Session 24 (2026-10-09, branch claude/new-session-9cbq38)
 
 - Jetpack Compose crash on a console: AndroidComposeView's constructor
   looks up `AutofillManager` and failed with NoClassDefFoundError. Added
@@ -847,3 +1048,50 @@ what is left in flight.
   the VFS change) was compiled only by the Package NRO workflow, which
   passed.
 
+- 2026-10-11, in-process executables: ProcessBuilder runs bionic PIE
+  executables inside switchapk (spawn.c: fresh image, kernel-style stack into
+  _start, __libc_init, per-thread process context for stdio, fds 0-2, exit,
+  abort, asserts, cwd and getenv; in-memory pipes to java.lang.ProcessImpl).
+  Native libraries are extracted to nativeLibraryDir at start. New sample
+  tests/apps/procs (a hand-built bionic executable) passes. DroidFish now runs
+  Stockfish 16.1. Simon Tatham's Puzzles needed ServiceLoader, color state list
+  drawables and PR 22's autofill and CursorAnchorInfo commits (cherry-picked,
+  the user pointed at them), then crashed in its generator: the fortified
+  __sprintf_chk shim passed (size_t)-1 to glibc's vsnprintf, which truncates
+  when the size wraps the address space, so every such sprintf in native code
+  lost output. Fixed and covered in tests/c/shim_sem_test.c. Puzzles now
+  shows a generated Sudoku: 12 of the 13 open apps draw.
+- 2026-10-11, merge of main: main had landed parallel implementations of
+  most of this branch's corpus fixes (113 conflicting files). Main's were
+  kept; this branch contributed what main lacked: the Switch native layers
+  (shim_bsd, shim_newlib, vfd), shim_posix and the OSRS native work, the
+  in-process executables (spawn.c, ProcessImpl, tests/apps/procs), native
+  library extraction, the fortified sprintf fix, autofill and
+  CursorAnchorInfo (PR 22), UserManager and SAXException.getCause. After
+  the merge all 13 open corpus apps draw on the host, every dex test, C
+  test and tests/apps check (with prefs and procs) passes, and the Switch
+  build links.
+- 2026-10-11, full rerun on PR 26: clean host and Switch builds, all 15
+  dex tests, the C tests, gfx_test and the launcher check pass; 45 of 46
+  tests/apps samples pass (curves is the known timing flake); all 14 corpus
+  apps draw, OSRS included (its own "Error connecting to server" screen in
+  the sandbox). The rerun found three merge regressions (java.vm.vendor,
+  meta-data @integer references, Runtime.exec envp) and fixed them. The
+  screenshots also showed Unciv's tap ending on its crash screen: ktor's
+  TLS setup hit NoClassDefFoundError for javax.net.ssl.TrustManagerFactory
+  now that NIO selectors let it get that far. A TrustManagerFactory whose
+  getInstance throws NoSuchAlgorithmException makes it a caught connection
+  failure; the tap now picks a language as it should.
+- 2026-10-11, PR 22 brought up to date with main (after PR 26 merged).
+  Main had landed parallel versions of this branch's java.util.logging,
+  FileLock/FileChannel/MappedByteBuffer and autofill/CursorAnchorInfo
+  work; main's were kept (with its HeapByteBuffer), and the now unused
+  libcore.io.Logcat bridge was dropped. This branch still brings WS17
+  (JCA providers, AES/HMAC/PBKDF2, RSA, EC, DH, the software
+  AndroidKeyStore), native BigInteger arithmetic, piped streams, custom
+  font families and the monospace face, StatFs over statvfs,
+  ThumbnailUtils, StorageManager and the Notification view fields. After
+  the merge all 19 dex tests (CryptoTest, PublicKeyTest, BigIntegerTest
+  and PipeLogTest included), the C tests and the samples (keystore
+  included) pass on the host, all 14 corpus apps draw (OSRS and Unciv as
+  on main), and the Switch build links.

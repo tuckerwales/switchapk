@@ -27,6 +27,8 @@ public final class Os {
 
     public static native void close(int fd) throws IOException;
 
+    public static native int dup(int fd) throws IOException;
+
     public static native int available(int fd) throws IOException;
 
     public static native long seek(int fd, long offset, int whence) throws IOException;
@@ -50,6 +52,8 @@ public final class Os {
     public static native boolean rename(String from, String to);
 
     public static native boolean setLastModified(String path, long time);
+
+    public static native boolean setExecutable(String path, boolean executable, boolean ownerOnly);
 
     public static native String hostPath(String path);
 

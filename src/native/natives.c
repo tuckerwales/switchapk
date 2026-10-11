@@ -9,6 +9,8 @@ void vm_natives_init(void) {
     natives_java_reflect_register();
     natives_java_annotation_register();
     natives_java_misc_register();
+    natives_java_unsafe_register();
+    natives_java_process_register();
     natives_java_net_register();
     natives_java_zip_register();
     natives_java_security_register();

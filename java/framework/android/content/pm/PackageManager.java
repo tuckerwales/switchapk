@@ -115,6 +115,25 @@ public abstract class PackageManager {
     public abstract List<ResolveInfo> queryBroadcastReceivers(Intent intent, int flags);
     public abstract ResolveInfo resolveService(Intent intent, int flags);
     public abstract ProviderInfo resolveContentProvider(String authority, int flags);
+    public abstract List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags);
+    public abstract List<ProviderInfo> queryContentProviders(String processName, int uid, int flags);
+    // API 33 typed-flag overloads: delegate to the int versions, as Android's defaults do.
+    public ActivityInfo getActivityInfo(ComponentName component, ComponentInfoFlags flags) throws NameNotFoundException { return getActivityInfo(component, (int) flags.getValue()); }
+    public ActivityInfo getReceiverInfo(ComponentName component, ComponentInfoFlags flags) throws NameNotFoundException { return getReceiverInfo(component, (int) flags.getValue()); }
+    public ServiceInfo getServiceInfo(ComponentName component, ComponentInfoFlags flags) throws NameNotFoundException { return getServiceInfo(component, (int) flags.getValue()); }
+    public ProviderInfo getProviderInfo(ComponentName component, ComponentInfoFlags flags) throws NameNotFoundException { return getProviderInfo(component, (int) flags.getValue()); }
+    public List<PackageInfo> getInstalledPackages(PackageInfoFlags flags) { return getInstalledPackages((int) flags.getValue()); }
+    public List<ApplicationInfo> getInstalledApplications(ApplicationInfoFlags flags) { return getInstalledApplications((int) flags.getValue()); }
+    public ResolveInfo resolveActivity(Intent intent, ResolveInfoFlags flags) { return resolveActivity(intent, (int) flags.getValue()); }
+    public List<ResolveInfo> queryIntentActivities(Intent intent, ResolveInfoFlags flags) { return queryIntentActivities(intent, (int) flags.getValue()); }
+    public List<ResolveInfo> queryBroadcastReceivers(Intent intent, ResolveInfoFlags flags) { return queryBroadcastReceivers(intent, (int) flags.getValue()); }
+    public ResolveInfo resolveService(Intent intent, ResolveInfoFlags flags) { return resolveService(intent, (int) flags.getValue()); }
+    public List<ResolveInfo> queryIntentServices(Intent intent, ResolveInfoFlags flags) { return queryIntentServices(intent, (int) flags.getValue()); }
+    public List<ResolveInfo> queryIntentContentProviders(Intent intent, ResolveInfoFlags flags) { return queryIntentContentProviders(intent, (int) flags.getValue()); }
+    public ProviderInfo resolveContentProvider(String authority, ComponentInfoFlags flags) { return resolveContentProvider(authority, (int) flags.getValue()); }
+    public List<ProviderInfo> queryContentProviders(String processName, int uid, ComponentInfoFlags flags) { return queryContentProviders(processName, uid, (int) flags.getValue()); }
+    public List<PackageInfo> getPackagesHoldingPermissions(String[] permissions, PackageInfoFlags flags) { return getPackagesHoldingPermissions(permissions, (int) flags.getValue()); }
+    public PackageInfo getPackageArchiveInfo(String archiveFilePath, PackageInfoFlags flags) { return getPackageArchiveInfo(archiveFilePath, (int) flags.getValue()); }
     public abstract Intent getLaunchIntentForPackage(String packageName);
     public Intent getLeanbackLaunchIntentForPackage(String packageName) { return null; }
     public abstract Drawable getDrawable(String packageName, int resid, ApplicationInfo appInfo);

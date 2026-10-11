@@ -69,7 +69,8 @@ src/nativeloader/ nativeloader.h, elf_loader.c (ELF loader, dl*), shim_libc.c
                  (libc/libm), shim_android.c (liblog, libdl, assets,
                  properties, zlib, GL lookup)
 src/app/         main_host.c (host driver), app_runner.c (APK runner),
-                 main_switch.c (Switch launcher), apk_info.c (labels/icons)
+                 main_switch.c (Switch entry), launcher.c (home screen, splash,
+                 error screen; shared with the host), apk_info.c (labels/icons)
 java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
 java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
@@ -222,9 +223,30 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
 ## 5. Class library (java/libcore)
 
 Our own implementation of the `java.*` subset Android apps use: lang,
-lang.reflect (+ Proxy), lang.invoke (lambdas), util (+ concurrent, atomic,
-locks, function, stream, regex, zip), io, nio (buffers, charset, basic
-file APIs), text, math, net (sockets, DNS and HTTP/1.1; 5.1), zip and jar (5.2), security (digests).
+lang.reflect (+ Proxy and generic signatures), lang.invoke (lambdas), util
+(+ concurrent, atomic, locks, function, stream, regex, zip, logging,
+ServiceLoader), io, nio (buffers, charset, file channels with locks and
+mapping, socket channels and selectors), text, math, net (sockets, DNS and
+HTTP/1.1; 5.1), zip and jar (5.2), security and javax.crypto (5.5), org.xml.sax and
+javax.xml.parsers (5.3), and sun.misc.Unsafe (5.4).
+`System` reports ART's identity: `java.vm.vendor` "The Android Project" (apps test it: Old
+School RuneScape loads its Windows build otherwise), `java.runtime.name` "Android Runtime".
+Manifest `<meta-data android:value="@type/name">` references are resolved to their values once
+resources load, as PackageParser does (Play services reads google_play_services_version so).
+`ClassLoader.getSystemClassLoader()` is a `dalvik.system.PathClassLoader`, the loader of every
+class and what `Context.getClassLoader()` returns. Classes come from the VM's one class path;
+the dex files a `PathClassLoader`/`DexClassLoader` names are not loaded. `findLibrary` follows
+DexPathList over its native search path, each element a directory or `file.apk!/lib/<abi>`,
+returning the first that holds `System.mapLibraryName(name)`. `ActivityThread` adds
+`ApplicationInfo.nativeLibraryDir` and `<apk>!/lib/<Build.CPU_ABI>` through the hidden
+`BaseDexClassLoader.addNativePath(Collection)` before the Application exists (GameActivity
+and NativeActivity-style loaders call `((BaseDexClassLoader) getClassLoader()).findLibrary`).
+`ProcessBuilder.start()` and `Runtime.exec` run bionic executables in-process (`ProcessImpl`
+over spawn.c, section 6.7): an app's own engine or helper binary works; a bare program name
+(`sh`, `su`, `logcat`) fails with "error=2, No such file or directory", a non-ELF with "error=8,
+Exec format error", as on a device without them. File and INHERIT redirects run through pump
+threads. `File.canExecute` reads the execute bit on the host (any regular file on the Switch,
+which has none), `setExecutable` sets it.
 Natives in `src/native`. File paths from Java are translated by
 `platform_map_path()` (src/native/java_io.c):
 
@@ -234,6 +256,11 @@ Natives in `src/native`. File paths from Java are translated by
 | `/sdcard/...`, `/storage/emulated/0/...` | `<data root>/sdcard/...` |
 | `/data/local/tmp/...` | `<data root>/tmp/...` |
 | other absolute paths on Switch | `sdmc:<path>` |
+
+`Environment.getExternalStorageDirectory()` is `/storage/emulated/0`
+(emulated, not removable) and the app's external directories use Android's
+layout on it: `Android/data/<pkg>/files` and `cache`, `Android/obb/<pkg>`,
+`Android/media/<pkg>`, so OBB files go where Android puts them.
 
 Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 `--data` (default `build/data`).
@@ -256,8 +283,21 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   RFC 5952 like Android), `InetSocketAddress`, `Socket` (descriptor
   created on bind or connect once the family is known; options set
   earlier are replayed), `ServerSocket` (SO_REUSEADDR on), and
-  `DatagramSocket`/`DatagramPacket`. `getChannel()` returns null:
-  NIO socket channels and selectors are not implemented.
+  `DatagramSocket`/`DatagramPacket`.
+- java.nio channels (`sun.nio.ch`): `SocketChannel`,
+  `ServerSocketChannel` and `DatagramChannel` wrap the java.net socket
+  that owns the descriptor (reached through hidden `fd$()`,
+  `prepareFd$()`, `markConnected$()`, `accepted$()` and
+  `closeInternal$()` hooks; the socket's `getChannel()` returns the
+  channel and its `close()` closes the channel). Blocking mode uses the
+  waiting natives above; non-blocking mode sets O_NONBLOCK and uses
+  single-call natives (`connectNow`, `finishConnectNow`, `recvNow`,
+  `sendNow`, `acceptNow`, `recvfromNow`, `sendtoNow`) that report "would
+  block" instead of waiting. `PollSelectorImpl` polls the registered
+  descriptors (`Net.poll`, GIL released) in 50 ms slices so `wakeup()`
+  and `close()` from other threads are seen without a wake-up pipe, which
+  newlib lacks. No pipes (`SelectorProvider.openPipe` throws) and no
+  multicast channels.
 - `URL.openConnection()` for http returns `HttpURLConnectionImpl`, an
   HTTP/1.1 client with one socket per request (sends `Connection:
   close`; no pool, cache, cookies or proxy). Like OkHttp it sends
@@ -274,7 +314,10 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `getInputStream` throws FileNotFoundException for any status >= 400
   and `getErrorStream` returns that body. https throws
   `SSLHandshakeException` until TLS exists; `javax.net.ssl` holds only
-  the exception classes so far. `javax.net.SocketFactory` and
+  the exception classes, `TrustManager` and a `TrustManagerFactory`
+  whose `getInstance` throws NoSuchAlgorithmException (so clients with
+  their own TLS, such as ktor, fail with a catchable exception rather
+  than NoClassDefFoundError). `javax.net.SocketFactory` and
   `ServerSocketFactory` return plain sockets.
 - `android.net.ConnectivityManager` (`Context.CONNECTIVITY_SERVICE`,
   one instance per process) reads `platform_network_state` through
@@ -328,7 +371,44 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - `tests/dex/ZipTest.java` checks all of it against OpenJDK, including
   streams made by Python's zlib and gzip.
 
-### 5.3 Crypto (WS17)
+### 5.3 XML, logging, reflection extras
+
+- SAX: `org.xml.sax` (with helpers and ext) is AOSP libcore's public
+  domain copy. `javax.xml.parsers.SAXParserFactory` makes
+  `org.apache.harmony.xml.parsers.SAXParserFactoryImpl` (Android's name),
+  whose reader `PullXMLReader` drives the framework pull parser:
+  namespaces and namespace-prefixes features, the lexical-handler property
+  (comments, CDATA), no DTD processing. Lives in java/framework because the
+  pull parser does. No DOM (`DocumentBuilder`) yet.
+- `java.util.logging`: Logger hierarchy by dotted name, Level, Handler,
+  StreamHandler, ConsoleHandler, SimpleFormatter. As on Android the root
+  logger logs at INFO through a handler that writes to `android.util.Log`
+  (found by reflection, since libcore cannot link the framework), with
+  Android's tag rules.
+- Generic signatures: `AnnotationParser.signature(owner, kind, token)`
+  reads the `dalvik.annotation.Signature` system annotation natively
+  (`src/native/java_annotation.c`); `libcore.reflect.GenericSignatureParser`
+  turns it into `ParameterizedType`, `GenericArrayType`, `WildcardType`
+  and `TypeVariable` objects with the JDK's equality and type names. Type
+  variable references resolve lazily along method, class, enclosing
+  method and enclosing class.
+- `ServiceLoader` reads `META-INF/services/<name>` from the APK's Java
+  resources and instantiates providers lazily.
+- `ProcessBuilder` and `Runtime.exec` run bionic executables in-process
+  (`java.lang.ProcessImpl` over spawn.c, section 6.7).
+
+### 5.4 sun.misc.Unsafe
+
+Android's hidden `sun.misc.Unsafe` (libraries and desugared `j$` code
+reflect on `theUnsafe`). Natives in `src/native/java_unsafe.c`: field
+offsets are the VM's byte offsets in the object (class.c packs fields at
+their natural size); arrays keep elements out of line, so array offsets
+start at `ARRAY_BASE_OFFSET` (16) and are rebased onto
+`ArrayObject.data`. Compare-and-swap and volatile accesses are plain
+loads and stores, atomic because Java threads hold the GIL. Off-heap
+`allocateMemory` addresses are malloc'd pointers.
+
+### 5.5 Crypto (WS17)
 
 - The JCA provider architecture as in the JDK. `Provider` extends
   `Properties`: services come from legacy entries (`Cipher.AES` = class
@@ -381,9 +461,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   paddings and validity dates are enforced; user authentication cannot
   be asked for and is treated as given. Key pairs and trusted
   certificates are not supported yet.
-- Not there yet: RSA, EC, DSA, DH, X25519/Ed25519 (KeyFactory,
-  KeyPairGenerator, Signature, KeyAgreement), ChaCha20, 3DES,
-  certificates and CertificateFactory (with TLS, WS11). The specs and
+- Public key: RSA (X.509/PKCS#8 keys, PKCS#1 v1.5 signatures, PKCS#1
+  and OAEP ciphers, CRT with blinding), EC on P-256/384/521 (ECDSA,
+  ECDH) and DH (MODP groups), over `BigInteger` with native multiply,
+  division and Montgomery modPow (`src/native/java_math.c`). Not there
+  yet: DSA, X25519/Ed25519, ChaCha20, 3DES, certificates and
+  CertificateFactory (with TLS, WS11). The specs and
   interfaces for them exist, so third-party providers (BouncyCastle)
   can supply the algorithms.
 - `tests/dex/CryptoTest.java` checks the provider against OpenJDK with
@@ -411,7 +494,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - AssetManager natives (src/android/android_res.c) answer:
   value lookup with reference following (`nGetValue`, fills TypedValue
   fields `type data resourceId assetCookie density string`), flattened style
-  bags with parents merged (`nGetBag` -> `{int[] (attr,type,data)*, String[]}`),
+  bags with parents merged (`nGetBag` -> `{int[] (attr,type,data)*, String[]}`;
+  as in AssetManager2::GetBag, an entry's own items are all kept, since
+  newer aapt2 gives every array item the same key, and only keys inherited
+  from a parent are overridden; parent chains are followed to any depth,
+  with a guard of 128 against cycles, since Material3 themes are about 25
+  styles deep),
   names/identifiers, asset bytes, directory listing, and binary XML
   flattened into arrays (`nOpenXml` -> `{int[] events, int[] attrs, String[] strings}`)
   consumed by `XmlBlock.Parser`. Asset cookies: 1 = framework, 2 = app,
@@ -428,6 +516,19 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   match what apps were compiled against. Internal (non-public) framework
   attributes can be looked up by name with
   `Resources.getIdentifier(name, "attr", "android")`.
+- `com.android.internal.R` is a generated subset (`tools/gen_internal_r.py`)
+  for AOSP code ported as is (android.preference, ListActivity,
+  FragmentBreadCrumbs): its ids are static fields resolved by name through
+  `InternalRes` when the class loads (0 when framework-res lacks one, so
+  they cannot be switch labels), and its styleables are attribute arrays
+  with index constants listed in the script. Rerun the script over the
+  files that use it after porting more AOSP code.
+- `AssetManager.openFd` gives a stored (uncompressed) asset a real
+  descriptor, the APK opened read-only with the asset's start offset, as
+  Android does; for a compressed asset it throws FileNotFoundException
+  like Android (raw resources may still be compressed; media APIs read
+  those by name). `ParcelFileDescriptor` holds a real descriptor (open, adoptFd,
+  fromFd/dup through `Os.dup`, detachFd).
 
 ### 6.3 Graphics
 - `src/gfx` is a stateless renderer: every call receives target pixels,
@@ -463,9 +564,21 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - `ActivityThread.main` prepares the main `Looper` and loops forever.
 - The main `MessageQueue` (flag `mIsMain`) never sleeps in Java: it calls
   `MessageQueue.nativePollOnce(timeoutMs)`, which releases the GIL and
-  waits in `platform_wait_event()` for an input event, a wake
-  (`nativeWake()` from `enqueueMessage` on any thread) or the timeout.
-  Afterwards it runs `MessageQueue.sPlatformDispatcher`, which drains events.
+  waits for an input event, a wake (`nativeWake()` from `enqueueMessage`
+  on any thread) or the timeout. Afterwards it runs
+  `MessageQueue.sPlatformDispatcher`, which drains events.
+- As on Android, the main thread's native `ALooper` is the one under that
+  queue: `app_runner` calls `nativeloader_prepare_main_looper()` on the main
+  thread before `ActivityThread.main`, so `ALooper_forThread()` there is
+  non-null from the first line of Java. `nativePollOnce` takes a pending
+  platform event without blocking, else blocks in
+  `nativeloader_poll_main(timeout)` (`ALooper_pollOnce` on the main looper,
+  running the callbacks of descriptors native code added, such as
+  GameActivity's command pipe), then takes the event that woke it.
+  `platform_set_wake_hook` makes every `platform_push_event` and
+  `platform_wake` call `ALooper_wake` on the main looper. Where there is no
+  ALooper (the Switch), `nativeloader_poll_main` returns false and the
+  thread waits in `platform_wait_event()` as before.
 - Event pull API (src/android/android_os.c, Java class
   `android.view.PlatformInput`):
   `static native int nNextEvent(int[] ints /*4*/, float[] floats /*8*/, long[] timeNs /*1*/)`
@@ -513,6 +626,8 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - Windows: `WindowManagerGlobal` keeps a z-ordered list of `ViewRootImpl`s
   (layer by window type: application 2, sub-windows 3, system 10, input
   method 15, toast 20; newer windows above older ones of the same layer).
+  `removeView` takes window focus away first, while the window is still
+  in the list, then unregisters it and detaches the hierarchy.
   Each `ViewRootImpl` owns an ARGB `Bitmap` of its window size and redraws
   only the union of invalidated rectangles (dirty rects are propagated up
   through `ViewGroup.invalidateChildInParent`, transformed by child
@@ -685,8 +800,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   framework "Can't play this video." dialog unless an `OnErrorListener`
   returns true (tests/apps/video). Audio files play through the mixer in
   6.6. `Context.AUDIO_SERVICE` returns an
-  AudioManager that grants focus and never revokes it, and stores a
-  volume index per stream. Subtitle sources are reported unsupported.
+  AudioManager that grants focus (including `AudioFocusRequest`) and never
+  revokes it, and stores a volume index per stream. It lists one output
+  device, the built-in speaker (48 kHz, 256 frames per buffer), no inputs;
+  ringer and mode are stored, music is never active behind the app, and
+  sound effects are off. Subtitle sources are reported unsupported.
 - RemoteViews inflates its layout and runs the action list (reflection
   setters, click and checked PendingIntents, fill-in against a template
   tag on an ancestor, and RemoteCollectionItems as a BaseAdapter).
@@ -793,6 +911,15 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   that fire during layout are posted (AdapterView SelectionNotifier), so
   listeners can change other views. Transitions and window animations
   are not run.
+- A color state list file (`res/color/*.xml`) requested as a drawable becomes a
+  ColorStateListDrawable, as AOSP ResourcesImpl does (Compose themes use these).
+- `android.view.autofill` (AutofillManager, always disabled, from getSystemService; AutofillId,
+  AutofillValue, the View autofill id/value methods), AccessibilityServiceInfo with empty
+  enabled/installed service lists, and CursorAnchorInfo/EditorBoundsInfo with the editor-state
+  IME calls as no-ops come from PR 22's branch (cherry-picked); Jetpack Compose's root view
+  needs them.
+- `Window.requestFeature` throws only after content was set (setContentView
+  or addContentView), as AOSP, not when getDecorView installed the decor.
 
 ### 6.5 Application model (design)
 - The app runner (C, `app_run_apk`) opens the APK, sets `g_app_zip` and
@@ -807,8 +934,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
 - `ActivityThread` parses `AndroidManifest.xml` with `XmlBlock` (package,
   application class, activities with intent filters and themes and
   screenOrientation/configChanges, services, receivers, providers,
-  meta-data into `PackageItemInfo.metaData` as PackageParser stores it,
-  uses-feature), creates `LoadedApk`/`ContextImpl`/
+  meta-data into `PackageItemInfo.metaData` as PackageParser stores it:
+  `android:resource` as the id, `android:value` by type, a reference such
+  as `@integer/google_play_services_version` resolved to its value once
+  the app's Resources exist (PackageParser reads it through a TypedArray;
+  Play Services checks that integer), uses-feature), creates `LoadedApk`/`ContextImpl`/
   `Application` (via `AppComponentFactory` when declared), installs
   content providers **before** `Application.onCreate` (as Android does;
   androidx startup relies on it), then launches the MAIN/LAUNCHER activity.
@@ -1089,7 +1219,9 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   (magic `SASU`, first field, plus the window pointer). `eglSwapBuffers`
   on that surface reads pixels with the same conversion as
   `nReadWindow` (GIL released around the GL call) and posts them with
-  `anw_post_argb`. Config handles stay raw driver pointers. Java's
+  `anw_post_argb`. A swap from a thread that is not a VM thread or holds
+  no GIL (GameActivity's and android_native_app_glue's render threads)
+  attaches through `nl_vm_enter`/`nl_vm_leave` for the post. Config handles stay raw driver pointers. Java's
   `EGLNative` path is unchanged: it still readbacks in Java and does
   not go through these wrappers.
 - GLSurfaceView is AOSP's (GLThread state machine, EglHelper, the default
@@ -1107,6 +1239,25 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `byteOffset` (by `vm_buffer_address`, declared in vm.h).
 
 ### 6.7 Native libraries
+- In-process executables (src/nativeloader/spawn.c, spawn.h, spawn_entry.S): ProcessBuilder
+  loads a PIE executable as a fresh image (`loader_load_executable`, never shared with an
+  earlier start) and runs it on an 8 MB thread, entering `_start` on a kernel-style stack
+  (argc, argv, envp, AT_NULL) through `nl_enter_entry`; the shim's `__libc_init` calls main
+  and exit. The thread and the threads it creates (`pthread_create` passes it on) carry a
+  process context: bionic's stdin/stdout/stderr, `__sF`, fds 0-2, printf/puts/getchar/scanf/
+  perror and isatty go to in-memory pipes (64 KB, buffers freed when a stream is done) that
+  `java.lang.ProcessImpl` reads and writes with the GIL released; exit/_exit/abort and failed
+  asserts end that process (status 134 for abort) by a longjmp to its thread start, or by
+  ending a secondary thread; relative paths resolve against its working directory; getenv
+  answers from its environment. These wrappers are the `shim_spawn_symbols` table, joined
+  after every other table and wrapping the entries it replaces (`shim_spawn_bind`). Limits:
+  images stay mapped, the libraries an executable needs are the app's already-loaded
+  instances (not private copies), destroy() can only end the streams, setenv/environ and
+  signals are not per process.
+- At start `ActivityThread` extracts `lib/<abi>/*.so` from the APK into its
+  `nativeLibraryDir` (`/data/app/<pkg>/lib/<abi>`, mapped to `<data root>/app/...`;
+  `loader_extract_native_libs`, skipped when sizes match), as the installer does, so apps
+  can stat, copy and exec those files. Libraries still load from the APK.
 
 - `System.loadLibrary("foo")` / `System.load(path)` reach
   `nativeloader_load_library` (src/nativeloader/elf_loader.c). Libraries
@@ -1137,18 +1288,34 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   provides` once and returns 0; the load succeeds with a warning listing
   the unresolved names. This trades Android's load failure for partial
   coverage, like framework auto-stubbing.
+- The shim is three tables joined by `shim_lookup`: `shim_libc.c` (libc,
+  libm, pthread wrappers, stdio, fortify), `shim_android.c` (liblog,
+  libandroid, OpenSL ES, EGL/GL) and `shim_runtime.c`: C++ operator
+  new/delete and `__cxa_pure_virtual` for code linked against the system
+  libstdc++, `sincos`, `vasprintf`, syslog (to the switchapk log),
+  semaphores and rwlocks (bionic objects hold a pointer to ours, created
+  on first use for zeroed static initializers), a C.UTF-8 locale with
+  bionic's UTF-8 multibyte functions (independent of the host locale),
+  wide-character calls, and `dl_iterate_phdr`, which walks the libraries
+  the loader mapped (it keeps a copy of each one's program headers) so C++
+  unwinders find `.eh_frame_hdr`.
 - `nativeloader_find_symbol` (JNI binding) searches every loaded library.
   libdl's dlopen/dlsym/dladdr go through the same loader; dlopen of a
   system library name returns a handle whose dlsym searches the shim.
-- Shim (`shim_libc.c`, `shim_android.c`): bionic names mapped to the host
+- Shim (`shim_libc.c`, `shim_android.c`, `shim_posix.c`): bionic names mapped to the host
   C library where the ABI matches, with wrappers where bionic differs:
   Android path mapping for open/fopen/stat/opendir/..., bionic sysconf
-  numbering, `__errno`, fortify `_chk` entry points, `__sF`
+  numbering, `__errno`, fortify `_chk` entry points (`__sprintf_chk` and friends format
+  unbounded when the object size is unknown, `(size_t)-1`: glibc's vsnprintf truncates
+  when buf + size wraps), `__sF`
   (stdin/stdout/stderr for code built before API 23) and FILE* translation,
   stack protector, `__cxa_atexit` (native destructors never run), pthread
-  mutexes and condition variables (bionic's 40/48-byte objects hold a
+  mutexes, condition variables and rwlocks (bionic's 40/48/56-byte objects hold a
   pointer to a lazily created host object, so zeroed static initializers
-  and the recursive initializer work), bionic pthread_attr_t, liblog
+  and the recursive initializer work), unnamed POSIX semaphores (`sem_init`,
+  `sem_wait`/`trywait`/`timedwait`, `sem_post`, `sem_getvalue`; the 16-byte bionic
+  sem_t points at a mutex/condition counter, since newlib has no sem_t; `sem_open`
+  is absent), bionic pthread_attr_t, liblog
   (to sa_log), AAssetManager (reads `assets/` from the APK; no file
   descriptors), `__system_property_get` (SDK 29 values), zlib, and GL/EGL
   names resolved from the driver (`sa_gl_proc`, 6.6.1), with the EGL
@@ -1159,6 +1326,74 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   Switch needs translation wrappers for newlib's. newlib also has no
   getpagesize, posix_memalign or pipe: the shim provides the first two
   and pipe returns ENOSYS.
+- Table order in `shim_lookup`: libc, android, `shim_runtime.c`, `shim_posix.c`, then the
+  Switch tables (`shim_bsd.c`, `shim_newlib.c`) and `spawn.c`; a later table replaces an earlier
+  entry, so where shim_runtime and shim_posix both define a symbol (C++ new/delete, locales and
+  wide characters, syslog, syscall, dl_iterate_phdr) the shim_posix entry is used.
+- `shim_posix.c` (what large C++ clients import beyond that): on the host,
+  sockets, select/poll/epoll/eventfd, fcntl/ioctl, `syscall` (the same
+  numbers: Android's kernel is Linux), pread/pwrite/readv/writev, statfs,
+  rusage, sysinfo, uname, termios, name lookup and inet_* pass to glibc,
+  whose Linux ABI is bionic's. Wrappers where it is not: `getaddrinfo`
+  returns bionic-ordered `struct addrinfo` copies (ai_canonname before
+  ai_addr) with bionic's positive EAI_* codes, and `freeaddrinfo` frees
+  them; `strtold`/`wcstold` return binary128 on x86-64 (bionic's long
+  double) through double; `mallinfo` has size_t fields. Locales follow
+  bionic: one UTF-8 C locale, every `*_l` function ignores its locale,
+  `newlocale` returns a token, `localeconv` a bionic-layout C lconv, and
+  the multibyte functions (mbrtowc, wcrtomb, mbsnrtowcs, wcsnrtombs, ...)
+  are our UTF-8 code, never the host locale's. Signals: `sigaction` and
+  `signal` record handlers without installing them (the VM owns the
+  process's signals, so native crash handlers do not run), `sigaltstack`
+  and `sigprocmask` are accepted, bionic's 8-byte sigset_t is handled.
+  Processes: fork, exec*, waitpid and ptrace fail; kill and raise of this
+  process are dropped; the uid is 10000 with no passwd entry; `getcwd` is
+  "/", `/proc/self/exe` reads as app_process64. Also syslog to sa_log,
+  vasprintf, memrchr, POSIX basename, sincos, and `dl_iterate_phdr`
+  (elf_loader.c: every loaded library with a copy of its program headers,
+  for libunwind's `.eh_frame_hdr` lookup). On the Switch the portable
+  parts are the same; sockets come from `shim_bsd.c` (next item) and the
+  rest of the descriptor calls fail with ENOSYS.
+- `shim_bsd.c` (Switch): libnx implements sockets with FreeBSD's ABI under
+  newlib, bionic code expects Linux's. Its table (`shim_bsd_symbols`,
+  joined last so it replaces earlier entries; empty on the host) wraps
+  socket, connect, bind, listen, accept/accept4, getsockname/getpeername,
+  send/recv/sendto/recvfrom, set/getsockopt, fcntl, ioctl, poll, select,
+  getaddrinfo/freeaddrinfo, gethostbyname and inet_ntop/pton. It converts
+  sockaddrs (BSD's length byte and 8-bit family; AF_INET6 28 vs 10),
+  SOCK_NONBLOCK/CLOEXEC, the SOL_SOCKET/SO_*, IP_*, IPV6_* and TCP_KEEP*
+  numbers (unknown options are ignored on set, ENOPROTOOPT on get), MSG_*
+  flags, O_NONBLOCK/O_APPEND for F_GETFL/F_SETFL, FIONBIO/FIONREAD, and
+  answers bionic's 1024-bit fd_set select with poll. struct addrinfo has
+  bionic's field order already, and EAI_* match. `SO_ERROR` needs no
+  change: Horizon's bsd service reports Linux-numbered errors (libnx's
+  `_convert_errno` table is indexed by them). errno: `__errno` returns a
+  per-thread Linux-numbered copy of newlib's errno, refreshed on each call;
+  whichever side changed since the previous call wins. The BSD-side
+  numbers are `_Static_assert`ed against libnx's headers, and the pure
+  translations (`sbsd_*`, built on every target) are checked on the host
+  by `tests/c/shim_bsd_test.c`. sendmsg, recvmsg and socketpair fail with
+  ENOSYS. Not run on hardware.
+- `shim_newlib.c` (Switch): bionic's arm64 file, time and thread ABI on
+  newlib, in a table joined last. open/openat take Linux flags (O_CREAT is
+  0x40 there, 0x200 in newlib); stat/lstat/fstat/fstatat fill bionic's
+  128-byte struct stat; readdir returns bionic's dirent; clock ids are
+  translated (CLOCK_MONOTONIC 1 to 4); localtime/gmtime(_r) fill bionic's
+  56-byte tm with tm_gmtoff and tm_zone; pthread_once works on bionic's
+  4-byte pthread_once_t (newlib's is 8). mmap gives zeroed heap pages, or a
+  private copy of a file read at map time (MAP_FIXED and writable
+  MAP_SHARED file maps fail); mprotect, madvise and msync succeed without
+  effect. `syscall()` answers the common AArch64 numbers: gettid (a
+  per-thread id), futex WAIT/WAKE (hashed condition variables), getrandom
+  (libnx `randomGet`, also behind getrandom, getentropy and arc4random*),
+  the clocks, nanosleep, sched_yield, membarrier, getcpu,
+  sched_getaffinity (three cores); others fail with ENOSYS, logged once.
+  The pure parts are checked on the host (`tests/c/shim_newlib_test.c`)
+  and the newlib constants static-asserted against devkitA64's headers.
+- Native file calls map paths with `shim_map_path`: `platform_map_path`,
+  except that a relative path fails as it would under Android's read-only
+  working directory "/" (ENOENT, EROFS for writes, one warning) instead of
+  reaching the host's working directory.
 - Code memory: mmap/mprotect on the host. On the Switch each mapping is
   page-aligned heap memory (`memalign`) mirrored into the alias region
   (`virtmemFindCodeMemory`) with `svcMapProcessCodeMemory` on
@@ -1220,18 +1455,25 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
     `nl_vm_enter`/`nl_vm_leave` (nativeloader.h). It attaches the thread
     on first use and takes the GIL; a pthread key detaches the thread
     when it exits.
-  - The Switch has no pipe or poll in newlib, so ALooper_prepare returns
-    NULL there, polls fail with ALOOPER_POLL_ERROR and NativeActivity
-    creates no input queue (a warning is logged). Making it work needs
-    virtual descriptors in the shim.
+  - The Switch has no pipe or poll in newlib: there ALooper, AInputQueue
+    and native `pipe`/`pipe2` use virtual pipes (`vfd.c`: in-process
+    pipes numbered from 0x30000000, above newlib's and libnx's
+    descriptors, 64 KiB each, blocking or not, EOF and EPIPE as on Linux).
+    `vfd_poll` waits on virtual pipes and real descriptors (libnx sockets)
+    together, slicing the wait at 10 ms when both kinds are present;
+    `read`, `write`, `close`, `fcntl`, `ioctl` (FIONREAD, FIONBIO), `poll`
+    and `select` dispatch virtual descriptors. So the main looper,
+    GameActivity's command pipe and android_native_app_glue work there.
 - OpenSL ES (WS7, symbols in this shim): `slCreateEngine` and the
   `SL_IID_*` pointer objects (engine, object, play, volume, buffer
   queue, output mix, Android simple buffer queue). GetInterface matches
   pointer identity or the 16-byte UUID. A player copies each enqueued
   buffer and runs the queue callback on the audio thread after the
   mixer lock is released. AAudio is not implemented.
-- Not yet: AAudio, ASensorManager, ALooper and input on the Switch
-  (no pipe/poll), libc++_shared coverage checks, socket APIs.
+- Not yet: AAudio, ASensorManager, libc++_shared coverage checks,
+  sendmsg/recvmsg and directory descriptors (openat relative to one) on
+  the Switch. None of the Switch shim layers (sockets, virtual pipes,
+  ALooper, newlib ABI) has run on hardware.
   NativeActivity and native EGL have not been run on hardware.
 
 ### 6.8 System services (WS15)
@@ -1282,7 +1524,12 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   `TelephonyManager` (TELEPHONY_SERVICE) reports no phone, an absent SIM,
   empty operator strings and null identifiers. `Camera` has no cameras
   (`open()` null, `open(int)` throws) and camera2 `CameraManager`
-  (CAMERA_SERVICE) an empty id list.
+  (CAMERA_SERVICE) an empty id list. `BluetoothManager`
+  (BLUETOOTH_SERVICE) exists but `getAdapter()`, like
+  `BluetoothAdapter.getDefaultAdapter()`, is null, as on a device without
+  Bluetooth; LE and GATT classes are not present.
+- `UserManager` (USER_SERVICE) is one unlocked, running admin user with
+  no profiles; restrictions an app sets on itself are kept for the run.
 - `PackageManager.hasSystemFeature` reports the touch screen
   (multi-touch), gamepad, Wi-Fi, audio output, both screen orientations
   and the accelerometer and gyroscope when the sensor service lists them.
@@ -1296,14 +1543,20 @@ Single C interface implemented once per target:
   `platform_present(argb, w, h, stride)` (blocks for vsync on Switch,
   letterboxes smaller windows centred)
 - events: `platform_wait_event(ev, timeout_ms)`, `platform_wake()`,
-  `platform_push_event(ev)` (thread-safe)
+  `platform_push_event(ev)` (thread-safe), `platform_set_wake_hook(fn)`:
+  `fn` runs after every wake and push, without platform locks held (the
+  main ALooper's wake, 6.4)
 - text: `platform_request_text(id, initial, hint, input_type, max_len)`
 - entropy (WS17): `platform_random_bytes(buf, len)` fills `buf` with
   cryptographically secure bytes and returns false if it cannot.
   Headless uses getrandom(2) (`/dev/urandom` before Linux 3.17); the
   Switch uses libnx `randomGet` (ChaCha20 seeded from the kernel's
   entropy). Used by SecureRandom and by the Switch SQLite VFS.
-- audio: `platform_audio_start(rate, cb, user)`, `platform_audio_stop()`
+- audio: `platform_audio_start(rate, cb, user)`, `platform_audio_stop()`.
+  The Switch plays through audout (48 kHz stereo s16, four 1024-frame
+  buffers refilled as they are released; the mixer runs at 48 kHz) and
+  drains in real time only when audout cannot start. Not yet heard on
+  hardware.
 - network: `platform_network_state(PlatformNetwork*)` fills `connected`,
   `transport` (`PLATFORM_NET_NONE/WIFI/ETHERNET`) and `signal` (Wi-Fi
   bars 0..3, -1 unknown); cheap enough to poll. Headless reports Wi-Fi
@@ -1372,16 +1625,39 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
 - Files: `romfs:/framework.dex`, `romfs:/framework-res.apk`; APKs in
   `sdmc:/switch/switchapk/apks`, app data in `sdmc:/switch/switchapk/data`,
   log in `sdmc:/switch/switchapk/log.txt` (flushed on warnings and errors).
-- Launcher: a C screen listing the APKs in `sdmc:/switch/switchapk/apks`
-  (D-pad, stick or touch, A runs, + exits). Each row shows the launcher
-  activity's `android:label` and `android:icon` when the APK has them
-  (else the application's, else the file name without `.apk`). Labels and
-  icons are read with the zip, binary XML and resource table code, at
-  240 dpi (`apk_read_identity` in `src/app/apk_info.c`). Bitmap icons are
-  drawn; XML drawables (adaptive icons, vectors) are skipped. `argv[1]`
-  ending in `.apk` skips the list (nxlink). When the app ends the NRO
-  reloads itself through hbloader (`envSetNextLoad`). A non-zero exit
-  shows the last 48 INFO+ log lines (`sa_log_recent`) on an error screen.
+- Launcher (`src/app/launcher.c`, `launcher.h`): a home screen for the
+  APKs in `sdmc:/switch/switchapk/apks`, drawn with gfx into a 1280x720
+  buffer. It knows nothing of libnx: input comes in as `UiInput` (UI_BTN_*
+  bits, touch point, clock) and the status bar as `UiStatus`, so the host
+  driver runs the same code (`switchapk-host --launcher <dir>`,
+  `--splash <apk>`, `--error-screen <apk>`, scripted and screenshotted by
+  the headless platform). A frame that changes nothing returns UI_IDLE and
+  is not presented.
+  - Carousel of tiles (D-pad, stick, swipe; L/R page, ZL/ZR ends; key
+    repeat on hold), a details panel (label, package, versionName, size,
+    last played) with a Play button, and button hints that are also touch
+    targets. A or a tap on the selected tile or Play runs the app; Y
+    switches between recently played and A to Z; X rescans; + exits.
+  - Each tile shows the launcher activity's `android:label` and
+    `android:icon` (else the application's, else the file name without
+    `.apk`), read at 640 dpi by `apk_read_identity`. APKs without a bitmap
+    icon (XML drawables are skipped) get a colored tile with their initial.
+  - State in `sdmc:/switch/switchapk/launcher/`: `launcher.ini` (sort
+    order, last app, `played=<unix time> <file>` lines) and `icons/`, one
+    `<file>.cache` per APK (label, package, version, 148 px PNG icon;
+    stale when the APK's size or mtime changes). With the cache the list
+    opens without reading any APK; otherwise a progress screen reads them.
+  - `argv[1]` ending in `.apk` skips the list (nxlink, Try again). A
+    splash with the app's icon shows while the VM boots. When the app ends
+    the NRO reloads itself through hbloader (`envSetNextLoad`), back to the
+    list. A non-zero exit opens the error screen with the last 64 INFO+
+    log lines (`sa_log_recent`, scrollable): A goes back to the list, X
+    reloads the NRO with the same APK as `argv[1]`, + exits.
+  - The hbmenu icon is the central part of `docs/assets/logo.jpg`, scaled
+    to 256 px by `switchapk-host --nro-icon` (`ui_draw_app_icon`, which
+    draws its own mark without a source) at build time and encoded by
+    `tools/ppm_to_jpeg.py`, so `make` must run before `make -f
+    Makefile.switch`.
 - GL: Mesa (switch-mesa) is linked when installed (6.6.1); not yet run on
   hardware.
 - Network: `main_switch.c` already calls `socketInitializeDefault()`, so
@@ -1405,13 +1681,18 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   checked for exceptions and `STUB:` lines.
 - Launcher identity (`apk_read_identity`) is checked on the host with
   `switchapk-host --apk-info` (`tests/apps/labeled/check_info.sh`), without
-  booting the VM.
+  booting the VM. The home screen itself (navigation, touch, saved state,
+  sort, empty folder, error screen) is checked by
+  `tests/launcher/check_launcher.sh`, which leaves screenshots of every
+  screen in `build/launcher-shots`.
 - Real-world APKs: `tests/corpus/corpus.json` pins open-source F-Droid
-  APKs (fetched into `build/corpus`, never committed). `tools/corpus.py`
+  APKs (fetched into `build/corpus`, never committed) and lists
+  proprietary ones (`"source": "local"`) whose APK or Play splits the
+  developer imports; splits are merged into one zip. `tools/corpus.py`
   scans each APK's bytecode references against framework.dex and
   android.jar (missing classes, java.* members that throw, android.*
   members that auto-stub), checks native imports against the shim
-  (`switchapk-host --shim-symbols` prints its names; GL and EGL come from
+  (`switchapk-host --shim-symbols` prints the names of all three shim tables; GL and EGL come from
   the driver), boots each APK headless with a smoke script and collects
   `STUB:` lines, exception chains and stubbed native calls, then writes
   the generated section of `docs/COMPATIBILITY.md`.

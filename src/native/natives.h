@@ -49,6 +49,8 @@ void natives_java_io_register(void);
 void natives_java_reflect_register(void);
 void natives_java_annotation_register(void);
 void natives_java_misc_register(void);
+void natives_java_unsafe_register(void);
+void natives_java_process_register(void);
 void natives_java_net_register(void);
 void natives_java_zip_register(void);
 void natives_java_security_register(void);

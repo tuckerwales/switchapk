@@ -7,6 +7,7 @@ public class FileInputStream extends InputStream {
     private final String path;
     private boolean closed;
     private final boolean owned;
+    private java.nio.channels.FileChannel channel;
 
     public FileInputStream(String name) throws FileNotFoundException {
         this(name != null ? new File(name) : null);
@@ -79,6 +80,9 @@ public class FileInputStream extends InputStream {
         if (owned) {
             Os.close(fd.fd);
         }
+        if (channel != null) {
+            channel.close();
+        }
     }
 
     public final FileDescriptor getFD() throws IOException {
@@ -86,6 +90,11 @@ public class FileInputStream extends InputStream {
     }
 
     public java.nio.channels.FileChannel getChannel() {
-        return java.nio.channels.FileChannel.forFd(fd.fd, true, false);
+        synchronized (this) {
+            if (channel == null) {
+                channel = sun.nio.ch.FileChannelImpl.open(fd.fd, path, this, true, false, false);
+            }
+            return channel;
+        }
     }
 }

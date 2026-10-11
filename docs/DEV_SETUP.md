@@ -63,12 +63,14 @@ Needs a Switch running homebrew (Atmosphere + hbmenu).
    switchapk.
 3. Pick an APK with the D-pad, stick or touch and press A. The app ends
    with B (back) on its first screen, or HOME and close. switchapk then
-   returns to its list; + exits.
+   returns to its list on that app; + exits. Y sorts by recently played or
+   name, X rescans the folder.
 
 Controls in apps: touch in handheld mode; D-pad or left stick moves
 focus; A clicks; B is back; + opens the options menu.
 
-When an app fails, an error screen shows the last log lines. The full
+When an app fails, an error screen shows the last log lines (X tries
+again, A goes back to the list). The full
 log is `sdmc:/switch/switchapk/log.txt`. For live logs, start it with
 nxlink: `$DEVKITPRO/tools/bin/nxlink -s -a <switch-ip> build/switch/switchapk.nro sdmc:/switch/switchapk/apks/hello.apk`
 (the APK path argument skips the launcher).
@@ -84,7 +86,12 @@ Plain dex programs (VM testing):
 ```
 build/host/switchapk-host --raw-stdio program.dex MainClass args...
 tests/run_dex_test.sh tests/dex/VmTest.java
+for t in tests/dex/*Test.java; do tests/run_dex_test.sh $t; done   # every libcore test
 ```
+
+Each `tests/dex/*Test.java` runs on OpenJDK and on switchapk and diffs
+stdout (Lang, Util, Net, Zip, Nio, Regex, Xml, Unsafe, Logging, Generics,
+Selector, Vm).
 
 APKs (after WS0):
 
@@ -96,6 +103,9 @@ build/host/switchapk-host [--data build/data] [--screen 1280x720@240] \
 Useful flags: `-v` / `-vv` (debug/verbose logs), `--trace` (every
 instruction), `--framework path/to/framework.dex`. Look for `STUB:` lines
 to find framework APIs apps call that we do not implement.
+`SWITCHAPK_TRACE_THROW=1` logs every throw (`W/throw:` with method and
+line), including exceptions the app catches: the quickest way to find
+what an app's own crash screen is hiding.
 
 ## Building test APKs
 
@@ -160,11 +170,21 @@ SWITCHAPK_NETWORK=none build/host/switchapk-host --data build/data app.apk
   `tools/corpus.py scan --apk any.apk` prints the gaps of any APK
   (missing classes and members, unresolved native imports, bundled
   libraries). Needs `make` and the sdk toolchain; GL apps need Mesa.
+  Proprietary corpus apps (Old School RuneScape) take your own APK or
+  Play splits via `tools/corpus.py import <id> files...` (see
+  docs/COMPATIBILITY.md "Proprietary apps").
 - `python3 tools/dexdump.py file.dex` lists classes/methods.
 - `javap -cp build/toolchains/sdk/android.jar -public <class>` shows the
   exact API signatures to match.
 - `aapt2 dump xmltree app.apk --file AndroidManifest.xml`, `aapt2 dump
   resources app.apk` for resources.
+- `tests/c/shim_bsd_test.c` checks the Switch socket ABI translations
+  (`src/nativeloader/shim_bsd.c`) on the host: `make && cc -Isrc
+  tests/c/shim_bsd_test.c build/host/src/nativeloader/shim_bsd.o -o
+  build/shim_bsd_test && build/shim_bsd_test`.
+- `tests/c/vfd_test.c` and `tests/c/shim_newlib_test.c` check the Switch's
+  virtual pipes and newlib ABI translations the same way (link
+  `build/host/src/nativeloader/vfd.o` or `shim_newlib.o`, add `-pthread`).
 - `tests/c/gfx_test.c` builds a standalone renderer test:
   `cc -Isrc -Ithird_party tests/c/gfx_test.c build/host/src/gfx/*.o build/host/src/core/util.o -lz -lm -lpthread -o gfx_test && ./gfx_test out.png`
 

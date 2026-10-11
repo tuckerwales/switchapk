@@ -15,6 +15,8 @@ typedef struct {
     uint32_t *icon; /* ARGB8888, or NULL; owned */
     int icon_w;
     int icon_h;
+    char *package; /* manifest package, or NULL; owned */
+    char *version; /* android:versionName, or NULL; owned */
 } ApkIdentity;
 
 /* The launcher activity (MAIN + LAUNCHER) wins over <application>. density_dpi

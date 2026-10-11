@@ -12,59 +12,59 @@
  * NDK API and are not implemented.
  *
  * It is plain C over poll(2) and a pipe: no VM objects, so it works from
- * threads the app created. The Switch has no pipe or poll in newlib; there
- * the calls fail (prepare returns NULL, polls return ALOOPER_POLL_ERROR)
- * until the shim gets virtual descriptors (ARCHITECTURE 6.7).
+ * threads the app created. On the Switch, which has no pipe or poll in
+ * newlib, the pipe is virtual (vfd.c) and poll waits on virtual pipes and
+ * libnx sockets together.
+ *
+ * The main thread's looper is the one under android.os.MessageQueue, as on
+ * Android: app_runner prepares it before ActivityThread.main, nativePollOnce
+ * blocks in it (so descriptors native code adds to ALooper_forThread() on
+ * the main thread, like GameActivity's command pipe, get their callbacks),
+ * and platform events and wake-ups reach it through platform_set_wake_hook.
  */
 #include "ndk_android.h"
 #include "../core/common.h"
+#include "../platform/platform.h"
 
 #define LOG_TAG "looper"
 
+/*
+ * The descriptors under a looper: host pipes and poll(2), or on the Switch (no pipe or poll in newlib) the shim's
+ * virtual pipes, whose poll also waits on libnx sockets the app adds.
+ */
 #ifdef __SWITCH__
-
-ALooper *ALooper_forThread(void) { return NULL; }
-ALooper *ALooper_prepare(int opts) {
-    SA_UNUSED(opts);
-    LOGW("ALooper is not available on the Switch yet (no pipe/poll)");
-    return NULL;
+#include "vfd.h"
+#include <poll.h>
+static int switch_real_poll(VfdPollfd *fds, unsigned long n, int timeout) {
+    return poll((struct pollfd *)fds, (nfds_t)n, timeout);
 }
-void ALooper_acquire(ALooper *looper) { SA_UNUSED(looper); }
-void ALooper_release(ALooper *looper) { SA_UNUSED(looper); }
-int ALooper_pollOnce(int timeoutMillis, int *outFd, int *outEvents, void **outData) {
-    SA_UNUSED(timeoutMillis);
-    SA_UNUSED(outFd);
-    SA_UNUSED(outEvents);
-    SA_UNUSED(outData);
-    return ALOOPER_POLL_ERROR;
-}
-int ALooper_pollAll(int timeoutMillis, int *outFd, int *outEvents, void **outData) {
-    return ALooper_pollOnce(timeoutMillis, outFd, outEvents, outData);
-}
-void ALooper_wake(ALooper *looper) { SA_UNUSED(looper); }
-int ALooper_addFd(ALooper *looper, int fd, int ident, int events, ALooper_callbackFunc callback, void *data) {
-    SA_UNUSED(looper);
-    SA_UNUSED(fd);
-    SA_UNUSED(ident);
-    SA_UNUSED(events);
-    SA_UNUSED(callback);
-    SA_UNUSED(data);
-    return -1;
-}
-int ALooper_removeFd(ALooper *looper, int fd) {
-    SA_UNUSED(looper);
-    SA_UNUSED(fd);
-    return -1;
-}
-
+#define lp_pipe(fds) vfd_pipe(fds, VFD_NONBLOCK)
+#define lp_read vfd_read
+#define lp_write vfd_write
+#define lp_close vfd_close
+#define lp_poll(fds, n, t) vfd_poll((VfdPollfd *)(fds), (unsigned long)(n), t, switch_real_poll)
 #else
-
-#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <unistd.h>
+static int host_pipe(int fds[2]) {
+    if (pipe(fds) != 0) return -1;
+    for (int i = 0; i < 2; i++) {
+        fcntl(fds[i], F_SETFL, fcntl(fds[i], F_GETFL) | O_NONBLOCK);
+        fcntl(fds[i], F_SETFD, FD_CLOEXEC);
+    }
+    return 0;
+}
+#define lp_pipe host_pipe
+#define lp_read read
+#define lp_write write
+#define lp_close close
+#define lp_poll(fds, n, t) poll(fds, (nfds_t)(n), t)
+#endif
+
+#include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
-#include <unistd.h>
 
 typedef struct {
     int fd;
@@ -96,21 +96,14 @@ static _Thread_local ALooper *tl_looper;
 
 static int64_t now_ms(void) { return sa_time_ns() / 1000000; }
 
-static void set_nonblock_cloexec(int fd) {
-    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
-    fcntl(fd, F_SETFD, FD_CLOEXEC);
-}
-
 static ALooper *looper_create(bool allow_non_callbacks) {
     ALooper *l = sa_calloc(1, sizeof *l);
     pthread_mutex_init(&l->lock, NULL);
-    if (pipe(l->wake_fds) != 0) {
+    if (lp_pipe(l->wake_fds) != 0) {
         LOGE("cannot create the wake pipe: %s", strerror(errno));
         free(l);
         return NULL;
     }
-    set_nonblock_cloexec(l->wake_fds[0]);
-    set_nonblock_cloexec(l->wake_fds[1]);
     atomic_init(&l->refs, 1);
     l->allow_non_callbacks = allow_non_callbacks;
     return l;
@@ -132,8 +125,8 @@ void ALooper_release(ALooper *l) {
     if (!l) return;
     if (atomic_fetch_sub(&l->refs, 1) != 1) return;
     if (tl_looper == l) tl_looper = NULL;
-    close(l->wake_fds[0]);
-    close(l->wake_fds[1]);
+    lp_close(l->wake_fds[0]);
+    lp_close(l->wake_fds[1]);
     pthread_mutex_destroy(&l->lock);
     free(l->requests);
     free(l->responses);
@@ -144,7 +137,7 @@ static void wake_fd(ALooper *l) {
     char c = 1;
     ssize_t r;
     do {
-        r = write(l->wake_fds[1], &c, 1);
+        r = lp_write(l->wake_fds[1], &c, 1);
     } while (r < 0 && errno == EINTR);
     /* EAGAIN: the pipe is full, so a wake-up is already pending */
 }
@@ -157,7 +150,7 @@ void ALooper_wake(ALooper *l) {
 
 static void drain_wake(ALooper *l) {
     char buf[64];
-    while (read(l->wake_fds[0], buf, sizeof buf) > 0) {
+    while (lp_read(l->wake_fds[0], buf, sizeof buf) > 0) {
     }
 }
 
@@ -262,7 +255,7 @@ static int poll_inner(ALooper *l, int timeout_ms) {
 
         int wait = timeout_ms < 0 ? -1 : timeout_ms == 0 ? 0 : (int)(deadline - now_ms());
         if (timeout_ms > 0 && wait < 0) wait = 0;
-        int r = poll(pfds, (nfds_t)(n + 1), wait);
+        int r = lp_poll(pfds, n + 1, wait);
         int err = errno;
 
         int result = 0;
@@ -351,4 +344,26 @@ int ALooper_pollAll(int timeout_ms, int *out_fd, int *out_events, void **out_dat
     }
 }
 
-#endif
+/* ---- the main thread's looper (VM contract, see the top of the file) ---- */
+
+static ALooper *g_main_looper;
+
+static void main_looper_wake(void) { ALooper_wake(g_main_looper); }
+
+/* On the main thread, before ActivityThread.main. False when there is no ALooper (the Switch). */
+bool nativeloader_prepare_main_looper(void) {
+    g_main_looper = ALooper_prepare(0);
+    if (g_main_looper) platform_set_wake_hook(main_looper_wake);
+    return g_main_looper != NULL;
+}
+
+/*
+ * The main thread's wait: blocks in the main looper for up to timeout_ms (-1 forever), running fd callbacks,
+ * until a callback ran, a descriptor fired, the timeout passed or the platform woke it. Called without the GIL.
+ * False when there is no main looper; the caller then waits in platform_wait_event.
+ */
+bool nativeloader_poll_main(int timeout_ms) {
+    if (!g_main_looper || tl_looper != g_main_looper) return false;
+    ALooper_pollOnce(timeout_ms, NULL, NULL, NULL);
+    return true;
+}

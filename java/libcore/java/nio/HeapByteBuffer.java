@@ -1,7 +1,6 @@
 package java.nio;
 
-// Extends MappedByteBuffer so FileChannel.map can hand out heap copies of file regions.
-final class HeapByteBuffer extends MappedByteBuffer {
+final class HeapByteBuffer extends ByteBuffer {
     HeapByteBuffer(byte[] hb, int offset, int cap) {
         super(-1, 0, cap, cap, hb, offset);
     }

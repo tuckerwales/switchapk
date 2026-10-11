@@ -433,6 +433,14 @@ public class VmTest {
                 + " " + "aaa".replaceAll("a+?", "b") + " " + "<<x>>".replaceAll("<(.*?)>", "[$1]"));
         p("foo123bar".replaceAll("(?<=foo)\\d+(?=bar)", "-") + " " + "The Cat".replaceAll("\\bc", "X") + " "
                 + "abcabc".matches("(abc)\\1") + " " + "x".matches("[^abc]") + " " + "tab\there".split("\\t").length);
+        // Unicode blocks and general categories (Shattered PD and Simple Calculator compile these at start)
+        Pattern cjk = Pattern.compile("[\\p{InHiragana}\\p{InKatakana}\\p{InCJK_Unified_Ideographs}"
+                + "\\p{InCJK_Symbols_and_Punctuation}\\p{InHalfwidth_and_Fullwidth_Forms}\\p{InHangul_Syllables}]+");
+        p(cjk.matcher("ab\u3072\u30ab\u4e2d\u3002\uff21\uac00cd").replaceAll("_") + " "
+                + "e\u0301".replaceAll("\\p{InCombiningDiacriticalMarks}", "") + " "
+                + "a b\u00a0c".replaceAll("\\p{Zs}", "+") + " " + "\u0391x".matches("\\p{InGreek}x") + " "
+                + "\u0391".matches("\\p{block=Greek}") + " " + "A1".matches("\\p{Lu}\\p{Nd}") + " "
+                + "a-(b)".replaceAll("\\p{P}", "") + " " + "$".matches("\\p{Sc}") + " " + "x".matches("\\P{L}"));
     }
 
     static volatile int shared;

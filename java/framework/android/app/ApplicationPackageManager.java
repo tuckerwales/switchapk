@@ -31,6 +31,23 @@ public class ApplicationPackageManager extends PackageManager {
         PackageInfo pi = new PackageInfo();
         pi.packageName = packageName;
         pi.applicationInfo = ActivityThread.sAppInfo;
+        pi.versionCode = ActivityThread.sVersionCode;
+        pi.versionCodeMajor = ActivityThread.sVersionCodeMajor;
+        pi.versionName = ActivityThread.sVersionName;
+        if (pi.versionName == null && ActivityThread.sVersionNameRes != 0) {
+            try {
+                pi.versionName = ActivityThread.sResources.getString(ActivityThread.sVersionNameRes);
+            } catch (RuntimeException ignored) {
+            }
+        }
+        long installed = new java.io.File(ActivityThread.sAppInfo.sourceDir).lastModified();
+        pi.firstInstallTime = installed;
+        pi.lastUpdateTime = installed;
+        if ((flags & GET_PERMISSIONS) != 0 && !ActivityThread.sPermissions.isEmpty()) {
+            pi.requestedPermissions = ActivityThread.sPermissions.toArray(new String[0]);
+            pi.requestedPermissionsFlags = new int[pi.requestedPermissions.length];
+            java.util.Arrays.fill(pi.requestedPermissionsFlags, PackageInfo.REQUESTED_PERMISSION_GRANTED);
+        }
         if ((flags & GET_ACTIVITIES) != 0) pi.activities = activityInfos(false);
         if ((flags & GET_RECEIVERS) != 0) pi.receivers = activityInfos(true);
         if ((flags & GET_SERVICES) != 0) pi.services = serviceInfos();
@@ -172,6 +189,19 @@ public class ApplicationPackageManager extends PackageManager {
             }
         }
         return null;
+    }
+
+    @Override
+    public List<ResolveInfo> queryIntentContentProviders(Intent intent, int flags) {
+        // Provider intent filters are not parsed; the providers apps look up this way (font and
+        // emoji providers) come from other packages, which are absent here.
+        return new ArrayList<ResolveInfo>();
+    }
+
+    @Override
+    public List<ProviderInfo> queryContentProviders(String processName, int uid, int flags) {
+        // Every provider runs in the one app process.
+        return new ArrayList<ProviderInfo>(ActivityThread.sProviders);
     }
 
     @Override

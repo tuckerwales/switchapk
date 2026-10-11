@@ -50,7 +50,7 @@ ones.
   AndroidX/AppCompat/Material/RecyclerView, performance work; track a
   corpus of open-source APKs in `docs/COMPATIBILITY.md`.
 
-## Current state (end of session 23, see SESSION_LOG.md)
+## Current state (end of session 26, see SESSION_LOG.md)
 
 Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 - VM core, libcore, JNI, reflection (including RUNTIME annotations),
@@ -76,8 +76,9 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   SurfaceView as an ANativeWindow, and native EGL window surfaces post
   into that queue (tests/apps/native on host Mesa). The OpenSL ES buffer
   queue is in the same shim and shares the WS7 mixer.
-- Switch (WS10): the NRO boots on hardware; launcher with APK labels and
-  icons; the build links Mesa when switch-mesa is installed. CI packages
+- Switch (WS10): the NRO boots on hardware; a home screen with APK icons,
+  recently played order, touch and an icon cache (not yet seen on
+  hardware); the build links Mesa when switch-mesa is installed. CI packages
   the NRO and sample APKs (`.github/workflows/package.yml`).
 - Audio (WS7): one 48 kHz stereo mixer for SoundPool, MediaPlayer,
   AudioTrack, ToneGenerator and the OpenSL ES buffer queue. Decoders are
@@ -110,6 +111,17 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
 Compression: java.util.zip and java.util.jar over zlib natives
 (tests/dex/ZipTest matches OpenJDK), and transparent gzip in
 HttpURLConnection.
+
+Real apps (session 25): 12 of the 13 corpus apps reach a drawn screen on
+the host (docs/COMPATIBILITY.md). On the way in: android.preference and
+ListActivity (AOSP ports, tests/apps/prefs), ActivityManager,
+DisplayManager, InputManager, activity-alias, SAX, java.util.logging,
+ServiceLoader, generic signatures, sun.misc.Unsafe, FileChannel locks and
+mapping, java.nio selectors and socket channels, regex Unicode classes,
+ProcessBuilder (always refused), and the native shim's C++ runtime,
+locale, wide-character, semaphore, rwlock and dl_iterate_phdr entries.
+New JDK-compared tests: RegexTest, NioTest, XmlTest, UnsafeTest,
+LoggingTest, GenericsTest, SelectorTest.
 
 Not yet: GL on the Switch (Mesa linked but not run on hardware), device
 audio output (audren/audout), running a native library on hardware (code
@@ -272,7 +284,11 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] first boot on hardware (confirmed 2026-10-02)
   - [x] APK labels and icons in the launcher (tests/apps/labeled,
     switchapk-host --apk-info)
-  - [ ] audio (audren/audout), rumble, 1080p docked
+  - [x] home screen redesign: tile carousel, details panel with Play,
+    touch and key repeat, recently played order, icon cache, launch
+    splash, error screen with Try again, generated NRO icon
+    (tests/launcher/check_launcher.sh)
+  - [ ] audio (audout output written 2026-10-10, not heard on hardware), rumble, 1080p docked
 
 ### M4
 - [x] WS5 animation
@@ -346,6 +362,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     (tests/apps/input, a glue-style app, on x86-64 and AArch64)
   - [ ] ALooper/input on the Switch (needs virtual descriptors: no
     pipe/poll in newlib), AAudio
+  - [x] shim runtime for corpus libraries: C++ operator new/delete,
+    sincos, C.UTF-8 locale and wide chars, syslog, semaphores, rwlocks,
+    dl_iterate_phdr (Vector Pinball, Frozen Bubble, Mindustry load)
   - [ ] real NDK-built APK corpus (libc++_shared, emulated TLS)
 
 ### M6
@@ -376,7 +395,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] java.util.zip and java.util.jar (zlib natives; tests/dex/ZipTest
     against OpenJDK); HttpURLConnection asks for gzip and decodes it
     like OkHttp (tests/apps/net)
-  - [ ] connection pooling, CookieManager, proxies; NIO socket channels
+  - [x] NIO selectors and socket, server socket and datagram channels,
+    blocking and non-blocking (tests/dex/SelectorTest against OpenJDK)
+  - [ ] connection pooling, CookieManager, proxies
   - [ ] sockets and nifm on hardware
 - [ ] WS17 crypto (JCA)
   - [x] provider framework (Provider, Service, Security, SPIs, engines,
@@ -399,7 +420,24 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] corpus of 13 F-Droid APKs (`tests/corpus/corpus.json`, pinned),
     `tools/corpus.py` static gap scan, headless smoke run and generated
     report (docs/COMPATIBILITY.md)
+  - [x] first blockers fixed: 12 of 13 apps draw their first screen on
+    the host (session 25; COMPATIBILITY.md "Findings")
   - [ ] corpus runs in CI; per-app scripts that get past the title screen
+  - [x] proprietary apps supplied locally (`"source": "local"`,
+    `tools/corpus.py import`, Play split merge); Old School RuneScape added
+  - [x] first Old School RuneScape scan and smoke run recorded (241.3:
+    stops at android.os.UserManager; game library needs native sockets)
+  - [x] Old School RuneScape reaches its own rendered client screen on the
+    host (GameActivity, GLES3 from a native render thread, posix shim);
+    stops at "Error connecting to server"
+  - [x] android.preference, ListActivity, SAX2 and ProcessBuilder: Andor's
+    Trail, Frozen Bubble and DroidFish draw (2026-10-10)
+  - [x] activity-alias, regex blocks, DisplayManager, Unsafe and generic
+    reflection: Shattered PD, Vector Pinball and Unciv draw (2026-10-11)
+  - [x] deep style chains, key-0 array bags, Holo ActionBarView: Simple
+    Calculator, Simple Solitaire and Blockinger draw (2026-10-11)
+  - [x] in-process executables, ServiceLoader, fortified sprintf fix:
+    DroidFish runs Stockfish, Simon Tatham's Puzzles draws (2026-10-11)
 
 ## Next steps (in order)
 
@@ -450,31 +488,33 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    both targets, `javax.net.ssl` and HttpsURLConnection), then a device
    run of tests/apps/net.
 
-8. libcore API gaps. `tools/api_check.py` used to resolve `java.*`
-   classes from the running JDK, so libcore always looked complete.
-   Fixed in session 23: `-p java.lang`, `-p java.util` and so on now
-   list real gaps (about 1,700 members across java.lang, java.util,
-   java.util.concurrent, java.text, java.nio, java.io and java.net).
-   Many are API 34/35 additions (SequencedCollection, Math.clamp) or
-   interface methods the checker does not follow (List inherits from
-   Collection). Real ones that apps hit include `Map.of` with six or
-   more pairs and `Map.ofEntries`, `String.codePoints`, the `Math`
-   exact and floor/ceil variants, `Class.getDeclaredAnnotation`,
-   `getEnclosingMethod` and `toGenericString`, Character code point
-   helpers, and the checked/navigable `Collections` wrappers. Each one
-   auto-stubs silently today.
+8. libcore API gaps. `tools/api_check.py -p java.lang` and so on list
+   about 1,700 members across java.lang, java.util,
+   java.util.concurrent, java.text, java.nio, java.io and java.net. Many
+   are API 34/35 additions (SequencedCollection, Math.clamp) or interface
+   methods the checker does not follow. Real ones that apps hit include
+   `Map.of` with six or more pairs and `Map.ofEntries`, `String.codePoints`,
+   the `Math` exact and floor/ceil variants, `Class.getDeclaredAnnotation`
+   and `toGenericString`, Character code point helpers (the Character
+   tables are approximations outside Latin, Greek, Cyrillic and CJK), and
+   the checked/navigable `Collections` wrappers. Still missing as whole
+   areas: java.time, ResourceBundle, org.w3c.dom and DocumentBuilder,
+   MulticastChannel and pipes, a default serialVersionUID hash.
 
-9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`).
-   Pixel Dungeon and Replica Island reach their title screens on the
-   host. First blockers for the rest, by apps unblocked:
-   `android.preference` (4 apps at start, 7 reference it, WS4);
-   `java.runtime.name` unset so libGDX takes the desktop library path
-   (2, WS16); regex `\p{InBlock}` classes (Shattered PD, WS16);
-   `FileChannel.lock/map` (Unciv, WS16); activity-alias launch (Simple
-   Calculator, WS4); `ListActivity` (Blockinger, WS4); shim gaps
-   `sincos`/`sincosf`, C++ `operator new/delete`, `vasprintf`, syslog,
-   `dl_iterate_phdr` (Mindustry renders black, WS9). Re-run the corpus
-   after each fix and update the findings table.
+9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`). All 13
+   open apps draw their first screen (2026-10-11, after the merge).
+   Next, by what each unblocks: drive
+   the apps past the first screen (a per-app smoke script that starts a
+   game), the AppCompat/AndroidX surface the static scan ranks highest
+   (accessibility, android.transition, android.icu, AppOpsManager,
+   window insets; WS14), Mindustry's map preview decode error (zip and
+   DataInputStream ruled out), and ActionBarView for Holo decors (they
+   use the Toolbar decor now). DroidFish (Stockfish) and Simon Tatham's
+   Puzzles (its generator) run their bundled executables in-process
+   (spawn.c). Old School RuneScape draws its own "Error connecting to
+   server" screen; its next step is the game connection (WS11). Then run
+   the drawing apps on hardware (the arm64 build of tests/apps/procs
+   needs NDK_ARM64).
 
 7. WS15: sensors, battery, rumble, power and the absent-hardware
    services are in (host). Next is a console run: check the six-axis
@@ -482,6 +522,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    battery level.
 
 ## Known issues and gotchas
+
+- Holo-themed apps get the Toolbar action bar decor: AOSP's
+  `screen_action_bar` is built on ActionBarView, which is not ported.
+  Behaviour matches; the bar is drawn in Toolbar style.
+- `SWITCHAPK_TRACE_THROW=1` logs every Java throw and VM-raised exception
+  with its method and line, caught or not. Use it when an app hides an
+  error behind its own crash screen.
 
 - Docker Hub rate-limits anonymous pulls (HTTP 429) for the devkitPro
   image; the fetch script retries, or install devkitPro with dkp-pacman.
@@ -525,7 +572,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   consumed and nothing was presented for the quiet time since the command
   started.
 - The launcher draws bitmap icons from the APK. Adaptive-icon and vector
-  XML drawables are skipped, and that row shows the label only.
+  XML drawables are skipped, and that tile shows a colored letter instead.
+- The redesigned home screen has only run on the host; check it on
+  hardware (touch, key repeat, clock, frame rate of the software renderer).
 
 ## Interface changes log
 
@@ -540,7 +589,88 @@ and update ARCHITECTURE.md in the same commit.
   read from C. `ActivityThread.boot` installs the AndroidKeyStore
   provider with the app's data directory (keys under
   `data/<pkg>/keystore`). `libcore.crypto.KeyMaterial` is the contract
-  for keys whose bytes are not exported. ARCHITECTURE 5.3 and 7.
+  for keys whose bytes are not exported. ARCHITECTURE 5.5 and 7.
+- 2026-10-11 (after the merge, OSRS re-run): three regressions from taking
+  main's side fixed. `java.vm.vendor` is ART's "The Android Project" again
+  (Old School RuneScape loads its Windows library for any other vendor);
+  `<meta-data android:value="@...">` references resolve to their values
+  once resources load (`ActivityThread.resolveMetaDataRefs`; Play services
+  checks google_play_services_version that way); `Runtime.exec` passes envp
+  through the package-private `ProcessBuilder.environment(String[])`.
+  ARCHITECTURE 5.
+- 2026-10-11 (merge of main into this branch): both lines had built the
+  corpus fixes in parallel; main's implementations were kept (preference,
+  SAX in libcore with xmlpull staying in the framework, reflection
+  generics in libcore.reflect, Unsafe, ServiceLoader, sem_*, DisplayManager,
+  InputManager, alias handling). Kept from this branch: the shim tables
+  `shim_posix`, `shim_bsd`, `shim_newlib` and `spawn`, joined after main's
+  `shim_runtime` (so shim_posix wins where both define a symbol);
+  `loader_load_executable`, `loader_extract_native_libs`; the
+  AUTOFILL_MANAGER_SERVICE and USER_SERVICE services; SAXException.getCause.
+  The loader's dl_iterate_phdr is main's `loader_iterate_phdr`.
+  ARCHITECTURE 2, 5, 6.7.
+- 2026-10-11 (WS9 with WS16): in-process executables. New files
+  src/nativeloader/spawn.c, spawn.h, spawn_entry.S (Makefile.switch now builds
+  src/nativeloader/*.S) and src/native/java_process.c; new shim table
+  `shim_spawn_symbols` joined after all others plus `shim_spawn_bind`
+  (nativeloader.h); `loader_load_executable` and `loader_extract_native_libs`
+  in elf_loader.c; `XF()`, `pthread_create`, `shim_map_path` and the assert
+  shims consult the process context. `platform_map_path` maps `/data/app/` to
+  `<data root>/app/`; `Os.stat` returns an eighth element (execute) and
+  `Os.setExecutable` is new. Java: `java.lang.ProcessImpl` (natives) behind
+  `ProcessBuilder.start`, `ActivityThread.nExtractNativeLibs` (android_os.c).
+  Fortified sprintf no longer truncates. No Java fields are read from C.
+  ARCHITECTURE 5, 6.7.
+- 2026-10-10 (WS9, touches WS10): new `src/nativeloader/vfd.c` (virtual
+  pipes and `vfd_poll`) used by native_looper.c and native_input.c on the
+  Switch, so ALooper, the main looper and AInputQueue exist there; new shim
+  table `shim_newlib_symbols` (shim_newlib.c) for bionic's file, time and
+  thread ABI on newlib. The host keeps real pipes and poll. ARCHITECTURE 6.7.
+- 2026-10-10 (WS9 with WS11): new shim table `shim_bsd_symbols`
+  (src/nativeloader/shim_bsd.c, shim_bsd.h), printed by `--shim-symbols`; on
+  the Switch it provides the socket calls and replaces `__errno` with a
+  Linux-numbered errno. Native file calls go through `shim_map_path`
+  (nativeloader.h), which fails relative paths. ARCHITECTURE 6.7.
+- 2026-10-10 (WS9 with WS4, WS8, WS10, WS16; for the Old School RuneScape
+  corpus run): `platform.h` gains `platform_set_wake_hook(void (*)(void))`,
+  implemented by both platforms and called after every `platform_wake` and
+  `platform_push_event`. The main thread gets a native ALooper before
+  `ActivityThread.main` (`nativeloader_prepare_main_looper`, called by
+  `app_runner`), and `MessageQueue.nativePollOnce` blocks in it
+  (`nativeloader_poll_main`) when it exists, so native fd callbacks run on
+  the Java main loop. New shim table `shim_posix_symbols`. Native EGL window
+  swaps attach non-VM threads with `nl_vm_enter`. libcore:
+  `ClassLoader.getSystemClassLoader()` is a `dalvik.system.PathClassLoader`
+  (new `dalvik.system` BaseDexClassLoader, PathClassLoader, DexClassLoader)
+  and `ActivityThread` adds the app's native library paths to it. No Java
+  fields are read from C. ARCHITECTURE 5, 6.4, 6.5, 6.6.1, 6.7, 6.8, 7, 8.
+- 2026-10-10 (WS10): the launcher moved out of main_switch.c into
+  `src/app/launcher.c` behind libnx-free `launcher.h` (UiInput, UiStatus),
+  shared with new `switchapk-host --launcher/--splash/--error-screen/
+  --nro-icon` modes. `ApkIdentity` gained `package` and `version`
+  (`--apk-info` prints them). `platform_switch_buttons_held()` added for
+  the Switch driver. Makefile.switch now needs the host binary for the NRO
+  icon. ARCHITECTURE 2 and 7.
+- 2026-10-10 (WS4/WS1): external storage is `/storage/emulated/0` and the
+  app's external files, cache, OBB and media directories use Android's
+  `Android/data|obb|media/<pkg>` layout under `<data root>/sdcard` (were
+  under the app's data directory). Style bags follow parents to any depth.
+  ARCHITECTURE 5, 6.2.
+- 2026-10-10 (WS11/WS16): java.net sockets own the descriptor for NIO
+  channels; `Socket`, `ServerSocket` and `DatagramSocket` gained hidden
+  `fd$()`, `setChannel$()` and `closeInternal$()` hooks (`Socket` also
+  `prepareFd$()`, `markConnected$()`, `accepted$()`), and `libcore.io.Net`
+  gained non-blocking natives and `poll`. ARCHITECTURE 5.1.
+- 2026-10-10 (WS9): the shim has a third table, `shim_runtime_symbols()`
+  (src/nativeloader/shim_runtime.c), and the loader exports
+  `loader_iterate_phdr()` for `dl_iterate_phdr`; `--shim-symbols` lists
+  all three tables. ARCHITECTURE 6.7.
+- 2026-10-10 (WS1/WS4): `com.android.internal.R` exists, generated by
+  `tools/gen_internal_r.py` for ported AOSP code. Bag merging keeps an
+  entry's own items with equal keys (array items). ARCHITECTURE 6.2.
+- 2026-10-10 (WS16): `java.lang.reflect.AnnotationParser.signature()` and
+  the `readSignature` native expose generic signatures; `sun.misc.Unsafe`
+  natives read `Field.vmField`. ARCHITECTURE 5.3, 5.4.
 
 - 2026-10-09 (WS8, touches WS9): `sa_egl_native_proc` also returns
   wrappers for `glBindFramebuffer` and `glBindFramebufferOES`, so the

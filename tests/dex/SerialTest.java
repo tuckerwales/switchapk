@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.CRC32;
 
 /**
@@ -93,6 +94,11 @@ public class SerialTest {
         }
         if (o instanceof double[]) {
             return Arrays.toString((double[]) o);
+        }
+        if (o instanceof ReentrantLock) {
+            // toString holds the identity hash code, which differs between VMs.
+            ReentrantLock l = (ReentrantLock) o;
+            return o.getClass().getName() + ":locked=" + l.isLocked() + ",fair=" + l.isFair();
         }
         return o.getClass().getName() + ":" + o;
     }
@@ -752,6 +758,27 @@ public class SerialTest {
         ConcurrentHashMap<String, Integer> chm = new ConcurrentHashMap<String, Integer>();
         chm.put("c", 3);
         round("ConcurrentHashMap", chm);
+        round("ConcurrentHashMap empty", new ConcurrentHashMap<String, Integer>());
+        round("ConcurrentHashMap one", chm);
+        ConcurrentHashMap<String, Integer> chm40 = new ConcurrentHashMap<String, Integer>();
+        for (int i = 0; i < 40; i++) {
+            chm40.put("k" + (i * 37 % 41), i);
+        }
+        @SuppressWarnings("unchecked")
+        ConcurrentHashMap<String, Integer> chmBack = (ConcurrentHashMap<String, Integer>) round("ConcurrentHashMap 40", chm40);
+        System.out.println("  equal " + chm40.equals(chmBack) + " size " + chmBack.size() + " put "
+                + chmBack.put("new", 1) + " " + chmBack.keySet());
+        ReentrantLock rl = new ReentrantLock();
+        round("ReentrantLock unlocked", rl);
+        rl.lock();
+        rl.lock();
+        ReentrantLock rlBack = (ReentrantLock) round("ReentrantLock locked", rl);
+        System.out.println("  back locked " + rlBack.isLocked() + " holds " + rlBack.getHoldCount() + " tryLock "
+                + rlBack.tryLock() + " held " + rlBack.isHeldByCurrentThread());
+        rlBack.unlock();
+        rl.unlock();
+        rl.unlock();
+        round("ReentrantLock fair", new ReentrantLock(true));
         round("Locale", Locale.CANADA_FRENCH);
         round("StringBuilder", new StringBuilder("sb"));
         round("StringBuffer", new StringBuffer("sbf"));

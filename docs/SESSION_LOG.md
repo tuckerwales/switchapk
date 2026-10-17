@@ -1181,3 +1181,23 @@ what is left in flight.
   sub-sets are copies, not views (writes do not reach the backing
   map); and tests/run_dex_test.sh lost the JVM's output after any NUL
   byte (grep treated it as binary), now grep -a.
+- 2026-10-17 (WS16): ConcurrentHashMap rewritten on AbstractMap with
+  OpenJDK's table layout (spread hashes, tail-appended bins, lo/hi
+  transfer with the reversed prefix, sizeCtl rules for every
+  constructor, putAll presizing, the small-table resize of treeifyBin)
+  so iteration order matches the JVM, checked against OpenJDK 21 by a
+  differential fuzzer over random operation sequences. Updates take one
+  private lock; reads, iterators and views traverse the live table with
+  ForwardingNodes and never throw ConcurrentModificationException.
+  KeySetView, the views' OpenJDK behaviour, the bulk operations
+  (sequential) and OpenJDK's serial form (16 Segments, readObject
+  rebuilds the table the same way) are in. Not done: treeified bins
+  (more than 8 colliding keys in a table of 64 or more iterate in a
+  different order). ReentrantLock now has OpenJDK's shape (Sync,
+  NonfairSync, FairSync over AbstractQueuedSynchronizer and the new
+  AbstractOwnableSynchronizer, AQS.ConditionObject) and serial form; a
+  deserialized lock is unlocked. Class.getModifiers for arrays now gives
+  the element's access plus abstract and final (array
+  serialVersionUIDs depended on it). run_dex_test.sh keeps JVM output
+  after a NUL character (grep -a). New tests/dex/ChmTest; SerialTest
+  gains map and lock round trips, which match the JVM byte for byte.

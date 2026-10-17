@@ -11,7 +11,7 @@ rm -rf "$OUT" && mkdir -p "$OUT/classes"
 RELEASE=$(sed -n "s|^// *javac-release: *\([0-9]*\).*|\1|p" "$SRC" | head -1)
 javac --release "${RELEASE:-17}" -nowarn -encoding UTF-8 -d "$OUT/classes" "$SRC" 2>&1 | grep -v "Picked up" || true
 (cd "$OUT/classes" && java -Dstdout.encoding=UTF-8 -Dfile.encoding=UTF-8 -Duser.language=en -Duser.country=US -Duser.timezone=UTC -Djava.io.tmpdir=/tmp "$NAME") \
-    2>&1 | grep -a -v "Picked up JAVA_TOOL_OPTIONS" > "$OUT/expected.txt" || true
+    2>&1 | grep -av "Picked up JAVA_TOOL_OPTIONS" > "$OUT/expected.txt" || true
 java -cp "$R8" com.android.tools.r8.D8 --min-api 24 --lib "$ROOT/build/java/libcore" --output "$OUT" \
     $(find "$OUT/classes" -name '*.class') 2>&1 | grep -v "Picked up" | grep -v "^Warning" || true
 "$ROOT/build/host/switchapk-host" --raw-stdio --data "$OUT/data" "$OUT/classes.dex" "$NAME" > "$OUT/actual.txt" 2> "$OUT/stderr.txt" || true

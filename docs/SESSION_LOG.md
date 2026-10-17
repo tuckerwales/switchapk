@@ -1165,3 +1165,19 @@ what is left in flight.
   builds, assembles the APK and runs the client headless on a Linux PC
   with screenshots and a summary of lookups, connections, audio and
   errors. VmTest and the net and web samples pass.
+
+- 2026-10-17, java.util serial forms (part of the serialization work):
+  Hashtable is now OpenJDK 17's (own chained table, head insertion,
+  2n+1 rehash, top-down enumeration, OpenJDK's writeObject/readObject),
+  so iteration order and bytes match. Properties keeps the OpenJDK 8
+  layout (entries in the Hashtable) with its own serialVersionUID.
+  Collections' wrappers and special collections are OpenJDK's classes
+  with their names, fields, serialVersionUIDs and readResolve /
+  writeReplace; before, several returned the collection itself (so
+  "unmodifiable" sorted sets could be modified) or plain ArrayLists.
+  Arrays.asList's class is Arrays$ArrayList and deepToString handles
+  short[] and cycles. New tests/dex/CollectionsTest.java; SerialTest
+  round-trips every wrapper. Found: TreeMap's sub-maps and TreeSet's
+  sub-sets are copies, not views (writes do not reach the backing
+  map); and tests/run_dex_test.sh lost the JVM's output after any NUL
+  byte (grep treated it as binary), now grep -a.

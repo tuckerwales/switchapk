@@ -391,6 +391,27 @@ public class SerialTest {
         Object inner;
     }
 
+    /** A serializable comparator for reverseOrder(cmp): orders strings by length, then naturally. */
+    static class ByLength implements Comparator<String>, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        public int compare(String a, String b) {
+            return a.length() != b.length() ? a.length() - b.length() : a.compareTo(b);
+        }
+
+        public boolean equals(Object o) {
+            return o instanceof ByLength;
+        }
+
+        public int hashCode() {
+            return 7;
+        }
+
+        public String toString() {
+            return "ByLength";
+        }
+    }
+
     static class Replacing extends ObjectOutputStream {
         Replacing(OutputStream out) throws IOException {
             super(out);
@@ -428,6 +449,118 @@ public class SerialTest {
             }
         }
         throw new IllegalArgumentException("not found: " + from);
+    }
+
+    /** Hashtable, Properties, Arrays.asList and every serializable Collections wrapper. */
+    static void collectionForms() throws Exception {
+        Hashtable<String, Integer> ht = new Hashtable<String, Integer>();
+        for (int i = 0; i < 40; i++) {
+            ht.put("h" + i, i);
+        }
+        for (int i = 0; i < 40; i += 3) {
+            ht.remove("h" + i);
+        }
+        round("Hashtable 27", ht);
+        Hashtable<Integer, String> small = new Hashtable<Integer, String>(3, 0.5f);
+        for (int i = 0; i < 5; i++) {
+            small.put(i * 7, "s" + i);
+        }
+        round("Hashtable lf 0.5", small);
+        round("Hashtable empty", new Hashtable<Object, Object>(1));
+        Hashtable<Object, Object> self = new Hashtable<Object, Object>();
+        self.put("me", self);
+        Hashtable<?, ?> selfBack = (Hashtable<?, ?>) deser(ser(self));
+        System.out.println("Hashtable self " + (selfBack.get("me") == selfBack) + " " + selfBack);
+
+        // Properties keeps its entries in the Hashtable (OpenJDK 8 layout, as Android). JDK 9+ writes a simulated
+        // length and threshold from the count, which equal the real ones for these sizes, and its entry order
+        // agrees for small Integer keys; the read-back contents are printed sorted.
+        Properties defaults = new Properties(3);
+        defaults.setProperty("d", "dv");
+        Properties props = new Properties(defaults);
+        for (int i = 1; i <= 7; i++) {
+            props.put(i, "v" + i);
+        }
+        byte[] pb = ser(props);
+        dump("Properties", pb);
+        Properties pback = (Properties) deser(pb);
+        System.out.println("  back: " + new TreeMap<Object, Object>(pback) + " d=" + pback.getProperty("d")
+                + " missing=" + pback.getProperty("missing"));
+
+        round("Arrays.asList ints", Arrays.asList(1, 2, 3));
+        round("emptySet", Collections.emptySet());
+        round("emptySortedSet", Collections.emptySortedSet());
+        round("emptyNavigableMap", Collections.emptyNavigableMap());
+        System.out.println("empty singletons " + (deser(ser(Collections.emptyList())) == Collections.emptyList()) + " "
+                + (deser(ser(Collections.emptySet())) == Collections.emptySet()) + " "
+                + (deser(ser(Collections.emptyMap())) == Collections.emptyMap()) + " "
+                + (deser(ser(Collections.emptyNavigableSet())) == Collections.emptyNavigableSet()) + " "
+                + (deser(ser(Collections.emptySortedMap())) == Collections.emptySortedMap()) + " "
+                + (deser(ser(Collections.reverseOrder())) == Collections.reverseOrder()));
+        round("singleton", Collections.singleton("s"));
+        round("singletonMap", Collections.singletonMap("k", 1));
+        round("nCopies", Collections.nCopies(3, "c"));
+        round("nCopies 0", Collections.nCopies(0, null));
+
+        ArrayList<String> al = new ArrayList<String>(Arrays.asList("b", "a"));
+        LinkedList<String> ll = new LinkedList<String>(Arrays.asList("l2", "l1"));
+        HashSet<String> hs = new HashSet<String>(Arrays.asList("s1", "s2"));
+        TreeSet<String> ts = new TreeSet<String>(Arrays.asList("t2", "t1"));
+        TreeMap<String, Integer> tm = new TreeMap<String, Integer>();
+        tm.put("m2", 2);
+        tm.put("m1", 1);
+        HashMap<String, Integer> hm = new HashMap<String, Integer>(tm);
+
+        round("unmodifiableCollection", Collections.unmodifiableCollection(al));
+        round("unmodifiableSet", Collections.unmodifiableSet(hs));
+        round("unmodifiableSortedSet", Collections.unmodifiableSortedSet(ts));
+        round("unmodifiableNavigableSet", Collections.unmodifiableNavigableSet(ts));
+        round("unmodifiableList linked", Collections.unmodifiableList(ll));
+        round("unmodifiableMap", Collections.unmodifiableMap(hm));
+        round("unmodifiableSortedMap", Collections.unmodifiableSortedMap(tm));
+        round("unmodifiableNavigableMap", Collections.unmodifiableNavigableMap(tm));
+
+        round("synchronizedCollection", Collections.synchronizedCollection(al));
+        round("synchronizedSet", Collections.synchronizedSet(hs));
+        round("synchronizedSortedSet", Collections.synchronizedSortedSet(ts));
+        round("synchronizedNavigableSet", Collections.synchronizedNavigableSet(ts));
+        round("synchronizedList", Collections.synchronizedList(al));
+        round("synchronizedList linked", Collections.synchronizedList(ll));
+        round("synchronizedMap", Collections.synchronizedMap(hm));
+        round("synchronizedSortedMap", Collections.synchronizedSortedMap(tm));
+        round("synchronizedNavigableMap", Collections.synchronizedNavigableMap(tm));
+
+        round("checkedCollection", Collections.checkedCollection(al, String.class));
+        List<String> cl = Collections.checkedList(new ArrayList<String>(), String.class);
+        cl.addAll(Arrays.asList("x", "y"));
+        round("checkedList", cl);
+        round("checkedList linked", Collections.checkedList(ll, String.class));
+        round("checkedSet", Collections.checkedSet(hs, String.class));
+        round("checkedSortedSet", Collections.checkedSortedSet(ts, String.class));
+        round("checkedNavigableSet", Collections.checkedNavigableSet(ts, String.class));
+        round("checkedQueue", Collections.checkedQueue(ll, String.class));
+        round("checkedMap", Collections.checkedMap(hm, String.class, Integer.class));
+        round("checkedSortedMap", Collections.checkedSortedMap(tm, String.class, Integer.class));
+        round("checkedNavigableMap", Collections.checkedNavigableMap(tm, String.class, Integer.class));
+
+        byte[] rb = ser(Collections.reverseOrder());
+        dump("reverseOrder", rb);
+        System.out.println("  back same " + (deser(rb) == Collections.reverseOrder()));
+        Comparator<String> rc = Collections.reverseOrder(new ByLength());
+        byte[] rcb = ser(rc);
+        dump("reverseOrder cmp", rcb);
+        Comparator<String> rcBack = (Comparator<String>) deser(rcb);
+        System.out.println("  compare " + rcBack.compare("aa", "b") + " equals " + rcBack.equals(rc) + " hash "
+                + rcBack.hashCode() + " reversed " + rcBack.reversed() + " " + rcBack.getClass().getName());
+        Set<String> sfm = Collections.newSetFromMap(new HashMap<String, Boolean>());
+        sfm.add("f1");
+        sfm.add("f2");
+        Set<String> sfmBack = (Set<String>) round("newSetFromMap", sfm);
+        System.out.println("  add after read " + sfmBack.add("f3") + " " + sfmBack);
+        Queue<String> lifo = Collections.asLifoQueue(new LinkedList<String>());
+        lifo.add("q1");
+        lifo.add("q2");
+        round("asLifoQueue", lifo);
     }
 
     public static void main(String[] args) throws Exception {
@@ -609,6 +742,7 @@ public class SerialTest {
         round("emptyMap", Collections.emptyMap());
         round("singletonList", Collections.singletonList("one"));
         round("unmodifiableList", Collections.unmodifiableList(new ArrayList<String>(Arrays.asList("u"))));
+        collectionForms();
         round("Date", new Date(1234567890123L));
         round("BigInteger", new BigInteger("-123456789012345678901234567890"));
         round("BigDecimal", new BigDecimal("3.14159"));

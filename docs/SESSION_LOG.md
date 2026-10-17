@@ -1166,6 +1166,26 @@ what is left in flight.
   with screenshots and a summary of lookups, connections, audio and
   errors. VmTest and the net and web samples pass.
 
+- 2026-10-17, Java serialization (WS16, claimed): ObjectOutputStream and
+  ObjectInputStream, written to produce exactly OpenJDK's bytes
+  (tests/dex/SerialTest compares every stream with the host JVM, and
+  all match). ObjectStreamClass computes Java's default
+  serialVersionUID, with two natives for serialization's instantiation
+  and the static-initializer test. Unknown classes are skipped as Java
+  does. libcore classes got Java's serial forms and the JDK's declared
+  serialVersionUIDs (a script read them from the host JDK for 230
+  classes). Found on the way: HashMap inserted at the bucket head and
+  resized differently, so its iteration order differed from Android's
+  (now OpenJDK's); reflection reported array modifiers and synchronized
+  methods differently from Android (fixed). Two helpers rewrote
+  Hashtable/Collections and ConcurrentHashMap/ReentrantLock to OpenJDK
+  (entries below); a third filled the remaining java.io gaps
+  (StreamTokenizer, piped readers, charset constructors;
+  tests/dex/IoExtraTest). All dex tests and the 48 samples pass.
+  Open: Properties keeps the OpenJDK 8 layout, while API 35's
+  overrides suggest Android now uses the newer one (entries in an
+  internal ConcurrentHashMap, which changes store() order); TreeMap
+  sub-maps are copies, not views.
 - 2026-10-17, java.util serial forms (part of the serialization work):
   Hashtable is now OpenJDK 17's (own chained table, head insertion,
   2n+1 rehash, top-down enumeration, OpenJDK's writeObject/readObject),

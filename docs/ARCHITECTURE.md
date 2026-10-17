@@ -461,9 +461,13 @@ round. `tests/dex/SerialTest.java` compares the bytes with the host JVM.
   bytes, AtomicBoolean's int, Locale's extension string.
   serialVersionUIDs for 230 other libcore classes come from the JDK's
   declared values (the JDK's computed ones would differ anyway).
-- HashMap inserts at the bucket tail and splits buckets on resize as
-  OpenJDK does, so iteration order (and with it the serial bytes)
-  matches Android.
+- HashMap, Hashtable, ConcurrentHashMap and the Collections wrappers use
+  OpenJDK's algorithms, classes and names: iteration order (and with it
+  the serial bytes) matches Android. ConcurrentHashMap updates take one
+  private lock; reads, iterators and views walk the live table and never
+  throw ConcurrentModificationException. Bins are never treeified, so
+  more than 8 colliding keys in one bin iterate differently.
+  ReentrantLock has OpenJDK's Sync/AbstractQueuedSynchronizer shape.
 - Reflection reports what Android reports. Array classes take
   public/private/protected from their component and are final and
   abstract. Methods that dex marks `ACC_DECLARED_SYNCHRONIZED` are

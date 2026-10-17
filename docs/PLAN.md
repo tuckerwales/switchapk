@@ -602,6 +602,18 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-17 (WS16): Java serialization. New natives on
+  `java.io.ObjectStreamClass`: `newInstanceNative(Class, Constructor)` and
+  `hasStaticInitializer(Class)` (src/native/java_reflect.c). Reflection now
+  reports Android's modifiers: arrays take their component's access plus
+  final and abstract; dex `ACC_DECLARED_SYNCHRONIZED` methods report
+  `synchronized`. Behaviour visible to apps: HashMap, Hashtable,
+  ConcurrentHashMap and the Collections wrappers now iterate and
+  serialize as OpenJDK/Android; ConcurrentHashMap extends AbstractMap
+  (was HashMap) and its iterators never throw
+  ConcurrentModificationException; ReentrantLock has OpenJDK's Sync/AQS
+  shape. String's `value` and `hash` are now `transient` (C reads them
+  by name, unchanged). ARCHITECTURE 5.4.1.
 - 2026-10-17 (WS18, touches WS10, WS4): new
   `platform_open_url(url, callback, out_url, size)` in platform.h (Switch
   web applets, a scripted browser on the host; new headless script

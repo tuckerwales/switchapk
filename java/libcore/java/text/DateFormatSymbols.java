@@ -3,6 +3,8 @@ package java.text;
 import java.util.Locale;
 
 public class DateFormatSymbols implements java.io.Serializable, Cloneable {
+    private static final long serialVersionUID = -5987973545549424702L;
+
     public DateFormatSymbols() {
     }
 

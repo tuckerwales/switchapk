@@ -3,6 +3,8 @@ package java.text;
 import java.util.Locale;
 
 public class MessageFormat extends Format {
+    private static final long serialVersionUID = 6479157306784022952L;
+
     private String pattern;
 
     public MessageFormat(String pattern) {

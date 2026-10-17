@@ -44,8 +44,43 @@ public class PrintStream extends FilterOutputStream implements Appendable, Close
         this(new FileOutputStream(fileName), false, csn);
     }
 
+    public PrintStream(String fileName, Charset charset) throws IOException {
+        this(false, requireCharset(charset), new FileOutputStream(fileName));
+    }
+
     public PrintStream(File file) throws FileNotFoundException {
         this(new FileOutputStream(file), false);
+    }
+
+    public PrintStream(File file, String csn) throws FileNotFoundException, UnsupportedEncodingException {
+        this(false, toCharset(csn), new FileOutputStream(file));
+    }
+
+    public PrintStream(File file, Charset charset) throws IOException {
+        this(false, requireCharset(charset), new FileOutputStream(file));
+    }
+
+    /** Validates the charset before the file is opened, as the JDK does. */
+    private PrintStream(boolean autoFlush, Charset charset, OutputStream out) {
+        this(out, autoFlush, charset);
+    }
+
+    private static Charset requireCharset(Charset charset) {
+        if (charset == null) {
+            throw new NullPointerException("charset");
+        }
+        return charset;
+    }
+
+    private static Charset toCharset(String csn) throws UnsupportedEncodingException {
+        if (csn == null) {
+            throw new NullPointerException("charsetName");
+        }
+        try {
+            return Charset.forName(csn);
+        } catch (IllegalArgumentException e) {
+            throw new UnsupportedEncodingException(csn);
+        }
     }
 
     public void flush() {

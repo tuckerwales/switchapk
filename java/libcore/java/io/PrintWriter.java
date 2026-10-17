@@ -34,8 +34,47 @@ public class PrintWriter extends Writer {
         this(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(fileName), csn)), false);
     }
 
+    public PrintWriter(OutputStream out, boolean autoFlush, java.nio.charset.Charset charset) {
+        this(new BufferedWriter(new OutputStreamWriter(out, charset)), autoFlush);
+    }
+
+    public PrintWriter(String fileName, java.nio.charset.Charset charset) throws IOException {
+        this(requireCharset(charset), new FileOutputStream(fileName));
+    }
+
     public PrintWriter(File file) throws FileNotFoundException {
         this(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file))), false);
+    }
+
+    public PrintWriter(File file, String csn) throws FileNotFoundException, UnsupportedEncodingException {
+        this(toCharset(csn), new FileOutputStream(file));
+    }
+
+    public PrintWriter(File file, java.nio.charset.Charset charset) throws IOException {
+        this(requireCharset(charset), new FileOutputStream(file));
+    }
+
+    /** Validates the charset before the file is opened, as the JDK does. */
+    private PrintWriter(java.nio.charset.Charset charset, OutputStream out) {
+        this(new BufferedWriter(new OutputStreamWriter(out, charset)), false);
+    }
+
+    private static java.nio.charset.Charset requireCharset(java.nio.charset.Charset charset) {
+        if (charset == null) {
+            throw new NullPointerException("charset");
+        }
+        return charset;
+    }
+
+    private static java.nio.charset.Charset toCharset(String csn) throws UnsupportedEncodingException {
+        if (csn == null) {
+            throw new NullPointerException("charsetName");
+        }
+        try {
+            return java.nio.charset.Charset.forName(csn);
+        } catch (IllegalArgumentException e) {
+            throw new UnsupportedEncodingException(csn);
+        }
     }
 
     public void flush() {

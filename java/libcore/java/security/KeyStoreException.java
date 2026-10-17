@@ -1,6 +1,8 @@
 package java.security;
 
 public class KeyStoreException extends GeneralSecurityException {
+    private static final long serialVersionUID = -1119353179322377262L;
+
     public KeyStoreException() {
     }
 

@@ -1,6 +1,8 @@
 package java.util;
 
 public class GregorianCalendar extends Calendar {
+    private static final long serialVersionUID = -8125100834729963327L;
+
     public static final int BC = 0;
     public static final int AD = 1;
 

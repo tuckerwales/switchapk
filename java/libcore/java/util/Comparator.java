@@ -45,9 +45,8 @@ public interface Comparator<T> {
         return thenComparing(comparingDouble(keyExtractor));
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     static <T extends Comparable<? super T>> Comparator<T> reverseOrder() {
-        return (Comparator) Collections.REVERSE_ORDER;
+        return Collections.reverseOrder();
     }
 
     @SuppressWarnings("unchecked")

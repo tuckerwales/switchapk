@@ -1,6 +1,8 @@
 package java.util;
 
 public abstract class Calendar implements java.io.Serializable, Cloneable, Comparable<Calendar> {
+    private static final long serialVersionUID = -1807547505821590642L;
+
     public static final int ERA = 0;
     public static final int YEAR = 1;
     public static final int MONTH = 2;

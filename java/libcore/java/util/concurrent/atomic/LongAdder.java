@@ -1,7 +1,32 @@
 package java.util.concurrent.atomic;
 
 public class LongAdder extends Number implements java.io.Serializable {
+    private static final long serialVersionUID = 7249069246863182397L;
     private long value;
+
+    /** Java writes a LongAdder as this proxy holding its sum. */
+    private static class SerializationProxy implements java.io.Serializable {
+        private static final long serialVersionUID = 7249069246863182397L;
+        private final long value;
+
+        SerializationProxy(LongAdder a) {
+            value = a.sum();
+        }
+
+        private Object readResolve() {
+            LongAdder a = new LongAdder();
+            a.value = value;
+            return a;
+        }
+    }
+
+    private Object writeReplace() {
+        return new SerializationProxy(this);
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.InvalidObjectException {
+        throw new java.io.InvalidObjectException("Proxy required");
+    }
 
     public LongAdder() {
     }

@@ -1,6 +1,35 @@
 package java.lang;
 
 public final class StringBuffer extends AbstractStringBuilder implements java.io.Serializable, Comparable<StringBuffer> {
+    private static final long serialVersionUID = 3388685877147921107L;
+
+    private static final java.io.ObjectStreamField[] serialPersistentFields = {
+        new java.io.ObjectStreamField("value", char[].class),
+        new java.io.ObjectStreamField("count", Integer.TYPE),
+        new java.io.ObjectStreamField("shared", Boolean.TYPE),
+    };
+
+    private synchronized void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        java.io.ObjectOutputStream.PutField fields = s.putFields();
+        char[] val = new char[capacity()];
+        System.arraycopy(value, 0, val, 0, count);
+        fields.put("value", val);
+        fields.put("count", count);
+        fields.put("shared", false);
+        s.writeFields();
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        java.io.ObjectInputStream.GetField fields = s.readFields();
+        char[] val = (char[]) fields.get("value", null);
+        int c = fields.get("count", 0);
+        if (val == null || c < 0 || c > val.length) {
+            throw new java.io.StreamCorruptedException("count value invalid");
+        }
+        value = val;
+        count = c;
+    }
+
     public StringBuffer() {
         super(16);
     }

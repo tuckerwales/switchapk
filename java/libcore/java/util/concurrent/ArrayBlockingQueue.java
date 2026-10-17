@@ -3,6 +3,8 @@ package java.util.concurrent;
 import java.util.Collection;
 
 public class ArrayBlockingQueue<E> extends LinkedBlockingDeque<E> {
+    private static final long serialVersionUID = -817911632652898426L;
+
     public ArrayBlockingQueue(int capacity) {
         super(capacity);
     }

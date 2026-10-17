@@ -1,6 +1,8 @@
 package java.util;
 
 public class Random implements java.io.Serializable {
+    private static final long serialVersionUID = 3905348978240129619L;
+
     private long seed;
     private double nextNextGaussian;
     private boolean haveNextNextGaussian = false;

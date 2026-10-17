@@ -210,9 +210,12 @@ static void inner_class_ann(DexFile *d, const char *type, uint32_t vis, const ui
 
 /* Member classes take their modifiers (static, private, ...) from the
  * InnerClass annotation, as ART does; the class_def flags lack them. */
-NATIVE(Class_getModifiers) {
-    UNUSED_ARGS();
-    Class *c = this_class(args);
+static int32_t class_modifiers(VMThread *t, Class *c) {
+    /* An array has its component's public/private/protected, and is always final and abstract. */
+    if (c->is_array && c->component) {
+        int32_t comp = class_modifiers(t, c->component);
+        return (comp & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED)) | ACC_FINAL | ACC_ABSTRACT;
+    }
     int32_t flags = (int32_t)(c->access & 0xffff);
     if (c->dex && !c->is_array && !c->prim) {
         DexClassDef cd;
@@ -224,7 +227,12 @@ NATIVE(Class_getModifiers) {
          * the InnerClass access flags drop them. */
         flags |= (int32_t)(c->access & (ACC_ANNOTATION | ACC_ENUM | ACC_INTERFACE));
     }
-    R_INT(flags);
+    return flags;
+}
+
+NATIVE(Class_getModifiers) {
+    UNUSED_ARGS();
+    R_INT(class_modifiers(t, this_class(args)));
 }
 
 /* Returns the InnerClass annotation name; sets *is_inner */

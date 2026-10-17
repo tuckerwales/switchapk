@@ -1,6 +1,7 @@
 package java.util.concurrent.atomic;
 
 public class AtomicIntegerArray implements java.io.Serializable {
+    private static final long serialVersionUID = 2862133569453604235L;
     private final int[] array;
 
     public AtomicIntegerArray(int length) {

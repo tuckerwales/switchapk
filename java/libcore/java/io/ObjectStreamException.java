@@ -1,10 +1,12 @@
 package java.io;
 
-public class ObjectStreamException extends IOException {
-    public ObjectStreamException() {
+public abstract class ObjectStreamException extends IOException {
+    private static final long serialVersionUID = 7260898174833392607L;
+
+    protected ObjectStreamException() {
     }
 
-    public ObjectStreamException(String message) {
+    protected ObjectStreamException(String message) {
         super(message);
     }
 }

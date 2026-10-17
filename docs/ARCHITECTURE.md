@@ -137,9 +137,15 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
   visible through `getAnnotation` on subclasses.
 
 ### 4.3 Interpreter
-- Non-recursive switch interpreter over a per-thread register stack
+- Non-recursive interpreter over a per-thread register stack
   (`rstack`). `vm_interpret(t, m, args)` runs until the entry frame
-  returns. Java-to-Java invokes push frames without C recursion; calls into
+  returns. Dispatch is threaded (GCC computed goto): every opcode handler
+  has a label (`case 0xNN: L_NN:`, `OPL(base, k)` for the macro-built
+  binary ops), `optab[256]` holds their addresses, and each handler ends
+  with `NEXT()`, which fetches the next instruction and jumps through the
+  table itself. The `switch` only scopes the handlers. `--trace` uses a
+  second table whose entries log first. Opcodes Dalvik leaves unused go
+  to `L_invalid` (VerifyError). Java-to-Java invokes push frames without C recursion; calls into
   natives and back into Java (`vm_call*`) recurse on the C stack.
 - Safepoints at backward branches and invokes: GC and GIL yield happen only
   there (and on allocation failure).
@@ -159,6 +165,14 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
     `vm_add_root` / `vm_remove_root` or JNI global refs.
   - Raw pointers into arrays (`ARRAY_DATA`) stay valid while the array is
     reachable: objects never move.
+- Allocation: objects up to 256 bytes go into size-class pages (15
+  classes from 16 to 256 bytes; 64 KiB `memalign`ed pages with a header,
+  an allocation bitmap and slots threaded on a per-class free list), so
+  allocating is a free-list pop and a memset. The page of a slot is its
+  address rounded down; `g_page_set` tells pages from other memory for
+  conservative checks (`vm_is_object`). Larger objects are calloc'd and
+  kept in `g_vm.objects` (address to size). The sweep rebuilds the free
+  lists and frees all but one empty page per class.
 - GC is triggered at safepoints when `heap_bytes > heap_threshold`
   (threshold = 2x live after last GC, minimum 24 MB) and on malloc failure.
 - Weak/soft references are cleared on every GC (no soft-reference
@@ -405,6 +419,60 @@ start at `ARRAY_BASE_OFFSET` (16) and are rebased onto
 `ArrayObject.data`. Compare-and-swap and volatile accesses are plain
 loads and stores, atomic because Java threads hold the GIL. Off-heap
 `allocateMemory` addresses are malloc'd pointers.
+
+### 5.4.1 Java serialization (WS16)
+
+`java.io.ObjectOutputStream` and `ObjectInputStream` implement the
+serialization stream format (protocol 2 by default, 1 on request) and
+aim to write exactly the bytes OpenJDK and Android write for the same
+objects, so files written on a phone read back here and the other way
+round. `tests/dex/SerialTest.java` compares the bytes with the host JVM.
+
+- `ObjectStreamClass` is the class descriptor: fields
+  (`serialPersistentFields` or the non-static, non-transient ones),
+  the writeObject/readObject/readObjectNoData/writeReplace/readResolve
+  methods, and the default serialVersionUID (Java's SHA-1 over the class
+  shape) when a class declares none. Stream descriptors are bound to
+  local classes by name and serialVersionUID; fields match by name.
+- Two natives on `ObjectStreamClass` (in `src/native/java_reflect.c`):
+  - `newInstanceNative(Class, Constructor)` allocates the class and runs
+    only the given constructor, the no-arg constructor of the first
+    non-serializable superclass. Serialized classes' own constructors
+    never run.
+  - `hasStaticInitializer(Class)` says whether the class has
+    `<clinit>`, which the default serialVersionUID includes. As on
+    Android it is the dex method, so a class whose static initializer
+    d8 folded into static values hashes without it.
+- A class that cannot be resolved does not stop a read: its data is
+  skipped, and the ClassNotFoundException is reported for every object
+  that refers to it, once the top-level readObject returns.
+- libcore classes carry Java's serial forms where apps are likely to
+  serialize them. Each has the same serialVersionUID and serial fields,
+  and the same custom data from writeObject, as OpenJDK. Covered so
+  far:
+  - boxes, String, StringBuilder and StringBuffer;
+  - Throwable;
+  - the collections;
+  - Date, UUID, Locale, BigInteger and BigDecimal;
+  - the atomics.
+
+  Where our internals differ, `serialPersistentFields` and
+  `putFields`/`readFields` translate. Examples: BigInteger's magnitude
+  bytes, AtomicBoolean's int, Locale's extension string.
+  serialVersionUIDs for 230 other libcore classes come from the JDK's
+  declared values (the JDK's computed ones would differ anyway).
+- HashMap, Hashtable, ConcurrentHashMap and the Collections wrappers use
+  OpenJDK's algorithms, classes and names: iteration order (and with it
+  the serial bytes) matches Android. ConcurrentHashMap updates take one
+  private lock; reads, iterators and views walk the live table and never
+  throw ConcurrentModificationException. Bins are never treeified, so
+  more than 8 colliding keys in one bin iterate differently.
+  ReentrantLock has OpenJDK's Sync/AbstractQueuedSynchronizer shape.
+- Reflection reports what Android reports. Array classes take
+  public/private/protected from their component and are final and
+  abstract. Methods that dex marks `ACC_DECLARED_SYNCHRONIZED` are
+  `synchronized`; the interpreter needs no flag, since d8 compiles
+  their bodies to monitor-enter/exit.
 
 ### 5.5 Crypto (WS17)
 

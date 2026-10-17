@@ -3,6 +3,8 @@ package java.util.concurrent.locks;
 import java.util.concurrent.TimeUnit;
 
 public class ReentrantReadWriteLock implements ReadWriteLock, java.io.Serializable {
+    private static final long serialVersionUID = -6992448646407690164L;
+
     private final ReentrantLock lock = new ReentrantLock();
     private final ReadLock readerLock = new ReadLock(this);
     private final WriteLock writerLock = new WriteLock(this);
@@ -34,6 +36,9 @@ public class ReentrantReadWriteLock implements ReadWriteLock, java.io.Serializab
     }
 
     public static class ReadLock implements Lock, java.io.Serializable {
+
+        private static final long serialVersionUID = -5992448646407690164L;
+
         private final ReentrantLock l;
 
         protected ReadLock(ReentrantReadWriteLock lock) {
@@ -66,6 +71,9 @@ public class ReentrantReadWriteLock implements ReadWriteLock, java.io.Serializab
     }
 
     public static class WriteLock implements Lock, java.io.Serializable {
+
+        private static final long serialVersionUID = -4992448646407690164L;
+
         private final ReentrantLock l;
 
         protected WriteLock(ReentrantReadWriteLock lock) {

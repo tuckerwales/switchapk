@@ -1,9 +1,38 @@
 package java.util;
 
 public class ArrayDeque<E> extends AbstractCollection<E> implements Deque<E>, Cloneable, java.io.Serializable {
+    private static final long serialVersionUID = 2340985798034038923L;
     transient Object[] elements;
     transient int head;
     transient int tail;
+
+    /** Java's serial form: the size, then the elements from head to tail. */
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        s.defaultWriteObject();
+        s.writeInt(size());
+        for (Iterator<E> it = iterator(); it.hasNext();) {
+            s.writeObject(it.next());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        int size = s.readInt();
+        if (size < 0) {
+            throw new java.io.StreamCorruptedException("Illegal size: " + size);
+        }
+        int n = 8;
+        while (n < size + 1) {
+            n <<= 1;
+        }
+        elements = new Object[n];
+        head = 0;
+        tail = 0;
+        for (int i = 0; i < size; i++) {
+            addLast((E) s.readObject());
+        }
+    }
 
     public ArrayDeque() {
         elements = new Object[16];

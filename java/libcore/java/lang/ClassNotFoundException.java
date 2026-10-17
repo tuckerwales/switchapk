@@ -1,6 +1,8 @@
 package java.lang;
 
 public class ClassNotFoundException extends ReflectiveOperationException {
+    private static final long serialVersionUID = 9176873029745254542L;
+
     public ClassNotFoundException() {
         super();
     }

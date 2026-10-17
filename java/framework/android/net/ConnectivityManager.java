@@ -70,6 +70,8 @@ public class ConnectivityManager {
     public static final int TYPE_VPN = 17;
 
     private static final int POLL_MS = 3000;
+    /** How long after onAvailable the network "validates" and capabilities are sent again. */
+    private static final int VALIDATION_MS = 1500;
     // platform transports (PLATFORM_NET_*) and the net ids we give their networks
     private static final int PLATFORM_WIFI = 1;
     private static final int PLATFORM_ETHERNET = 2;
@@ -490,6 +492,20 @@ public class ConnectivityManager {
                 }
             }
         });
+        if (now != null && !same) {
+            // Android sends capabilities again once the network validates, a moment after onAvailable. Some
+            // apps (OSRS) only hook their native side up to the callback during that window.
+            r.handler.postDelayed(new Runnable() {
+                public void run() {
+                    synchronized (mRecords) {
+                        if (!mRecords.contains(r) || !now.equals(r.current)) {
+                            return;
+                        }
+                    }
+                    r.callback.onCapabilitiesChanged(now, capabilitiesFor(s));
+                }
+            }, VALIDATION_MS);
+        }
     }
 
     /** Re-reads the platform state and notifies callbacks and broadcast receivers of any change. */

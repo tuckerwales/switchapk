@@ -1,6 +1,8 @@
 package java.security;
 
 public class InvalidKeyException extends KeyException {
+    private static final long serialVersionUID = 5698479920593359816L;
+
     public InvalidKeyException() {
     }
 

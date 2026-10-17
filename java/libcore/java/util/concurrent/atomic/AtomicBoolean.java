@@ -1,7 +1,22 @@
 package java.util.concurrent.atomic;
 
 public class AtomicBoolean implements java.io.Serializable {
+    private static final long serialVersionUID = 4654671469794556979L;
+    /** Java stores the flag as an int, and that is what the serial form carries. */
+    private static final java.io.ObjectStreamField[] serialPersistentFields = {
+        new java.io.ObjectStreamField("value", Integer.TYPE),
+    };
     private volatile boolean value;
+
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        java.io.ObjectOutputStream.PutField fields = s.putFields();
+        fields.put("value", value ? 1 : 0);
+        s.writeFields();
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        value = s.readFields().get("value", 0) != 0;
+    }
 
     public AtomicBoolean(boolean initialValue) {
         value = initialValue;

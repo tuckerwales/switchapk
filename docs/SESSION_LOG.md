@@ -1133,4 +1133,91 @@ what is left in flight.
   on a slow first frame and passed on the rerun), VmTest, NetTest,
   X509Test and TlsTest pass, all 14 corpus apps draw, and the Switch
   build links. Not run on hardware.
+- 2026-10-17, VM performance (WS12, claimed): a benchmark
+  (tests/bench/run_bench.sh) and a callgrind profile showed a quarter of
+  the interpreter's time in dispatch (the switch, the instruction fetch
+  and a per-instruction trace check) and allocation 7x slower than the
+  JVM's interpreter (calloc plus a hash insert per object). Threaded
+  dispatch (computed goto, one jump per handler; GCC would not duplicate
+  a central one, so NEXT() is explicit) cut executed instructions by 20%;
+  a size-class page allocator for objects up to 256 bytes replaced
+  calloc and the hash insert. The benchmark total went from about
+  1850 ms to 1080 ms on the host (allocation 173 to 66 ms, HashMap 661
+  to 294 ms). All 21 dex tests, TlsTest, all 48 samples and the 14
+  corpus apps pass; the Switch build links. Not measured on
+  hardware.
+  Follow-ups the same day: the size-class table was being rebuilt on every
+  allocation (a ready check read a valid 0 entry), and the literal ops
+  (add-int/lit8 and the rest) shared one handler with an inner switch;
+  each now has its own. Benchmark total about 910 ms, 2x the start.
 
+- 2026-10-17, OSRS input, audio and a run script: on the host, taps and
+  D-pad keys reach the client's native code (traced with the new
+  `SWITCHAPK_TRACE_NATIVE`), and GameTextInput's input connection is
+  registered; typing is untested until a login screen is reachable.
+  The OpenSL ES shim covers every import the client uses and now logs
+  engine and player creation, but the client opens no audio at its
+  error screen. Its "onUpdateInternetAvailable not yet available" error
+  was a timing problem (the native is registered after the first
+  network callback); ConnectivityManager now repeats
+  onCapabilitiesChanged 1.5 s after onAvailable, as Android does after
+  validation, and the native call then lands. `tools/run_osrs.sh`
+  builds, assembles the APK and runs the client headless on a Linux PC
+  with screenshots and a summary of lookups, connections, audio and
+  errors. VmTest and the net and web samples pass.
+
+- 2026-10-17, Java serialization (WS16, claimed): ObjectOutputStream and
+  ObjectInputStream, written to produce exactly OpenJDK's bytes
+  (tests/dex/SerialTest compares every stream with the host JVM, and
+  all match). ObjectStreamClass computes Java's default
+  serialVersionUID, with two natives for serialization's instantiation
+  and the static-initializer test. Unknown classes are skipped as Java
+  does. libcore classes got Java's serial forms and the JDK's declared
+  serialVersionUIDs (a script read them from the host JDK for 230
+  classes). Found on the way: HashMap inserted at the bucket head and
+  resized differently, so its iteration order differed from Android's
+  (now OpenJDK's); reflection reported array modifiers and synchronized
+  methods differently from Android (fixed). Two helpers rewrote
+  Hashtable/Collections and ConcurrentHashMap/ReentrantLock to OpenJDK
+  (entries below); a third filled the remaining java.io gaps
+  (StreamTokenizer, piped readers, charset constructors;
+  tests/dex/IoExtraTest). All dex tests and the 48 samples pass.
+  Open: Properties keeps the OpenJDK 8 layout, while API 35's
+  overrides suggest Android now uses the newer one (entries in an
+  internal ConcurrentHashMap, which changes store() order); TreeMap
+  sub-maps are copies, not views.
+- 2026-10-17, java.util serial forms (part of the serialization work):
+  Hashtable is now OpenJDK 17's (own chained table, head insertion,
+  2n+1 rehash, top-down enumeration, OpenJDK's writeObject/readObject),
+  so iteration order and bytes match. Properties keeps the OpenJDK 8
+  layout (entries in the Hashtable) with its own serialVersionUID.
+  Collections' wrappers and special collections are OpenJDK's classes
+  with their names, fields, serialVersionUIDs and readResolve /
+  writeReplace; before, several returned the collection itself (so
+  "unmodifiable" sorted sets could be modified) or plain ArrayLists.
+  Arrays.asList's class is Arrays$ArrayList and deepToString handles
+  short[] and cycles. New tests/dex/CollectionsTest.java; SerialTest
+  round-trips every wrapper. Found: TreeMap's sub-maps and TreeSet's
+  sub-sets are copies, not views (writes do not reach the backing
+  map); and tests/run_dex_test.sh lost the JVM's output after any NUL
+  byte (grep treated it as binary), now grep -a.
+- 2026-10-17 (WS16): ConcurrentHashMap rewritten on AbstractMap with
+  OpenJDK's table layout (spread hashes, tail-appended bins, lo/hi
+  transfer with the reversed prefix, sizeCtl rules for every
+  constructor, putAll presizing, the small-table resize of treeifyBin)
+  so iteration order matches the JVM, checked against OpenJDK 21 by a
+  differential fuzzer over random operation sequences. Updates take one
+  private lock; reads, iterators and views traverse the live table with
+  ForwardingNodes and never throw ConcurrentModificationException.
+  KeySetView, the views' OpenJDK behaviour, the bulk operations
+  (sequential) and OpenJDK's serial form (16 Segments, readObject
+  rebuilds the table the same way) are in. Not done: treeified bins
+  (more than 8 colliding keys in a table of 64 or more iterate in a
+  different order). ReentrantLock now has OpenJDK's shape (Sync,
+  NonfairSync, FairSync over AbstractQueuedSynchronizer and the new
+  AbstractOwnableSynchronizer, AQS.ConditionObject) and serial form; a
+  deserialized lock is unlocked. Class.getModifiers for arrays now gives
+  the element's access plus abstract and final (array
+  serialVersionUIDs depended on it). run_dex_test.sh keeps JVM output
+  after a NUL character (grep -a). New tests/dex/ChmTest; SerialTest
+  gains map and lock round trips, which match the JVM byte for byte.

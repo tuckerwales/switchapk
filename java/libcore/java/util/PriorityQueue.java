@@ -1,6 +1,8 @@
 package java.util;
 
 public class PriorityQueue<E> extends AbstractQueue<E> implements java.io.Serializable {
+    private static final long serialVersionUID = -7720805057305804111L;
+
     private Object[] queue;
     private int size = 0;
     private final Comparator<? super E> comparator;

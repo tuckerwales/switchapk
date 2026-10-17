@@ -1,6 +1,8 @@
 package java.util;
 
 public class IllegalFormatCodePointException extends IllegalFormatException {
+    private static final long serialVersionUID = 19080630L;
+
     private final int c;
 
     public IllegalFormatCodePointException(int c) {

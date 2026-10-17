@@ -1,6 +1,7 @@
 package java.util.concurrent.atomic;
 
 public class AtomicInteger extends Number implements java.io.Serializable {
+    private static final long serialVersionUID = 6214790243416807050L;
     private volatile int value;
 
     public AtomicInteger(int initialValue) {

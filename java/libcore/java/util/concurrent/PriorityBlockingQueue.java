@@ -8,6 +8,8 @@ import java.util.Iterator;
 import java.util.PriorityQueue;
 
 public class PriorityBlockingQueue<E> extends AbstractQueue<E> implements BlockingQueue<E>, java.io.Serializable {
+    private static final long serialVersionUID = 5595510919245408276L;
+
     private final PriorityQueue<E> q;
 
     public PriorityBlockingQueue() {

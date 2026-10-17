@@ -1,6 +1,8 @@
 package java.net;
 
 public final class URI implements Comparable<URI>, java.io.Serializable {
+    private static final long serialVersionUID = -6052424284110960213L;
+
     private final String string;
     private String scheme, authority, userInfo, host, path, query, fragment, schemeSpecificPart;
     private int port = -1;

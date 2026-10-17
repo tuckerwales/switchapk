@@ -1,6 +1,8 @@
 package java.lang;
 
 public class ReflectiveOperationException extends Exception {
+    private static final long serialVersionUID = 123456789L;
+
     public ReflectiveOperationException() {
         super();
     }

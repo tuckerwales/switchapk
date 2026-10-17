@@ -1,6 +1,8 @@
 package java.util;
 
 public class UnknownFormatFlagsException extends IllegalFormatException {
+    private static final long serialVersionUID = 19370506L;
+
     private final String flags;
 
     public UnknownFormatFlagsException(String f) {

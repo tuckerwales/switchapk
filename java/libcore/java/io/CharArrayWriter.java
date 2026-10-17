@@ -59,6 +59,13 @@ public class CharArrayWriter extends Writer {
         return this;
     }
 
+    public CharArrayWriter append(CharSequence csq, int start, int end) {
+        if (csq == null) {
+            csq = "null";
+        }
+        return append(csq.subSequence(start, end));
+    }
+
     public CharArrayWriter append(char c) {
         write(c);
         return this;

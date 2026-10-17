@@ -9,6 +9,8 @@ import libcore.crypto.Services;
  * Android's default NativePRNG/OpenSSL generator.
  */
 public class SecureRandom extends java.util.Random {
+    private static final long serialVersionUID = 4940670005562187L;
+
     private SecureRandomSpi secureRandomSpi;
     private Provider provider;
     private String algorithm;

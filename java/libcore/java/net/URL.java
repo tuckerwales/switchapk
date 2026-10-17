@@ -1,6 +1,8 @@
 package java.net;
 
 public final class URL implements java.io.Serializable {
+    private static final long serialVersionUID = -7627629688361524110L;
+
     private final String spec;
     private final URI uri;
 

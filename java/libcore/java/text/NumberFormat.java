@@ -5,6 +5,8 @@ import java.util.Currency;
 import java.util.Locale;
 
 public abstract class NumberFormat extends Format {
+    private static final long serialVersionUID = -2308460125733713944L;
+
     public static final int INTEGER_FIELD = 0;
     public static final int FRACTION_FIELD = 1;
 
@@ -181,6 +183,9 @@ public abstract class NumberFormat extends Format {
     }
 
     public static class Field extends Format.Field {
+
+        private static final long serialVersionUID = 7494728892700160890L;
+
         protected Field(String name) {
             super(name);
         }

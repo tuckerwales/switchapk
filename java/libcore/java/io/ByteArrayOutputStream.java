@@ -63,6 +63,11 @@ public class ByteArrayOutputStream extends OutputStream {
         return new String(buf, 0, count);
     }
 
+    @Deprecated
+    public synchronized String toString(int hibyte) {
+        return new String(buf, hibyte, 0, count);
+    }
+
     public synchronized String toString(String charsetName) throws UnsupportedEncodingException {
         return new String(buf, 0, count, charsetName);
     }

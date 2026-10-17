@@ -1,6 +1,8 @@
 package java.lang;
 
 public abstract class Number implements java.io.Serializable {
+    private static final long serialVersionUID = -8742448824652078965L;
+
     public abstract int intValue();
 
     public abstract long longValue();

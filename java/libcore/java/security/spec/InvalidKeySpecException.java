@@ -3,6 +3,8 @@ package java.security.spec;
 import java.security.GeneralSecurityException;
 
 public class InvalidKeySpecException extends GeneralSecurityException {
+    private static final long serialVersionUID = 3546139293998810778L;
+
     public InvalidKeySpecException() {
     }
 

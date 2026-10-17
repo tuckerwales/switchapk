@@ -1,6 +1,8 @@
 package java.util;
 
 public class MissingFormatArgumentException extends IllegalFormatException {
+    private static final long serialVersionUID = 19190115L;
+
     private final String s;
 
     public MissingFormatArgumentException(String s) {

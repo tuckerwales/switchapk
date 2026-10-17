@@ -11,7 +11,13 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.Writer;
 
+/**
+ * Properties in the OpenJDK 8 layout that Android uses: the entries live in the Hashtable itself, so the serial form
+ * is Hashtable's (threshold, loadFactor, length, count, entries) followed by this class's one field, defaults.
+ */
 public class Properties extends Hashtable<Object, Object> {
+    private static final long serialVersionUID = 4112578634029874840L;
+
     protected Properties defaults;
 
     public Properties() {
@@ -19,11 +25,88 @@ public class Properties extends Hashtable<Object, Object> {
     }
 
     public Properties(int initialCapacity) {
-        this();
+        super(initialCapacity);
     }
 
     public Properties(Properties defaults) {
         this.defaults = defaults;
+    }
+
+    // Hashtable overrides that android.jar declares on Properties; behaviour is Hashtable's.
+
+    @Override
+    public synchronized Object get(Object key) {
+        return super.get(key);
+    }
+
+    @Override
+    public synchronized Object put(Object key, Object value) {
+        return super.put(key, value);
+    }
+
+    @Override
+    public synchronized Object remove(Object key) {
+        return super.remove(key);
+    }
+
+    @Override
+    public synchronized Object getOrDefault(Object key, Object defaultValue) {
+        return super.getOrDefault(key, defaultValue);
+    }
+
+    @Override
+    public synchronized void forEach(java.util.function.BiConsumer<? super Object, ? super Object> action) {
+        super.forEach(action);
+    }
+
+    @Override
+    public synchronized void replaceAll(
+            java.util.function.BiFunction<? super Object, ? super Object, ? extends Object> function) {
+        super.replaceAll(function);
+    }
+
+    @Override
+    public synchronized Object putIfAbsent(Object key, Object value) {
+        return super.putIfAbsent(key, value);
+    }
+
+    @Override
+    public synchronized boolean remove(Object key, Object value) {
+        return super.remove(key, value);
+    }
+
+    @Override
+    public synchronized boolean replace(Object key, Object oldValue, Object newValue) {
+        return super.replace(key, oldValue, newValue);
+    }
+
+    @Override
+    public synchronized Object replace(Object key, Object value) {
+        return super.replace(key, value);
+    }
+
+    @Override
+    public synchronized Object computeIfAbsent(Object key,
+            java.util.function.Function<? super Object, ? extends Object> mappingFunction) {
+        return super.computeIfAbsent(key, mappingFunction);
+    }
+
+    @Override
+    public synchronized Object computeIfPresent(Object key,
+            java.util.function.BiFunction<? super Object, ? super Object, ? extends Object> remappingFunction) {
+        return super.computeIfPresent(key, remappingFunction);
+    }
+
+    @Override
+    public synchronized Object compute(Object key,
+            java.util.function.BiFunction<? super Object, ? super Object, ? extends Object> remappingFunction) {
+        return super.compute(key, remappingFunction);
+    }
+
+    @Override
+    public synchronized Object merge(Object key, Object value,
+            java.util.function.BiFunction<? super Object, ? super Object, ? extends Object> remappingFunction) {
+        return super.merge(key, value, remappingFunction);
     }
 
     public synchronized Object setProperty(String key, String value) {
@@ -41,8 +124,21 @@ public class Properties extends Hashtable<Object, Object> {
         return (val == null) ? defaultValue : val;
     }
 
+    /** All keys including the defaults', as OpenJDK 8: every key must be a String, values may be anything. */
     public Enumeration<?> propertyNames() {
-        return Collections.enumeration(stringPropertyNames());
+        Hashtable<String, Object> h = new Hashtable<String, Object>();
+        enumerate(h);
+        return h.keys();
+    }
+
+    private synchronized void enumerate(Hashtable<String, Object> h) {
+        if (defaults != null) {
+            defaults.enumerate(h);
+        }
+        for (Enumeration<?> e = keys(); e.hasMoreElements();) {
+            String key = (String) e.nextElement();
+            h.put(key, get(key));
+        }
     }
 
     public Set<String> stringPropertyNames() {
@@ -96,7 +192,13 @@ public class Properties extends Hashtable<Object, Object> {
             while (i < l.length()) {
                 char c = l.charAt(i);
                 if (c == '\\' && i + 1 < l.length()) {
-                    key.append(unescape(l.charAt(++i)));
+                    char n = l.charAt(++i);
+                    if (n == 'u' && i + 4 < l.length()) {
+                        key.append((char) Integer.parseInt(l.substring(i + 1, i + 5), 16));
+                        i += 5;
+                        continue;
+                    }
+                    key.append(unescape(n));
                     i++;
                     continue;
                 }

@@ -3,6 +3,8 @@ package java.security.cert;
 import java.security.GeneralSecurityException;
 
 public class CertificateException extends GeneralSecurityException {
+    private static final long serialVersionUID = 3192535253797119798L;
+
     public CertificateException() {
     }
 

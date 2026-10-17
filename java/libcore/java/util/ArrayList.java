@@ -5,9 +5,36 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+    private static final long serialVersionUID = 8683452581122892189L;
     private static final Object[] EMPTY = new Object[0];
     transient Object[] elementData;
     private int size;
+
+    /** Java's serial form: size, then size again (where Java once wrote the capacity), then the elements. */
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        int expectedModCount = modCount;
+        s.defaultWriteObject();
+        s.writeInt(size);
+        for (int i = 0; i < size; i++) {
+            s.writeObject(elementData[i]);
+        }
+        if (modCount != expectedModCount) {
+            throw new ConcurrentModificationException();
+        }
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        s.readInt();
+        if (size < 0) {
+            throw new java.io.InvalidObjectException("Invalid size: " + size);
+        }
+        Object[] elements = (size == 0) ? EMPTY : new Object[size];
+        for (int i = 0; i < size; i++) {
+            elements[i] = s.readObject();
+        }
+        elementData = elements;
+    }
 
     public ArrayList(int initialCapacity) {
         if (initialCapacity < 0) {

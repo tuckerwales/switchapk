@@ -1,6 +1,8 @@
 package java.util.concurrent;
 
 public class SynchronousQueue<E> extends LinkedBlockingDeque<E> {
+    private static final long serialVersionUID = -3223113410248163686L;
+
     public SynchronousQueue() {
         super(1);
     }

@@ -27,6 +27,15 @@ public class OutputStreamWriter extends Writer {
         this.cs = cs;
     }
 
+    public OutputStreamWriter(OutputStream out, java.nio.charset.CharsetEncoder enc) {
+        super(out);
+        if (enc == null) {
+            throw new NullPointerException("charset encoder");
+        }
+        this.out = out;
+        this.cs = enc.charset();
+    }
+
     public String getEncoding() {
         return cs.name();
     }

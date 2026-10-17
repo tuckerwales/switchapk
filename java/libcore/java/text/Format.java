@@ -1,6 +1,8 @@
 package java.text;
 
 public abstract class Format implements java.io.Serializable, Cloneable {
+    private static final long serialVersionUID = -299282585814624189L;
+
     protected Format() {
     }
 
@@ -30,6 +32,9 @@ public abstract class Format implements java.io.Serializable, Cloneable {
     }
 
     public static class Field extends java.text.AttributedCharacterIterator.Attribute {
+
+        private static final long serialVersionUID = 276966692217360283L;
+
         protected Field(String name) {
             super(name);
         }

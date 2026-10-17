@@ -1258,62 +1258,135 @@ public final class Arrays {
 
     @SafeVarargs
     public static <T> List<T> asList(T... a) {
-        return new ArrayAsList<T>(a);
+        return new ArrayList<T>(a);
     }
 
-    private static class ArrayAsList<E> extends AbstractList<E> implements RandomAccess, java.io.Serializable {
+    /**
+     * The list behind asList. Named ArrayList as in OpenJDK, because serialization writes the class name
+     * (java.util.Arrays$ArrayList); inside this file "ArrayList" therefore means this class, not java.util.ArrayList.
+     */
+    private static class ArrayList<E> extends AbstractList<E> implements RandomAccess, java.io.Serializable {
+        private static final long serialVersionUID = -2764017481108945198L;
         private final E[] a;
 
-        ArrayAsList(E[] array) {
+        ArrayList(E[] array) {
             a = Objects.requireNonNull(array);
         }
 
+        @Override
         public int size() {
             return a.length;
         }
 
+        @Override
         public Object[] toArray() {
             return Arrays.copyOf(a, a.length, Object[].class);
         }
 
+        @Override
         @SuppressWarnings("unchecked")
-        public <T> T[] toArray(T[] b) {
+        public <T> T[] toArray(T[] a) {
             int size = size();
-            if (b.length < size) {
-                return Arrays.copyOf(this.a, size, (Class<? extends T[]>) b.getClass());
+            if (a.length < size) {
+                return Arrays.copyOf(this.a, size, (Class<? extends T[]>) a.getClass());
             }
-            System.arraycopy(this.a, 0, b, 0, size);
-            if (b.length > size) {
-                b[size] = null;
+            System.arraycopy(this.a, 0, a, 0, size);
+            if (a.length > size) {
+                a[size] = null;
             }
-            return b;
+            return a;
         }
 
+        @Override
         public E get(int index) {
             return a[index];
         }
 
+        @Override
         public E set(int index, E element) {
             E oldValue = a[index];
             a[index] = element;
             return oldValue;
         }
 
+        @Override
         public int indexOf(Object o) {
-            for (int i = 0; i < a.length; i++) {
-                if (Objects.equals(o, a[i])) {
-                    return i;
+            E[] a = this.a;
+            if (o == null) {
+                for (int i = 0; i < a.length; i++) {
+                    if (a[i] == null) {
+                        return i;
+                    }
+                }
+            } else {
+                for (int i = 0; i < a.length; i++) {
+                    if (o.equals(a[i])) {
+                        return i;
+                    }
                 }
             }
             return -1;
         }
 
+        @Override
         public boolean contains(Object o) {
             return indexOf(o) >= 0;
         }
 
+        @Override
+        public Spliterator<E> spliterator() {
+            return Spliterators.spliterator(a, Spliterator.ORDERED);
+        }
+
+        @Override
+        public void forEach(java.util.function.Consumer<? super E> action) {
+            Objects.requireNonNull(action);
+            for (E e : a) {
+                action.accept(e);
+            }
+        }
+
+        @Override
+        public void replaceAll(java.util.function.UnaryOperator<E> operator) {
+            Objects.requireNonNull(operator);
+            E[] a = this.a;
+            for (int i = 0; i < a.length; i++) {
+                a[i] = operator.apply(a[i]);
+            }
+        }
+
+        @Override
         public void sort(Comparator<? super E> c) {
             Arrays.sort(a, c);
+        }
+
+        @Override
+        public Iterator<E> iterator() {
+            return new ArrayItr<E>(a);
+        }
+    }
+
+    private static class ArrayItr<E> implements Iterator<E> {
+        private int cursor;
+        private final E[] a;
+
+        ArrayItr(E[] a) {
+            this.a = a;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cursor < a.length;
+        }
+
+        @Override
+        public E next() {
+            int i = cursor;
+            if (i >= a.length) {
+                throw new NoSuchElementException();
+            }
+            cursor = i + 1;
+            return a[i];
         }
     }
 
@@ -1349,6 +1422,10 @@ public final class Arrays {
                 elementHash = hashCode((float[]) element);
             } else if (element instanceof double[]) {
                 elementHash = hashCode((double[]) element);
+            } else if (element instanceof short[]) {
+                elementHash = hashCode((short[]) element);
+            } else if (element instanceof boolean[]) {
+                elementHash = hashCode((boolean[]) element);
             } else if (element != null) {
                 elementHash = element.hashCode();
             } else {
@@ -1400,6 +1477,8 @@ public final class Arrays {
             return equals((double[]) e1, (double[]) e2);
         } else if (e1 instanceof boolean[] && e2 instanceof boolean[]) {
             return equals((boolean[]) e1, (boolean[]) e2);
+        } else if (e1 instanceof short[] && e2 instanceof short[]) {
+            return equals((short[]) e1, (short[]) e2);
         }
         return e1.equals(e2);
     }
@@ -1427,35 +1506,72 @@ public final class Arrays {
         if (a == null) {
             return "null";
         }
-        StringBuilder buf = new StringBuilder();
+
+        int bufLen = 20 * a.length;
+        if (a.length != 0 && bufLen <= 0) {
+            bufLen = Integer.MAX_VALUE;
+        }
+        StringBuilder buf = new StringBuilder(bufLen);
+        deepToString(a, buf, new HashSet<Object[]>());
+        return buf.toString();
+    }
+
+    /** As OpenJDK: nested arrays of every primitive type, and "[...]" for an array that contains itself. */
+    private static void deepToString(Object[] a, StringBuilder buf, Set<Object[]> dejaVu) {
+        if (a == null) {
+            buf.append("null");
+            return;
+        }
+        int iMax = a.length - 1;
+        if (iMax == -1) {
+            buf.append("[]");
+            return;
+        }
+
+        dejaVu.add(a);
         buf.append('[');
-        for (int i = 0; i < a.length; i++) {
-            if (i > 0) {
-                buf.append(", ");
-            }
+        for (int i = 0;; i++) {
             Object element = a[i];
-            if (element instanceof Object[]) {
-                buf.append(deepToString((Object[]) element));
-            } else if (element instanceof int[]) {
-                buf.append(toString((int[]) element));
-            } else if (element instanceof long[]) {
-                buf.append(toString((long[]) element));
-            } else if (element instanceof float[]) {
-                buf.append(toString((float[]) element));
-            } else if (element instanceof double[]) {
-                buf.append(toString((double[]) element));
-            } else if (element instanceof byte[]) {
-                buf.append(toString((byte[]) element));
-            } else if (element instanceof char[]) {
-                buf.append(toString((char[]) element));
-            } else if (element instanceof boolean[]) {
-                buf.append(toString((boolean[]) element));
+            if (element == null) {
+                buf.append("null");
             } else {
-                buf.append(String.valueOf(element));
+                Class<?> eClass = element.getClass();
+
+                if (eClass.isArray()) {
+                    if (eClass == byte[].class) {
+                        buf.append(toString((byte[]) element));
+                    } else if (eClass == short[].class) {
+                        buf.append(toString((short[]) element));
+                    } else if (eClass == int[].class) {
+                        buf.append(toString((int[]) element));
+                    } else if (eClass == long[].class) {
+                        buf.append(toString((long[]) element));
+                    } else if (eClass == char[].class) {
+                        buf.append(toString((char[]) element));
+                    } else if (eClass == float[].class) {
+                        buf.append(toString((float[]) element));
+                    } else if (eClass == double[].class) {
+                        buf.append(toString((double[]) element));
+                    } else if (eClass == boolean[].class) {
+                        buf.append(toString((boolean[]) element));
+                    } else { // element is an array of object references
+                        if (dejaVu.contains(element)) {
+                            buf.append("[...]");
+                        } else {
+                            deepToString((Object[]) element, buf, dejaVu);
+                        }
+                    }
+                } else { // element is non-null and not an array
+                    buf.append(element.toString());
+                }
             }
+            if (i == iMax) {
+                break;
+            }
+            buf.append(", ");
         }
         buf.append(']');
-        return buf.toString();
+        dejaVu.remove(a);
     }
 
     public static <T> void setAll(T[] array, IntFunction<? extends T> generator) {

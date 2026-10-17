@@ -381,6 +381,7 @@ static SLresult eng_create_player(SLEngineItf self, SLObjectItf *pPlayer, SLData
     else return SL_RESULT_PARAMETER_INVALID;
     int rate = (int)(fmt->samplesPerSec / 1000);
     int num_buffers = (int)bq->numBuffers;
+    LOGD("audio player: %d Hz, %u channel(s), %d-bit, %d buffers", rate, (unsigned)fmt->numChannels, bits, num_buffers);
     SlPlayer *p = alloc_player();
     if (!p) return SL_RESULT_MEMORY_FAILURE;
     int index = (int)(p - g_players);
@@ -806,6 +807,7 @@ SLresult slCreateEngine(SLObjectItf *pEngine, SLuint32 numOptions, const SLEngin
                         const SLboolean *pInterfaceRequired) {
     (void)numOptions;
     (void)pEngineOptions;
+    LOGD("slCreateEngine (%u interfaces)", (unsigned)numInterfaces);
     if (!pEngine) return SL_RESULT_PARAMETER_INVALID;
     if (!required_ok(numInterfaces, pInterfaceIds, pInterfaceRequired, engine_iid)) {
         return SL_RESULT_FEATURE_UNSUPPORTED;

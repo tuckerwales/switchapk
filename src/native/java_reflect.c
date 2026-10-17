@@ -46,6 +46,16 @@ static void set_by_name(Object *o, const char *name, JValue v) {
     if (f) vm_field_set(o, f, v);
 }
 
+/* Java modifiers from dex access flags, as Android reports them: dex marks a synchronized method with
+ * ACC_DECLARED_SYNCHRONIZED (ACC_SYNCHRONIZED is only for native ones), and abstract wins over native. */
+static int32_t method_modifiers(uint32_t access) {
+    int32_t flags = (int32_t)access;
+    if (flags & ACC_ABSTRACT) flags &= ~ACC_NATIVE;
+    flags &= ~ACC_SYNCHRONIZED;
+    if (access & 0x20000) flags |= ACC_SYNCHRONIZED; /* ACC_DECLARED_SYNCHRONIZED */
+    return flags & 0xffff;
+}
+
 static Object *make_executable(VMThread *t, Method *m, bool ctor) {
     if (m->reflect) return m->reflect;
     Class *rc = ctor ? g_vm.wk.reflect_Constructor : g_vm.wk.reflect_Method;
@@ -73,7 +83,7 @@ static Object *make_executable(VMThread *t, Method *m, bool ctor) {
     v.l = vm_class_mirror(t, ret);
     set_by_name(o, "returnType", v);
     v.raw = 0;
-    v.i = (int32_t)(m->access & 0xffff);
+    v.i = method_modifiers(m->access);
     set_by_name(o, "modifiers", v);
     m->reflect = o;
     return o;
@@ -260,6 +270,37 @@ NATIVE(Constructor_newInstanceNative) {
         return;
     }
     R_OBJ(o);
+}
+
+/* ObjectStreamClass.newInstanceNative(cl, ctor): a new cl with only ctor run on it, the no-arg constructor of its
+ * first non-serializable superclass (or cl's own for Externalizable). Exceptions from ctor pass through unwrapped. */
+NATIVE(ObjectStreamClass_newInstanceNative) {
+    UNUSED_ARGS();
+    Class *c = vm_class_from_mirror(A_OBJ(0));
+    Object *ctor = A_OBJ(1);
+    if (!c || !ctor) {
+        vm_throw_npe(t, "class");
+        return;
+    }
+    Method *m = (Method *)(intptr_t)vm_get_long(ctor, g_vm.wf.Constructor_vmMethod);
+    if (c->is_array || (c->access & (ACC_ABSTRACT | ACC_INTERFACE))) {
+        vm_throw_new(t, "Ljava/lang/InstantiationException;", "%s", c->name);
+        return;
+    }
+    if (!vm_init_class(t, c)) return;
+    Object *o = vm_alloc_object(t, c);
+    if (!o) return;
+    uint64_t slots[1] = {(uint64_t)(uintptr_t)o};
+    vm_invoke(t, m, slots);
+    if (t->exception) return;
+    R_OBJ(o);
+}
+
+/* ObjectStreamClass.hasStaticInitializer(cl): whether cl declares <clinit>, for the default serialVersionUID. */
+NATIVE(ObjectStreamClass_hasStaticInitializer) {
+    UNUSED_ARGS();
+    Class *c = vm_class_from_mirror(A_OBJ(0));
+    R_BOOL(c && vm_find_method(c, "<clinit>", "()V") != NULL);
 }
 
 static Field *field_of(Object *self) { return (Field *)(intptr_t)vm_get_long(self, g_vm.wf.Field_vmField); }
@@ -577,6 +618,9 @@ static const NativeMethodReg g_regs[] = {
      Method_invokeNative},
     {"Ljava/lang/reflect/Constructor;", "newInstanceNative", "([Ljava/lang/Object;)Ljava/lang/Object;",
      Constructor_newInstanceNative},
+    {"Ljava/io/ObjectStreamClass;", "newInstanceNative",
+     "(Ljava/lang/Class;Ljava/lang/reflect/Constructor;)Ljava/lang/Object;", ObjectStreamClass_newInstanceNative},
+    {"Ljava/io/ObjectStreamClass;", "hasStaticInitializer", "(Ljava/lang/Class;)Z", ObjectStreamClass_hasStaticInitializer},
     {"Ljava/lang/reflect/Field;", "getNative", "(Ljava/lang/Object;)Ljava/lang/Object;", Field_getNative},
     {"Ljava/lang/reflect/Field;", "setNative", "(Ljava/lang/Object;Ljava/lang/Object;)V", Field_setNative},
     {"Ljava/lang/reflect/Array;", "newArray", "(Ljava/lang/Class;I)Ljava/lang/Object;", Array_newArray},

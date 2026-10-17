@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public final class Class<T> implements java.io.Serializable, GenericDeclaration, Type {
+    private static final long serialVersionUID = 3206093459760846163L;
+
     private transient long vmClass;
     private transient String name;
     private transient Method[] declaredMethods;

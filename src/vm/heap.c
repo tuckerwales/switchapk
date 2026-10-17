@@ -7,8 +7,15 @@
  * address of a live object keeps it alive). Collection only happens at
  * interpreter safepoints while holding the GIL, so allocation itself never
  * moves or frees memory.
+ *
+ * Objects up to SMALL_MAX bytes live in size-class pages: PAGE_SIZE-aligned blocks with a header in front, an
+ * allocation bitmap, and slots of one size threaded on a per-class free list. Allocation pops the list; the page of
+ * any slot is its address rounded down, and a set of page bases tells real pages from other memory when a word on a
+ * stack is checked conservatively. Larger objects are calloc'd and kept in g_vm.objects (address -> size).
  */
 #include "vm.h"
+
+#include <malloc.h>
 
 #define LOG_TAG "heap"
 
@@ -17,21 +24,134 @@
 typedef struct Monitor Monitor;
 void vm_monitor_free_index(uint32_t idx);
 
+/* ---- small-object pages ------------------------------------------------------------ */
+
+#define PAGE_SIZE ((size_t)64 * 1024)
+#define SMALL_MAX 256
+#define NCLASSES 15
+
+static const uint16_t g_slot_sizes[NCLASSES] = {16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256};
+static uint8_t g_class_of[SMALL_MAX / 8 + 1]; /* size in 8-byte units -> size class */
+
+typedef struct Page {
+    struct Page *next; /* all pages of one class */
+    uint32_t cls, slot, nslots, used;
+    uint8_t *first;     /* first slot */
+    uint64_t bits[];    /* allocation bitmap, one bit per slot */
+} Page;
+
+typedef struct FreeSlot {
+    struct FreeSlot *next;
+} FreeSlot;
+
+static Page *g_pages[NCLASSES];
+static FreeSlot *g_free[NCLASSES];
+static SaPtrMap g_page_set; /* page base -> page, for conservative checks */
+static size_t g_small_count;
+
+static bool g_classes_ready;
+
+static void init_classes(void) {
+    if (SA_LIKELY(g_classes_ready)) return;
+    g_classes_ready = true;
+    int c = 0;
+    for (int u = 0; u <= SMALL_MAX / 8; u++) {
+        while (g_slot_sizes[c] < u * 8) c++;
+        g_class_of[u] = (uint8_t)c;
+    }
+}
+
+static inline Page *page_of(const void *p) { return (Page *)((uintptr_t)p & ~(uintptr_t)(PAGE_SIZE - 1)); }
+
+/* Whether pg is one of our pages (base 0 is never one: the set uses keys 0 and 1 as markers). */
+static inline bool is_page(const Page *pg) { return (uintptr_t)pg >= PAGE_SIZE && sa_ptrmap_has(&g_page_set, pg); }
+
+static inline uint32_t slot_index(const Page *pg, const void *p) {
+    return (uint32_t)(((const uint8_t *)p - pg->first) / pg->slot);
+}
+
+static Page *new_page(uint32_t cls) {
+    uint8_t *mem = memalign(PAGE_SIZE, PAGE_SIZE);
+    if (!mem) return NULL;
+    uint32_t slot = g_slot_sizes[cls];
+    /* the header and bitmap take the front of the page; slots follow, 8-byte aligned */
+    uint32_t nslots = (uint32_t)((PAGE_SIZE - sizeof(Page)) / (slot + 1.0 / 8));
+    size_t hdr;
+    for (;;) {
+        hdr = SA_ALIGN_UP(sizeof(Page) + ((nslots + 63) / 64) * 8, 16);
+        if (hdr + (size_t)nslots * slot <= PAGE_SIZE) break;
+        nslots--;
+    }
+    Page *pg = (Page *)mem;
+    memset(pg, 0, hdr);
+    pg->cls = cls;
+    pg->slot = slot;
+    pg->nslots = nslots;
+    pg->first = mem + hdr;
+    pg->next = g_pages[cls];
+    g_pages[cls] = pg;
+    for (uint32_t i = nslots; i-- > 0;) {
+        FreeSlot *f = (FreeSlot *)(pg->first + (size_t)i * slot);
+        f->next = g_free[cls];
+        g_free[cls] = f;
+    }
+    sa_ptrmap_put(&g_page_set, pg, pg);
+    return pg;
+}
+
+static void *small_alloc(size_t size) {
+    uint32_t cls = g_class_of[(size + 7) / 8];
+    FreeSlot *f = g_free[cls];
+    if (!f) {
+        if (!new_page(cls)) return NULL;
+        f = g_free[cls];
+    }
+    g_free[cls] = f->next;
+    Page *pg = page_of(f);
+    uint32_t i = slot_index(pg, f);
+    pg->bits[i >> 6] |= (uint64_t)1 << (i & 63);
+    pg->used++;
+    g_small_count++;
+    memset(f, 0, pg->slot);
+    return f;
+}
+
+/* The object a word on a stack points at, if it is the start of a live small or large object. */
+static inline bool is_object(uintptr_t w) {
+    if (!w || (w & 7)) return false;
+    Page *pg = page_of((void *)w);
+    if (is_page(pg)) {
+        if ((uint8_t *)w < pg->first) return false;
+        size_t off = (size_t)((uint8_t *)w - pg->first);
+        uint32_t i = (uint32_t)(off / pg->slot);
+        return off % pg->slot == 0 && i < pg->nslots && (pg->bits[i >> 6] >> (i & 63) & 1);
+    }
+    return sa_ptrmap_has(&g_vm.objects, (void *)w);
+}
+
 /* ---- allocation ----------------------------------------------------------------- */
 
+static void *alloc_mem(size_t size) {
+    if (size <= SMALL_MAX) return small_alloc(size);
+    void *o = calloc(1, size);
+    if (o) sa_ptrmap_put(&g_vm.objects, o, (void *)(uintptr_t)size);
+    return o;
+}
+
 static Object *raw_alloc(VMThread *t, Class *c, size_t size) {
-    Object *o = calloc(1, size);
+    init_classes();
+    if (size <= SMALL_MAX) size = g_slot_sizes[g_class_of[(size + 7) / 8]];
+    Object *o = alloc_mem(size);
     if (!o) {
         LOGW("allocation of %zu bytes failed, collecting", size);
         if (t && t->has_gil) vm_gc(t);
-        o = calloc(1, size);
+        o = alloc_mem(size);
         if (!o) {
             if (t) vm_throw_oom(t);
             return NULL;
         }
     }
     o->clazz = c;
-    sa_ptrmap_put(&g_vm.objects, o, (void *)(uintptr_t)size);
     g_vm.heap_bytes += size;
     if (g_vm.heap_bytes > g_vm.heap_threshold) g_vm.safepoint_requested = true;
     return o;
@@ -79,7 +199,11 @@ ArrayObject *vm_alloc_prim_array(VMThread *t, char prim, int32_t length) {
     return vm_alloc_array(t, ac, length);
 }
 
-size_t vm_object_size(Object *o) { return (size_t)(uintptr_t)sa_ptrmap_get(&g_vm.objects, o); }
+size_t vm_object_size(Object *o) {
+    Page *pg = page_of(o);
+    if (is_page(pg)) return pg->slot;
+    return (size_t)(uintptr_t)sa_ptrmap_get(&g_vm.objects, o);
+}
 
 Object *vm_clone(VMThread *t, Object *o) {
     size_t size = vm_object_size(o);
@@ -101,10 +225,7 @@ Object *vm_clone(VMThread *t, Object *o) {
     return c;
 }
 
-bool vm_is_object(const void *p) {
-    if (!p || ((uintptr_t)p & 7)) return false;
-    return sa_ptrmap_has(&g_vm.objects, p);
-}
+bool vm_is_object(const void *p) { return is_object((uintptr_t)p); }
 
 void vm_add_root(Object **slot) { sa_vec_push(&g_vm.explicit_roots, slot); }
 
@@ -131,7 +252,7 @@ static inline void mark(Object *o) {
 }
 
 static inline void mark_conservative(uintptr_t w) {
-    if (w && !(w & 7) && sa_ptrmap_has(&g_vm.objects, (void *)w)) mark((Object *)w);
+    if (is_object(w)) mark((Object *)w);
 }
 
 static void scan_range(const void *lo, const void *hi) {
@@ -258,7 +379,7 @@ static void __attribute__((noinline)) mark_roots(VMThread *self) {
 
 void vm_gc(VMThread *t) {
     uint64_t start = sa_time_ns();
-    size_t before = g_vm.heap_bytes, count_before = g_vm.objects.count;
+    size_t before = g_vm.heap_bytes, count_before = g_vm.objects.count + g_small_count;
     g_found_refs.len = 0;
     mark_roots(t);
     drain();
@@ -299,12 +420,52 @@ void vm_gc(VMThread *t) {
     }
     sa_ptrmap_free(old);
     g_vm.objects = live;
+    /* small pages: free unmarked slots and rebuild the free lists; give back pages left empty */
+    g_small_count = 0;
+    for (uint32_t c = 0; c < NCLASSES; c++) {
+        g_free[c] = NULL;
+        Page **link = &g_pages[c];
+        bool kept_empty = false;
+        while (*link) {
+            Page *pg = *link;
+            uint32_t used = 0;
+            for (uint32_t i = pg->nslots; i-- > 0;) {
+                uint64_t bit = (uint64_t)1 << (i & 63);
+                Object *o = (Object *)(pg->first + (size_t)i * pg->slot);
+                if (pg->bits[i >> 6] & bit) {
+                    if (o->gcflags & GC_MARK) {
+                        o->gcflags &= ~GC_MARK;
+                        used++;
+                        continue;
+                    }
+                    if (o->monitor) vm_monitor_free_index(o->monitor);
+                    pg->bits[i >> 6] &= ~bit;
+                }
+                ((FreeSlot *)o)->next = g_free[c];
+                g_free[c] = (FreeSlot *)o;
+            }
+            pg->used = used;
+            live_bytes += (size_t)used * pg->slot;
+            g_small_count += used;
+            if (used == 0 && kept_empty) {
+                /* drop this page's slots from the list just rebuilt: they are the newest entries */
+                uint8_t *lo = pg->first, *hi = pg->first + (size_t)pg->nslots * pg->slot;
+                while (g_free[c] && (uint8_t *)g_free[c] >= lo && (uint8_t *)g_free[c] < hi) g_free[c] = g_free[c]->next;
+                *link = pg->next;
+                sa_ptrmap_remove(&g_page_set, pg);
+                free(pg);
+                continue;
+            }
+            if (used == 0) kept_empty = true;
+            link = &pg->next;
+        }
+    }
     g_vm.heap_bytes = live_bytes;
     g_vm.heap_live_after_gc = live_bytes;
     g_vm.heap_threshold = live_bytes * 2 > MIN_HEAP_THRESHOLD ? live_bytes * 2 : MIN_HEAP_THRESHOLD;
     g_vm.gc_count++;
     LOGD("GC #%llu: %zu -> %zu objects, %zu KB -> %zu KB in %.2f ms", (unsigned long long)g_vm.gc_count, count_before,
-         g_vm.objects.count, before / 1024, live_bytes / 1024, (double)(sa_time_ns() - start) / 1e6);
+         g_vm.objects.count + g_small_count, before / 1024, live_bytes / 1024, (double)(sa_time_ns() - start) / 1e6);
 }
 
 /* ---- strings -------------------------------------------------------------------------------- */

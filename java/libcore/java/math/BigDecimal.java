@@ -1,7 +1,20 @@
 package java.math;
 
 public class BigDecimal extends Number implements Comparable<BigDecimal> {
+    private static final long serialVersionUID = 6108874887143696463L;
     private final BigInteger intVal;
+
+    /** Java writes BigDecimal through writeObject (its compact form inflated), so the stream marks custom data. */
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        s.defaultWriteObject();
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        if (intVal == null) {
+            throw new java.io.StreamCorruptedException("BigDecimal: null intVal - possible malicious stream");
+        }
+    }
     private final int scale;
 
     public static final BigDecimal ZERO = new BigDecimal(BigInteger.ZERO, 0);

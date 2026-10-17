@@ -9,6 +9,8 @@ import java.util.ListIterator;
 import java.util.RandomAccess;
 
 public class CopyOnWriteArrayList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+    private static final long serialVersionUID = 8673264195747942595L;
+
     private volatile Object[] array;
 
     public CopyOnWriteArrayList() {

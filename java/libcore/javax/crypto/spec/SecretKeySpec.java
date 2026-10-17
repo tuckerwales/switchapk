@@ -9,6 +9,7 @@ import javax.crypto.SecretKey;
 public class SecretKeySpec implements KeySpec, SecretKey {
     private static final long serialVersionUID = 6577238317307289933L;
 
+
     private final byte[] key;
     private final String algorithm;
 

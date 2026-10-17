@@ -290,10 +290,17 @@ public class UtilTest {
         p(new TreeMap<>(fx));
         StringWriter sw = new StringWriter();
         pr.store(sw, null);
-        p(sw.toString().split("\n", 2)[1].trim().replace("\n", "|"));
+        // Entry order is the Hashtable's (Android keeps OpenJDK 8's layout), not JDK 9+'s map, so sort the lines.
+        p(sortedLines(sw.toString().split("\n", 2)[1].trim()));
         bo.reset();
         pr.store(bo, null);
-        p(new String(bo.toByteArray(), StandardCharsets.ISO_8859_1).split("\n", 2)[1].trim().replace("\n", "|"));
+        p(sortedLines(new String(bo.toByteArray(), StandardCharsets.ISO_8859_1).split("\n", 2)[1].trim()));
+    }
+
+    static String sortedLines(String s) {
+        String[] lines = s.split("\n");
+        Arrays.sort(lines);
+        return String.join("|", lines);
     }
 
     static void locales() {

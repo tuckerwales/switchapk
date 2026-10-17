@@ -3,6 +3,74 @@ package java.io;
 public abstract class Reader implements Readable, Closeable {
     protected Object lock;
 
+    public static Reader nullReader() {
+        return new Reader() {
+            private volatile boolean closed;
+
+            private void ensureOpen() throws IOException {
+                if (closed) {
+                    throw new IOException("Stream closed");
+                }
+            }
+
+            @Override
+            public int read() throws IOException {
+                ensureOpen();
+                return -1;
+            }
+
+            @Override
+            public int read(char[] cbuf, int off, int len) throws IOException {
+                if ((off | len | (off + len) | (cbuf.length - (off + len))) < 0) {
+                    throw new IndexOutOfBoundsException();
+                }
+                ensureOpen();
+                if (len == 0) {
+                    return 0;
+                }
+                return -1;
+            }
+
+            @Override
+            public int read(java.nio.CharBuffer target) throws IOException {
+                if (target == null) {
+                    throw new NullPointerException();
+                }
+                ensureOpen();
+                if (target.hasRemaining()) {
+                    return -1;
+                }
+                return 0;
+            }
+
+            @Override
+            public boolean ready() throws IOException {
+                ensureOpen();
+                return false;
+            }
+
+            @Override
+            public long skip(long n) throws IOException {
+                ensureOpen();
+                return 0L;
+            }
+
+            @Override
+            public long transferTo(Writer out) throws IOException {
+                if (out == null) {
+                    throw new NullPointerException();
+                }
+                ensureOpen();
+                return 0L;
+            }
+
+            @Override
+            public void close() {
+                closed = true;
+            }
+        };
+    }
+
     protected Reader() {
         this.lock = this;
     }

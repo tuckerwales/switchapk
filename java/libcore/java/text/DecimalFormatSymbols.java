@@ -3,6 +3,8 @@ package java.text;
 import java.util.Locale;
 
 public class DecimalFormatSymbols implements Cloneable, java.io.Serializable {
+    private static final long serialVersionUID = 5772796243397350300L;
+
     private char zeroDigit = '0';
     private char groupingSeparator = ',';
     private char decimalSeparator = '.';

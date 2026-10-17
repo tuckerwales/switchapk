@@ -429,6 +429,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] the browser applet on hardware (title takeover and applet mode)
   - [ ] network images, forms, CSS layout; a real engine is out of reach
 - [ ] WS12 VM performance
+  - [x] threaded dispatch (computed goto), one handler per literal op,
+    and a size-class page allocator; tests/bench/run_bench.sh about 2x
+    faster on the host (about 1850 to 910 ms; allocation 3x, HashMap 3x)
+  - [ ] measure on hardware (the A57's branch predictor should gain more
+    from threading than x86 does)
+  - [ ] inline caches for virtual and interface calls, quickening, a
+    faster frame push, generational or incremental GC
 - [ ] WS14 AndroidX compatibility
 - [ ] docs/COMPATIBILITY.md with a tested APK corpus
   - [x] corpus of 13 F-Droid APKs (`tests/corpus/corpus.json`, pinned),
@@ -595,6 +602,18 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-17 (WS16): Java serialization. New natives on
+  `java.io.ObjectStreamClass`: `newInstanceNative(Class, Constructor)` and
+  `hasStaticInitializer(Class)` (src/native/java_reflect.c). Reflection now
+  reports Android's modifiers: arrays take their component's access plus
+  final and abstract; dex `ACC_DECLARED_SYNCHRONIZED` methods report
+  `synchronized`. Behaviour visible to apps: HashMap, Hashtable,
+  ConcurrentHashMap and the Collections wrappers now iterate and
+  serialize as OpenJDK/Android; ConcurrentHashMap extends AbstractMap
+  (was HashMap) and its iterators never throw
+  ConcurrentModificationException; ReentrantLock has OpenJDK's Sync/AQS
+  shape. String's `value` and `hash` are now `transient` (C reads them
+  by name, unchanged). ARCHITECTURE 5.4.1.
 - 2026-10-17 (WS18, touches WS10, WS4): new
   `platform_open_url(url, callback, out_url, size)` in platform.h (Switch
   web applets, a scripted browser on the host; new headless script

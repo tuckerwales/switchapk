@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import libcore.io.Os;
 
 public class File implements Serializable, Comparable<File> {
+    private static final long serialVersionUID = 301077366599181567L;
+
     public static final char separatorChar = '/';
     public static final String separator = "/";
     public static final char pathSeparatorChar = ':';

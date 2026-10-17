@@ -6,9 +6,33 @@ package java.util;
  * of applications. Sub-map views are snapshots.
  */
 public class TreeMap<K, V> extends AbstractMap<K, V> implements NavigableMap<K, V>, Cloneable, java.io.Serializable {
+    private static final long serialVersionUID = 919286545866124006L;
     private final Comparator<? super K> comparator;
-    private ArrayList<Entry<K, V>> entries = new ArrayList<Entry<K, V>>();
+    private transient ArrayList<Entry<K, V>> entries = new ArrayList<Entry<K, V>>();
     private transient int modCount;
+
+    /** Java's serial form: the comparator (a field), the size, then each key and value in order. */
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        s.defaultWriteObject();
+        s.writeInt(entries.size());
+        for (Entry<K, V> e : entries) {
+            s.writeObject(e.key);
+            s.writeObject(e.value);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        int size = s.readInt();
+        if (size < 0) {
+            throw new java.io.StreamCorruptedException("Illegal size: " + size);
+        }
+        entries = new ArrayList<Entry<K, V>>(size);
+        for (int i = 0; i < size; i++) {
+            entries.add(new Entry<K, V>((K) s.readObject(), (V) s.readObject()));
+        }
+    }
 
     static final class Entry<K, V> implements Map.Entry<K, V> {
         final K key;

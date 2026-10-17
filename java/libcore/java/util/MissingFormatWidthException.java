@@ -1,6 +1,8 @@
 package java.util;
 
 public class MissingFormatWidthException extends IllegalFormatException {
+    private static final long serialVersionUID = 15560123L;
+
     private final String s;
 
     public MissingFormatWidthException(String s) {

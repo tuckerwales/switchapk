@@ -1095,3 +1095,42 @@ what is left in flight.
   and PipeLogTest included), the C tests and the samples (keystore
   included) pass on the host, all 14 corpus apps draw (OSRS and Unciv as
   on main), and the Switch build links.
+- 2026-10-11, TLS (WS11): https and javax.net.ssl work on the host over
+  mbedtls 2.28 (TLS 1.2), the Switch build links it, and Android 15's
+  145 system CA certificates are fetched from AOSP (content-hashed) and
+  served at /system/etc/security/cacerts. The native session works on
+  memory buffers and stops after the server certificate so Java
+  TrustManagers decide, as on Android; the platform trust manager
+  verifies with mbedtls against anchors. A subagent wrote the X.509 side
+  (certificates, CertificateFactory, X500Principal, BKS/PKCS12/
+  AndroidCAStore keystores; X509Test matches OpenJDK). New TlsTest
+  against a local Python server with a test PKI (good chain with an
+  intermediate, expired, wrong host, self-signed, default trust store,
+  app trust manager, ALPN, 1 MB echo, read timeout, HttpsURLConnection)
+  matches the reference JVM. All 21 dex tests, the C tests and 46 of 47
+  samples pass (curves is the timing flake), and all 14 corpus apps
+  draw. OSRS's Crashlytics now completes a real handshake through the
+  sandbox network and refuses the sandbox proxy's certificate ("Trust
+  anchor for certification path not found."), as a phone would. Not yet:
+  SSLEngine, session resumption, client certificates, server sockets,
+  TLS 1.3, a run on hardware.
+- 2026-10-11, SSLEngine (WS11): a client-mode SSLEngine over the same
+  native session (one record per unwrap, synchronous certificate
+  checks). TlsTest drives it over a blocking SocketChannel (handshake,
+  ALPN, an HTTP request, close_notify both ways, a wrong-host rejection)
+  and matches the reference JVM. PR #28 opened for the TLS work.
+- 2026-10-17, web content (WS18, new): web intents that nothing in the
+  app handles open the platform browser (Switch WebPage applet with a
+  callback URL in title-takeover mode, WifiWebAuth browser otherwise;
+  scripted on the host), with the app paused underneath and the OAuth
+  redirect delivered as an intent; PackageManager reports a browser
+  package. android.webkit is there in full (a subagent wrote the API
+  surface, CookieManager, URLUtil and MimeTypeMap); WebView renders HTML
+  as styled text without JavaScript. Found on the way: manifest `<data>`
+  elements were never parsed, so intent filters with schemes or hosts
+  never matched; they are now, with android.os.PatternMatcher and
+  wildcard hosts. tests/apps/web passes; all 48 samples (gles flaked once
+  on a slow first frame and passed on the rerun), VmTest, NetTest,
+  X509Test and TlsTest pass, all 14 corpus apps draw, and the Switch
+  build links. Not run on hardware.
+

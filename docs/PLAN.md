@@ -96,7 +96,8 @@ Working (host tests on Linux x86-64; AArch64 checked under qemu-user):
   ConnectivityManager reports the platform network (nifm on the Switch)
   with callbacks and CONNECTIVITY_ACTION. tests/dex/NetTest matches
   OpenJDK; tests/apps/net checks HTTP, UDP and network switches on the
-  host. No TLS yet: https fails with SSLHandshakeException.
+  host. https works over TLS 1.2 (mbedtls) with Android's CA set and
+  trust semantics (tests/tls); not yet run on hardware.
 - System services (WS15): accelerometer and gyroscope from the platform
   (headless script values; the Switch six-axis sensor) with gravity,
   linear acceleration, rotation vectors and orientation fused from them;
@@ -127,7 +128,7 @@ Not yet: GL on the Switch (Mesa linked but not run on hardware), device
 audio output (audren/audout), running a native library on hardware (code
 memory is mapped; newlib struct translation remains), ALooper and the
 input queue on the Switch (no pipe/poll in newlib) and AAudio,
-TLS for https and running the sockets on hardware (WS11), AndroidX
+running the sockets and TLS on hardware (WS11), AndroidX
 (WS14), and running the sensors, rumble and battery on a console
 (WS15). Photo-picker and
 cloud-media helpers on MediaStore (createDeleteRequest, getVersion,
@@ -390,8 +391,14 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     NetworkRequest, LinkProperties, callbacks and sticky
     CONNECTIVITY_ACTION from `platform_network_state` (nifm on the
     Switch; tests/apps/net flips the host state)
-  - [ ] TLS: javax.net.ssl (SSLSocketFactory, SSLContext, trust
-    managers, HttpsURLConnection) over mbedtls, with a CA bundle
+  - [x] TLS: javax.net.ssl (SSLSocketFactory, SSLContext, trust
+    managers, HttpsURLConnection) over mbedtls 2.28 (TLS 1.2), with
+    Android 15's CA set; X.509 certificates, CertificateFactory,
+    X500Principal, BKS/PKCS12/AndroidCAStore keystores
+    (tests/dex/X509Test, tests/tls/run_tls_test.sh with TlsTest)
+  - [x] SSLEngine, client mode (TlsTest drives one over a SocketChannel)
+  - [ ] TLS: session resumption, client certificates, server
+    sockets, TLS 1.3 (needs mbedtls 3), a handshake on hardware
   - [x] java.util.zip and java.util.jar (zlib natives; tests/dex/ZipTest
     against OpenJDK); HttpURLConnection asks for gzip and decodes it
     like OkHttp (tests/apps/net)
@@ -414,6 +421,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     keystore key pairs
   - [ ] ChaCha20-Poly1305, 3DES; certificates and CertificateFactory
     (with WS11 TLS)
+- [ ] WS18 web content
+  - [x] system browser for web intents with OAuth redirects (Switch web
+    applet; scripted on the host; tests/apps/web)
+  - [x] android.webkit API, WebView rendering HTML as styled text (no
+    JavaScript), CookieManager, URLUtil, MimeTypeMap (tests/apps/web)
+  - [ ] the browser applet on hardware (title takeover and applet mode)
+  - [ ] network images, forms, CSS layout; a real engine is out of reach
 - [ ] WS12 VM performance
 - [ ] WS14 AndroidX compatibility
 - [ ] docs/COMPATIBILITY.md with a tested APK corpus
@@ -580,6 +594,27 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-17 (WS18, touches WS10, WS4): new
+  `platform_open_url(url, callback, out_url, size)` in platform.h (Switch
+  web applets, a scripted browser on the host; new headless script
+  command `browser <url>|close`) and the static native
+  `android.app.SystemBrowser.nOpenUrl` (src/android/android_net.c, GIL
+  released, no Java fields read from C). ActivityThread sends unresolved
+  web ACTION_VIEW intents to it, and manifest `<data>` elements are now
+  parsed into intent filters. ARCHITECTURE 6.9 and 7.
+
+- 2026-10-11 (WS11, touches WS0 build, WS17, WS13 packaging): both
+  builds link mbedtls 2.28 (host: libmbedtls-dev, also in CI; Switch:
+  portlibs). New native file `src/native/java_ssl.c` (`libcore.ssl.Tls`
+  statics; no Java fields read from C). `platform_map_path` maps
+  `/system/etc/security/cacerts` to `build/toolchains/cacerts` (host) or
+  `romfs:/cacerts` (Switch; Makefile.switch copies the fetched set).
+  `KeyStore.getDefaultType()` is "BKS" as on Android. The built-in
+  provider adds CertificateFactory X.509, KeyStore BKS/PKCS12/
+  AndroidCAStore, SSLContext, TrustManagerFactory and KeyManagerFactory.
+  URL.openConnection for https returns HttpsURLConnectionImpl.
+  ARCHITECTURE 5.5, 5.6.
 
 - 2026-10-09 (WS17, touches WS10, WS6, WS4): new
   `platform_random_bytes(buf, len)` in platform.h (getrandom on the host,

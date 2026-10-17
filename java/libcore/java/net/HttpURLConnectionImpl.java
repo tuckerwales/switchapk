@@ -15,10 +15,10 @@ import java.util.TreeMap;
 import java.util.zip.GZIPInputStream;
 
 /**
- * HTTP/1.1 client behind URL.openConnection() for http URLs. One socket per request (no connection pool, no cache,
- * no gzip), redirects within the same scheme, fixed-length, chunked and read-until-close bodies. Error behaviour
- * follows Android's OkHttp-based implementation: getInputStream() throws FileNotFoundException for any status of
- * 400 or more and getErrorStream() returns that body.
+ * HTTP/1.1 client behind URL.openConnection() for http URLs (and inside HttpsURLConnectionImpl, over TLS, for https
+ * ones). One socket per request (no connection pool, no cache), redirects within the same scheme, fixed-length,
+ * chunked and read-until-close bodies. Error behaviour follows Android's OkHttp-based implementation:
+ * getInputStream() throws FileNotFoundException for any status of 400 or more and getErrorStream() returns that body.
  */
 final class HttpURLConnectionImpl extends HttpURLConnection {
     private static final int MAX_FOLLOW_UPS = 20;
@@ -35,9 +35,15 @@ final class HttpURLConnectionImpl extends HttpURLConnection {
     private InputStream body;
     private IOException failure;
     private int followUps;
+    private final HttpsURLConnectionImpl https; // the https connection this client serves, or null for http
 
     HttpURLConnectionImpl(URL u) {
+        this(u, null);
+    }
+
+    HttpURLConnectionImpl(URL u, HttpsURLConnectionImpl https) {
         super(u);
+        this.https = https;
     }
 
     public void connect() throws IOException {
@@ -49,10 +55,6 @@ final class HttpURLConnectionImpl extends HttpURLConnection {
     }
 
     private void openSocket() throws IOException {
-        if (url.getProtocol().equals("https")) {
-            // TODO(WS11): TLS. Until then https fails the way a handshake failure does.
-            throw new javax.net.ssl.SSLHandshakeException("TLS is not supported yet: " + url.getHost());
-        }
         String host = url.getHost();
         if (host.isEmpty()) {
             throw new UnknownHostException("No host in " + url);
@@ -66,10 +68,17 @@ final class HttpURLConnectionImpl extends HttpURLConnection {
                 s.connect(new InetSocketAddress(a, port), getConnectTimeout());
                 s.setSoTimeout(getReadTimeout());
                 s.setTcpNoDelay(true);
-                socket = s;
-                in = new BufferedInputStream(s.getInputStream(), 8192);
-                out = s.getOutputStream();
+                if (https != null) {
+                    socket = https.secure(s, host, port);
+                } else {
+                    socket = s;
+                }
+                in = new BufferedInputStream(socket.getInputStream(), 8192);
+                out = socket.getOutputStream();
                 return;
+            } catch (javax.net.ssl.SSLException e) {
+                s.close();
+                throw e; // a TLS failure is about the server, not this address: Android does not try the next one
             } catch (IOException e) {
                 s.close();
                 last = e;

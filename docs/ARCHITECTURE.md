@@ -312,13 +312,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   up to 20 (303, and 301/302 after POST, become GET; 307/308 resend a
   buffered body). Errors follow Android's OkHttp-based client:
   `getInputStream` throws FileNotFoundException for any status >= 400
-  and `getErrorStream` returns that body. https throws
-  `SSLHandshakeException` until TLS exists; `javax.net.ssl` holds only
-  the exception classes, `TrustManager` and a `TrustManagerFactory`
-  whose `getInstance` throws NoSuchAlgorithmException (so clients with
-  their own TLS, such as ktor, fail with a catchable exception rather
-  than NoClassDefFoundError). `javax.net.SocketFactory` and
-  `ServerSocketFactory` return plain sockets.
+  and `getErrorStream` returns that body. https URLs get
+  `HttpsURLConnectionImpl`, which runs the same client over a TLS socket
+  (5.6) and forwards every URLConnection method to it.
+  `javax.net.SocketFactory` and `ServerSocketFactory` return plain
+  sockets.
 - `android.net.ConnectivityManager` (`Context.CONNECTIVITY_SERVICE`,
   one instance per process) reads `platform_network_state` through
   `ConnectivityManager.nGetState()` (`src/android/android_net.c`: bit 0
@@ -465,13 +463,86 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   and OAEP ciphers, CRT with blinding), EC on P-256/384/521 (ECDSA,
   ECDH) and DH (MODP groups), over `BigInteger` with native multiply,
   division and Montgomery modPow (`src/native/java_math.c`). Not there
-  yet: DSA, X25519/Ed25519, ChaCha20, 3DES, certificates and
-  CertificateFactory (with TLS, WS11). The specs and
+  yet: DSA, X25519/Ed25519, ChaCha20, 3DES, RSASSA-PSS. The specs and
   interfaces for them exist, so third-party providers (BouncyCastle)
   can supply the algorithms.
 - `tests/dex/CryptoTest.java` checks the provider against OpenJDK with
   published vectors; `tests/apps/keystore` checks the keystore across
   two runs.
+
+- X.509 (WS11): `CertificateFactory` "X.509" (`libcore.crypto.X509Factory`:
+  DER, PEM with text around it, PKCS#7 bundles, PkiPath/PKCS7 cert
+  paths) makes `X509CertImpl`, which parses certificates in Java and
+  returns exactly the input DER from `getEncoded()`; `getPublicKey()` is
+  an RSA or EC key whose encoding is the certificate's SPKI byte for
+  byte (pinning hashes it). `X500Principal` keeps the DER and formats
+  RFC 2253, RFC 1779 and canonical names as OpenJDK does
+  (`libcore.crypto.X500Name`). KeyStores: "BKS" (the default type, as on
+  Android; loads BouncyCastle BKS files' certificates and unprotected
+  keys) and "PKCS12" are in-memory stores (`MemoryKeyStore`; no store()
+  and no PKCS#12 file loading yet); "AndroidCAStore" lists
+  `$ANDROID_ROOT/etc/security/cacerts` as `system:<file>` aliases,
+  parsing lazily with a process-wide cache. `tests/dex/X509Test.java`
+  matches OpenJDK.
+
+### 5.6 TLS (WS11)
+
+- Engine: `src/native/java_ssl.c` (`libcore.ssl.Tls` natives) runs TLS
+  1.2 client sessions on mbedtls 2.28 (host: the system libmbedtls;
+  Switch: the devkitPro portlib). A session never touches a socket: its
+  record layer reads and writes two memory buffers, Java feeds it what
+  it read from the transport (`nFeed`) and sends what it produced
+  (`nPending`/`nDrain`). Socket I/O, timeouts and layered sockets stay in
+  Java, and the same session can back SSLEngine later. Each session has
+  its own CTR_DRBG seeded from `platform_random_bytes`. Handshake steps,
+  record crypto and chain verification release the GIL; every call on a
+  session is serialized by its Java owner.
+- Trust is decided by Java TrustManagers, as on Android: sessions run
+  with `MBEDTLS_SSL_VERIFY_NONE` and `nHandshake` returns NEED_VERIFY
+  right after the server's Certificate message, before the client sends
+  its key exchange. `SslSocketImpl` builds the X509Certificate chain,
+  calls the context's trust manager (the 3-argument
+  `X509ExtendedTrustManager` form when it is one) and then `nVerified`,
+  or sends a fatal alert and throws SSLHandshakeException. mbedtls still
+  checks the ServerKeyExchange signature with the certificate's key.
+- The platform trust manager (`libcore.ssl.TrustManagerImpl`, from
+  TrustManagerFactory "PKIX") verifies with mbedtls (`nVerifyChain`:
+  path building, signatures, validity dates, basic constraints, key
+  usage and serverAuth) against anchors parsed once (`nAnchors`): the
+  given KeyStore's certificates, or Android's system CA set for a null
+  KeyStore. That set is AOSP's `system/ca-certificates` for Android 15
+  (145 PEM files), fetched by `tools/fetch_toolchains.py sdk` into
+  `build/toolchains/cacerts` and mapped to
+  `/system/etc/security/cacerts` (romfs on the Switch). Failures carry
+  Android's messages ("Trust anchor for certification path not
+  found."). Endpoint identification "HTTPS" in the socket's
+  SSLParameters checks the host name too.
+- `SSLContext` "TLS" (aliases SSL, TLSv1 to TLSv1.3) and "Default" come
+  from the built-in "AndroidOpenSSL" provider (`libcore.ssl.SslServices`),
+  as do TrustManagerFactory and KeyManagerFactory "PKIX". `SslSocketImpl`
+  wraps a transport socket (the app's, or one it connects itself) and
+  delegates the Socket methods to it; SNI is the host name the socket
+  was made with, ALPN comes from `SSLParameters.setApplicationProtocols`
+  and `getApplicationProtocol()` reports the result.
+  `android.net.ssl.SSLSockets` and `android.net.http.X509TrustManagerExtensions`
+  (the verified path) are there for OkHttp.
+- HttpsURLConnection checks the host with its HostnameVerifier after the
+  handshake (default `libcore.ssl.HostnameVerifierImpl`, OkHostnameVerifier's
+  rules: subjectAltName DNS and IP entries, one-label wildcards, no
+  common name), and throws SSLPeerUnverifiedException like Android.
+- `SSLEngine` (`SslEngineImpl`, client mode) drives the same session:
+  `unwrap` takes one whole record per call (BUFFER_UNDERFLOW, nothing
+  consumed, until one is there; BUFFER_OVERFLOW unless the destination
+  holds the record) so no plaintext waits inside the engine, `wrap`
+  turns at most 16 KiB of application data into records, certificates
+  are checked synchronously in `unwrap` (no delegated tasks), and
+  FINISHED is reported once.
+- Not yet: TLS 1.3 (mbedtls 2.28), server sockets and server-mode
+  engines, session resumption, client certificates.
+- Tests: `tests/tls/run_tls_test.sh` starts `tests/tls/server.py`
+  (Python ssl, fixed local ports 47441-47444, test PKI from
+  `tests/tls/gen_certs.py`) and runs `tests/dex/TlsTest.java` against the
+  reference JVM and switchapk.
 
 ## 6. Android framework (java/framework)
 
@@ -1534,6 +1605,53 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   (multi-touch), gamepad, Wi-Fi, audio output, both screen orientations
   and the accelerometer and gyroscope when the sensor service lists them.
 
+### 6.9 Web content (WS18)
+
+- No browser engine runs inside switchapk. Two things stand in for one.
+- System browser: `ActivityThread.startActivity` hands ACTION_VIEW on an
+  http(s) URL that nothing in the app resolves (Custom Tabs, AppAuth,
+  "open in browser") to `android.app.SystemBrowser`. The top activity
+  pauses and stops as if another app's activity came up, and
+  `platform_open_url` runs on a "browser" thread with a callback prefix:
+  the request's `redirect_uri` when the app handles it, else the app's
+  first BROWSABLE non-web scheme. A callback URL comes back as a
+  BROWSABLE ACTION_VIEW intent to the activity that takes it (OAuth
+  redirect receivers, which typically reach their caller with
+  CLEAR_TOP|SINGLE_TOP); otherwise the top activity resumes, which
+  AppAuth reads as a cancel. PackageManager reports a `com.android.browser`
+  package (queryIntentActivities for web URLs, getPackageInfo with a
+  signature) so apps that look for a browser find one.
+- `android.webkit.WebView` renders HTML as styled text in a ScrollView:
+  `<head>`, scripts, styles and comments are dropped, lists, `<pre>`,
+  tables (as rows) and headings become spans through `Html.fromHtml`,
+  links become ClickableSpans that navigate (shouldOverrideUrlLoading
+  first), images load from assets, files and data: URLs (not the
+  network). Pages come from `file:///android_asset/`,
+  `file:///android_res/`, files, content: and data: URLs, `loadData` /
+  `loadDataWithBaseURL`, and http(s) through HttpURLConnection with
+  CookieManager cookies, the settings' user agent and manual redirects
+  (each one offered to shouldOverrideUrlLoading, so OAuth redirects
+  caught inside a WebView work). Callbacks follow Android's order:
+  onPageStarted, progress, onReceivedTitle, onPageCommitVisible,
+  onPageFinished; errors go to both onReceivedError forms and show a
+  "Webpage not available" page. Non-text responses go to the
+  DownloadListener. There is no JavaScript: `evaluateJavascript` answers
+  "null" and JavaScript interfaces are kept but never called. History,
+  saveState/restoreState, find, HitTestResult for the last link.
+- The rest of android.webkit is the full API 35 surface: WebSettings
+  (`WebSettingsImpl`, Chromium's defaults for API 29), the clients,
+  CookieManager (`CookieManagerImpl`, RFC 6265 in memory: domains,
+  paths, expiry, Secure, prefixes), URLUtil, MimeTypeMap (Android 10's
+  table), back/forward lists, handlers and singletons;
+  android.net.http.SslError and SslCertificate.
+- Manifest `<data>` elements are parsed into intent filters (schemes,
+  hosts with `*.` wildcards, ports, path, pathPrefix and pathPattern via
+  `android.os.PatternMatcher`, MIME types); before, filters had no data
+  and so never matched an intent that carried any.
+- Test: `tests/apps/web` (asset page, link tap, back, loadDataWithBaseURL,
+  cookies, URLUtil and MimeTypeMap, then two browser logins: a redirect
+  and a cancel).
+
 ## 7. Platform layer (src/platform/platform.h)
 
 Single C interface implemented once per target:
@@ -1547,6 +1665,16 @@ Single C interface implemented once per target:
   `fn` runs after every wake and push, without platform locks held (the
   main ALooper's wake, 6.4)
 - text: `platform_request_text(id, initial, hint, input_type, max_len)`
+- browser (WS18): `platform_open_url(url, callback, out_url, size)`
+  shows `url` and blocks until the browser closes (callers use their own
+  thread). PLATFORM_BROWSER_CALLBACK when it reached a URL starting with
+  `callback` (copied to `out_url`), CLOSED when the user left it,
+  UNAVAILABLE when there is none. Switch: the WebPage applet with
+  `webConfigSetCallbackUrl` when running as an Application (title
+  takeover; it needs the application's whitelist), else the WifiWebAuth
+  browser, which cannot report a URL. Headless: the script plays the
+  browser (`browser <url>` navigates, `browser close` closes) and every
+  request is logged.
 - entropy (WS17): `platform_random_bytes(buf, len)` fills `buf` with
   cryptographically secure bytes and returns false if it cannot.
   Headless uses getrandom(2) (`/dev/urandom` before Linux 3.17); the

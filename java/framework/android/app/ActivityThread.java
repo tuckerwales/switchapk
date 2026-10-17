@@ -116,7 +116,15 @@ public final class ActivityThread {
                 throw new android.content.ActivityNotFoundException("Unable to find explicit activity class "
                         + intent.getComponent().toShortString() + "; have you declared this activity in your AndroidManifest.xml?");
             }
-            // Implicit intents for other apps (browser, mail, settings) have no handler here.
+            if (SystemBrowser.handles(intent)) {
+                final ActivityRecord from = caller != null ? findRecord(caller) : null;
+                final Intent web = new Intent(intent);
+                post(new Runnable() {
+                    public void run() { openBrowser(from, web); }
+                });
+                return;
+            }
+            // Implicit intents for other apps (mail, settings) have no handler here.
             Log.w(TAG, "No activity for " + intent);
             return;
         }
@@ -298,6 +306,43 @@ public final class ActivityThread {
             return;
         }
         launch(caller, parsed, intent, requestCode, resultWho, top);
+    }
+
+    private static boolean sBrowserOpen;
+
+    /** The platform browser comes up like another app's activity: the top activity pauses and stops under it. */
+    private static void openBrowser(ActivityRecord caller, Intent intent) {
+        if (sShutdown || sBrowserOpen) return;
+        sBrowserOpen = true;
+        ActivityRecord prev = top();
+        if (prev != null) {
+            if ((intent.getFlags() & Intent.FLAG_ACTIVITY_NO_USER_ACTION) == 0 && prev.activity.mResumed) {
+                prev.activity.performUserLeaving();
+            }
+            stopRecord(prev, true);
+        }
+        String callback = SystemBrowser.callbackFor(intent.getData());
+        SystemBrowser.open(intent.getDataString(), callback, new SystemBrowser.Listener() {
+            public void closed(final String callbackUrl, boolean available) {
+                post(new Runnable() {
+                    public void run() { browserClosed(callbackUrl); }
+                });
+            }
+        });
+    }
+
+    /** Back from the browser: a callback URL goes to the activity that takes it, else the top activity resumes. */
+    private static void browserClosed(String callbackUrl) {
+        sBrowserOpen = false;
+        if (sShutdown) return;
+        Intent redirect = callbackUrl != null ? SystemBrowser.redirectIntent(callbackUrl) : null;
+        ParsedActivity parsed = redirect != null ? resolveActivity(redirect) : null;
+        if (parsed != null) {
+            redirect.setComponent(new ComponentName(parsed.info.packageName, parsed.info.name));
+            handleStartActivity(null, parsed, redirect, -1, null);
+            return;
+        }
+        resumeTop();
     }
 
     /** Creates, starts and resumes a new activity on top; prev (the old top) is paused first and stopped after. */
@@ -799,6 +844,8 @@ public final class ActivityThread {
                     } else if ("category".equals(name) && filter != null) {
                         String category = attrString(parser, android.R.attr.name, "name");
                         if (category != null) filter.addCategory(category);
+                    } else if ("data".equals(name) && filter != null) {
+                        readFilterData(filter, parser);
                     }
                 } else if (type == XmlPullParser.END_TAG) {
                     String name = parser.getName();
@@ -847,6 +894,28 @@ public final class ActivityThread {
     }
 
     /** An activity-alias runs its target's class with the target's attributes (PackageParser.parseActivityAlias). */
+    /** A filter's &lt;data&gt; element; as in AOSP, the parts of all its data elements combine. */
+    private static void readFilterData(IntentFilter filter, android.content.res.XmlResourceParser parser) {
+        String scheme = attrString(parser, android.R.attr.scheme, "scheme");
+        if (scheme != null) filter.addDataScheme(scheme);
+        String host = attrString(parser, android.R.attr.host, "host");
+        if (host != null) filter.addDataAuthority(host, attrString(parser, android.R.attr.port, "port"));
+        String path = attrString(parser, android.R.attr.path, "path");
+        if (path != null) filter.addDataPath(path, android.os.PatternMatcher.PATTERN_LITERAL);
+        path = attrString(parser, android.R.attr.pathPrefix, "pathPrefix");
+        if (path != null) filter.addDataPath(path, android.os.PatternMatcher.PATTERN_PREFIX);
+        path = attrString(parser, android.R.attr.pathPattern, "pathPattern");
+        if (path != null) filter.addDataPath(path, android.os.PatternMatcher.PATTERN_SIMPLE_GLOB);
+        String mime = attrString(parser, android.R.attr.mimeType, "mimeType");
+        if (mime != null) {
+            try {
+                filter.addDataType(mime);
+            } catch (IntentFilter.MalformedMimeTypeException e) {
+                Log.w(TAG, "bad mimeType " + mime + " in the manifest");
+            }
+        }
+    }
+
     private static void resolveAliases() {
         for (int i = 0; i < sActivities.size(); i++) {
             ActivityInfo alias = sActivities.get(i).info;

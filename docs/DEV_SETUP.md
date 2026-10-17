@@ -2,7 +2,9 @@
 
 ## Requirements (host)
 
-- Linux (x86-64 or AArch64), gcc or clang, make, zlib headers, pthreads
+- Linux (x86-64 or AArch64), gcc or clang, make, zlib headers, pthreads,
+  mbedtls 2.28 headers and libraries for TLS (`apt install libmbedtls-dev`;
+  the Switch build uses the devkitPro portlib)
 - JDK 17+ (`javac`, `java`, `javap`) for building the Java side and the
   VM conformance tests
 - Python 3.8+
@@ -12,12 +14,13 @@
   unavailable" instead of rendering. `SWITCHAPK_EGL_FBO=1` makes EGL
   surfaces framebuffer objects as on the Switch (whose Mesa has no
   pbuffers); run the gles and native samples both ways after EGL changes.
-- Internet access to dl.google.com, sqlite.org and Docker Hub (for devkitPro)
+- Internet access to dl.google.com, android.googlesource.com (font and CA
+  certificates), sqlite.org and Docker Hub (for devkitPro)
 
 ## Fetch toolchains
 
 ```
-python3 tools/fetch_toolchains.py sdk        # build/toolchains/sdk/{aapt2,android.jar}, build/toolchains/framework-res.apk
+python3 tools/fetch_toolchains.py sdk        # build/toolchains/sdk/{aapt2,android.jar}, framework-res.apk, fonts, cacerts
 python3 tools/fetch_toolchains.py sqlite     # third_party/sqlite/sqlite3.{c,h}
 python3 tools/fetch_toolchains.py devkitpro  # build/toolchains/devkitpro/opt/devkitpro (large; Docker Hub may rate-limit)
 export DEVKITPRO=$PWD/build/toolchains/devkitpro/opt/devkitpro

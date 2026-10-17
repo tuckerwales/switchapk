@@ -100,6 +100,13 @@ void platform_battery_state(PlatformBattery *b);
 void platform_vibrate(int ms, int amplitude);
 /* Fills buf with len cryptographically secure random bytes (OS entropy). Returns false on failure. */
 bool platform_random_bytes(void *buf, size_t len);
+/* Shows url in the system browser and blocks until it closes (call it off the main thread). When the browser
+ * navigates to a URL starting with callback (may be NULL), it closes and that URL is copied to out_url.
+ * Returns 1 for a callback URL, 0 when the user closed the browser, -1 when no browser is available. */
+#define PLATFORM_BROWSER_CALLBACK 1
+#define PLATFORM_BROWSER_CLOSED 0
+#define PLATFORM_BROWSER_UNAVAILABLE (-1)
+int platform_open_url(const char *url, const char *callback, char *out_url, size_t out_size);
 /* Root of the writable data tree and the location of bundled files. */
 const char *platform_data_root(void);
 const char *platform_framework_path(void); /* directory holding framework.dex / framework-res.apk */

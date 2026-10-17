@@ -51,6 +51,9 @@ static uint64_t g_frames;
 static char *g_script_path;
 static char *g_shot_dir;
 static char *g_pending_text;
+/* the script's answer for the next (or the open) browser: a URL, "" for closed; g_browser_set says one is there */
+static char *g_browser_answer;
+static bool g_browser_set;
 static int g_pending_text_id = -1;
 static bool g_text_requested;
 
@@ -202,6 +205,28 @@ void platform_request_text(int id, const char *initial, const char *hint, int in
     } else {
         (void)initial;
     }
+}
+
+/* ---- browser ------------------------------------------------------------------------ */
+
+/* The host has no browser: the script plays it ("browser <url>" navigates to url, "browser close" closes), and
+ * every request is logged so scripts and checks can see what an app opened. */
+int platform_open_url(const char *url, const char *callback, char *out_url, size_t out_size) {
+    LOGI("browser open %s (callback %s)", url ? url : "", callback ? callback : "none");
+    pthread_mutex_lock(&g_lock);
+    while (!g_browser_set) pthread_cond_wait(&g_cond, &g_lock);
+    char *answer = g_browser_answer;
+    g_browser_answer = NULL;
+    g_browser_set = false;
+    pthread_mutex_unlock(&g_lock);
+    int r = PLATFORM_BROWSER_CLOSED;
+    if (answer && *answer && callback && !strncmp(answer, callback, strlen(callback))) {
+        snprintf(out_url, out_size, "%s", answer);
+        r = PLATFORM_BROWSER_CALLBACK;
+    }
+    LOGI("browser closed%s%s", r == PLATFORM_BROWSER_CALLBACK ? " at " : "", r == PLATFORM_BROWSER_CALLBACK ? answer : "");
+    free(answer);
+    return r;
 }
 
 /* ---- script runner ---------------------------------------------------------------- */
@@ -417,6 +442,13 @@ static void *script_thread(void *arg) {
                     ev.text = sa_strdup(rest);
                     platform_push_event(&ev);
                 }
+            } else if (!strcmp(cmd, "browser")) {
+                pthread_mutex_lock(&g_lock);
+                free(g_browser_answer);
+                g_browser_answer = sa_strdup(strcmp(rest, "close") ? rest : "");
+                g_browser_set = true;
+                pthread_cond_broadcast(&g_cond);
+                pthread_mutex_unlock(&g_lock);
             } else if (!strcmp(cmd, "screen")) {
                 int w, h, dpi;
                 if (sscanf(rest, "%dx%d@%d", &w, &h, &dpi) == 3 && w > 0 && h > 0 && dpi > 0) {

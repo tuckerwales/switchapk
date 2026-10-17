@@ -42,6 +42,8 @@ final class RsaKeys {
     static final class Public implements RSAPublicKey {
         private static final long serialVersionUID = 1L;
         final BigInteger n, e;
+        /** The X.509 encoding this key was parsed from, returned as is (certificate pinning hashes it). */
+        byte[] encoding;
 
         Public(BigInteger n, BigInteger e) throws InvalidKeySpecException {
             if (n == null || e == null || n.signum() <= 0 || e.signum() <= 0) throw new InvalidKeySpecException("Invalid RSA public key");
@@ -66,6 +68,7 @@ final class RsaKeys {
         }
 
         public byte[] getEncoded() {
+            if (encoding != null) return encoding.clone();
             return Der.seq(ALG_ID, Der.bits(Der.seq(Der.integer(n), Der.integer(e))));
         }
 
@@ -206,14 +209,17 @@ final class RsaKeys {
 
     static RSAPublicKey parsePublic(byte[] encoded) throws InvalidKeySpecException {
         try {
-            Der.Reader spki = new Der.Reader(encoded).sequence();
+            Der.Reader outer = new Der.Reader(encoded);
+            Der.Reader spki = outer.sequence();
             Der.Reader alg = spki.sequence();
             if (!RSA_OID.equals(alg.oid())) throw new InvalidKeySpecException("Not an RSA key");
             byte[] key = spki.bits();
             Der.Reader r = new Der.Reader(key).sequence();
             BigInteger n = r.integer(), e = r.integer();
             r.end();
-            return new Public(n, e);
+            Public k = new Public(n, e);
+            if (!outer.more()) k.encoding = encoded.clone();
+            return k;
         } catch (IOException e) {
             throw new InvalidKeySpecException("Bad X.509 RSA key: " + e.getMessage(), e);
         }

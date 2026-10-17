@@ -23,12 +23,12 @@ CFLAGS := -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-missing-fie
           -Isrc -Ithird_party -I$(DEVKITPRO)/libnx/include -I$(DEVKITPRO)/portlibs/switch/include
 ASFLAGS := $(ARCH) -D__SWITCH__
 LDFLAGS := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(BUILD)/switchapk.map
-LIBS := -L$(DEVKITPRO)/portlibs/switch/lib -L$(DEVKITPRO)/libnx/lib -lz -lnx -lm
+LIBS := -L$(DEVKITPRO)/portlibs/switch/lib -L$(DEVKITPRO)/libnx/lib -lmbedtls -lmbedx509 -lmbedcrypto -lz -lnx -lm
 # OpenGL ES (WS8) through Mesa (switch-mesa portlib, C++: needs libstdc++) when installed; without it GL
 # reports itself unavailable
 ifneq ($(wildcard $(DEVKITPRO)/portlibs/switch/lib/libEGL.a),)
 CFLAGS += -DSA_HAVE_EGL
-LIBS := -L$(DEVKITPRO)/portlibs/switch/lib -L$(DEVKITPRO)/libnx/lib -lEGL -lglapi -ldrm_nouveau -lstdc++ -lz -lnx -lm
+LIBS := -L$(DEVKITPRO)/portlibs/switch/lib -L$(DEVKITPRO)/libnx/lib -lEGL -lglapi -ldrm_nouveau -lstdc++ -lmbedtls -lmbedx509 -lmbedcrypto -lz -lnx -lm
 endif
 
 SRCS := $(filter-out src/app/main_host.c src/platform/platform_headless.c, \
@@ -47,7 +47,7 @@ all: $(BUILD)/switchapk.nro
 MONO_FONT := build/toolchains/fonts/DroidSansMono.ttf
 
 $(BUILD)/switchapk.nro: $(BUILD)/switchapk.elf $(BUILD)/switchapk.nacp $(BUILD)/icon.jpg $(ROMFS)/framework.dex \
-                        $(ROMFS)/framework-res.apk $(ROMFS)/fonts/DroidSansMono.ttf
+                        $(ROMFS)/framework-res.apk $(ROMFS)/fonts/DroidSansMono.ttf $(ROMFS)/cacerts/.stamp
 	$(TOOLS)/elf2nro $< $@ --icon=$(BUILD)/icon.jpg --nacp=$(BUILD)/switchapk.nacp --romfsdir=$(ROMFS)
 
 # The hbmenu icon: the project logo's central part, scaled by the host build (ui_draw_app_icon, which draws
@@ -99,6 +99,14 @@ $(ROMFS)/fonts/DroidSansMono.ttf: $(MONO_FONT)
 
 $(MONO_FONT):
 	python3 tools/fetch_toolchains.py sdk
+
+# Android's system CA certificates (TLS trust anchors), served as /system/etc/security/cacerts
+CACERTS := build/toolchains/cacerts
+$(ROMFS)/cacerts/.stamp: $(wildcard $(CACERTS)/*.0)
+	@test -d $(CACERTS) || python3 tools/fetch_toolchains.py sdk
+	@mkdir -p $(dir $@)
+	cp $(CACERTS)/*.0 $(dir $@)
+	touch $@
 
 $(FRAMEWORK_DEX):
 	@echo "build/java/framework.dex is missing: run make (the host build) first" && false

@@ -21,7 +21,7 @@ public final class Security {
     static {
         providers.add(new libcore.crypto.BuiltinProvider());
         props.put("securerandom.source", "file:/dev/urandom");
-        props.put("keystore.type", "PKCS12");
+        props.put("keystore.type", "BKS");
     }
 
     private Security() {

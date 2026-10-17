@@ -27,6 +27,7 @@ public class ApplicationPackageManager extends PackageManager {
 
     @Override
     public PackageInfo getPackageInfo(String packageName, int flags) throws NameNotFoundException {
+        if (SystemBrowser.PACKAGE.equals(packageName)) return SystemBrowser.packageInfo();
         if (!ours(packageName)) throw new NameNotFoundException(packageName);
         PackageInfo pi = new PackageInfo();
         pi.packageName = packageName;
@@ -57,6 +58,7 @@ public class ApplicationPackageManager extends PackageManager {
 
     @Override
     public ApplicationInfo getApplicationInfo(String packageName, int flags) throws NameNotFoundException {
+        if (SystemBrowser.PACKAGE.equals(packageName)) return SystemBrowser.applicationInfo();
         if (!ours(packageName)) throw new NameNotFoundException(packageName);
         return ActivityThread.sAppInfo;
     }
@@ -148,7 +150,9 @@ public class ApplicationPackageManager extends PackageManager {
 
     @Override
     public List<ResolveInfo> queryIntentActivities(Intent intent, int flags) {
-        return queryActivities(ActivityThread.sActivities, intent);
+        List<ResolveInfo> out = queryActivities(ActivityThread.sActivities, intent);
+        if (SystemBrowser.handles(intent)) out.add(SystemBrowser.resolveInfo());
+        return out;
     }
 
     @Override

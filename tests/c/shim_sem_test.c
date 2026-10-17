@@ -2,7 +2,7 @@
  * Checks bionic libc shims (shim_runtime.c, shim_libc.c) through shim_lookup: sem_* (counting, trywait,
  * timedwait timeouts, a cross-thread post) and fortified sprintf with an unknown object size.
  *   make && cc -Isrc -pthread tests/c/shim_sem_test.c $(find build/host -name '*.o' ! -name 'main_host.o') \
- *     -lz -lm -ldl -o build/shim_sem_test \
+ *     -lmbedtls -lmbedx509 -lmbedcrypto -lz -lm -ldl -o build/shim_sem_test \
  *     && build/shim_sem_test
  */
 #include "nativeloader/nativeloader.h"

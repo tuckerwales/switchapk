@@ -141,11 +141,36 @@ public final class BuiltinProvider extends Provider {
             }
         });
 
+        // X.509 certificates and key stores
+        add(new Svc(this, "CertificateFactory", "X.509", X509Factory.class, list("X509"), null, null) {
+            Object create() {
+                return new X509Factory();
+            }
+        });
+        add(new Svc(this, "KeyStore", "BKS", MemoryKeyStore.class, null, null, null) {
+            Object create() {
+                return new MemoryKeyStore(false);
+            }
+        });
+        add(new Svc(this, "KeyStore", "PKCS12", MemoryKeyStore.class, null, null, null) {
+            Object create() {
+                return new MemoryKeyStore(true);
+            }
+        });
+        add(new Svc(this, "KeyStore", "AndroidCAStore", AndroidCAStore.class, null, null, null) {
+            Object create() {
+                return new AndroidCAStore();
+            }
+        });
+
         add(new Svc(this, "SecureRandom", "NativePRNG", NativePrng.class, list("SHA1PRNG", "DEFAULT"), null, null) {
             Object create() {
                 return new NativePrng();
             }
         });
+
+        // TLS (SSLContext, TrustManagerFactory, KeyManagerFactory) from libcore.ssl.
+        for (Provider.Service s : libcore.ssl.SslServices.services(this)) putService(s);
     }
 
     private static List<String> list(String... s) {

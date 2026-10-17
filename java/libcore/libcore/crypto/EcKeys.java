@@ -47,6 +47,8 @@ final class EcKeys {
         private static final long serialVersionUID = 1L;
         final EcCurve curve;
         final ECPoint w;
+        /** The X.509 encoding this key was parsed from, returned as is (certificate pinning hashes it). */
+        byte[] encoding;
 
         Public(EcCurve curve, ECPoint w) {
             this.curve = curve;
@@ -70,6 +72,7 @@ final class EcKeys {
         }
 
         public byte[] getEncoded() {
+            if (encoding != null) return encoding.clone();
             return Der.seq(algId(curve), Der.bits(curve.encodePoint(w)));
         }
 
@@ -185,11 +188,14 @@ final class EcKeys {
 
     static Public parsePublic(byte[] encoded) throws InvalidKeySpecException {
         try {
-            Der.Reader spki = new Der.Reader(encoded).sequence();
+            Der.Reader outer = new Der.Reader(encoded);
+            Der.Reader spki = outer.sequence();
             Der.Reader alg = spki.sequence();
             if (!EC_OID.equals(alg.oid())) throw new InvalidKeySpecException("Not an EC key");
             EcCurve c = curveByOid(alg.oid());
-            return new Public(c, c.decodePoint(spki.bits()));
+            Public k = new Public(c, c.decodePoint(spki.bits()));
+            if (!outer.more()) k.encoding = encoded.clone();
+            return k;
         } catch (IOException e) {
             throw new InvalidKeySpecException("Bad X.509 EC key: " + e.getMessage(), e);
         } catch (InvalidKeyException e) {

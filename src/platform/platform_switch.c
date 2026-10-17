@@ -529,6 +529,43 @@ bool platform_random_bytes(void *buf, size_t len) {
     return true;
 }
 
+/* The web applet: WebPage (returns the callback URL) needs the application whitelist, so it only runs when
+ * switchapk is an Application (title takeover); from the album applet the WifiWebAuth browser can show a page but
+ * reports no URL, so callbacks are not possible there. */
+int platform_open_url(const char *url, const char *callback, char *out_url, size_t out_size) {
+    if (!url) return PLATFORM_BROWSER_UNAVAILABLE;
+    AppletType type = appletGetAppletType();
+    if (type == AppletType_Application || type == AppletType_SystemApplication) {
+        WebCommonConfig config;
+        WebCommonReply reply;
+        Result rc = webPageCreate(&config, url);
+        if (R_SUCCEEDED(rc) && callback && *callback) rc = webConfigSetCallbackUrl(&config, callback);
+        if (R_SUCCEEDED(rc)) rc = webConfigSetWhitelist(&config, "^.*$");
+        if (R_SUCCEEDED(rc)) rc = webConfigShow(&config, &reply);
+        if (R_FAILED(rc)) {
+            LOGW("web applet failed: 0x%x", rc);
+            return PLATFORM_BROWSER_UNAVAILABLE;
+        }
+        WebExitReason reason = WebExitReason_ExitButton;
+        webReplyGetExitReason(&reply, &reason);
+        if (reason == WebExitReason_LastUrl && out_url && out_size) {
+            size_t n = 0;
+            if (R_SUCCEEDED(webReplyGetLastUrl(&reply, out_url, out_size, &n)) && n > 0) {
+                if (!callback || !strncmp(out_url, callback, strlen(callback))) return PLATFORM_BROWSER_CALLBACK;
+            }
+        }
+        return PLATFORM_BROWSER_CLOSED;
+    }
+    WebWifiConfig wifi;
+    webWifiCreate(&wifi, NULL, url, (Uuid){0}, 0);
+    Result rc = webWifiShow(&wifi, NULL);
+    if (R_FAILED(rc)) {
+        LOGW("wifi web applet failed: 0x%x", rc);
+        return PLATFORM_BROWSER_UNAVAILABLE;
+    }
+    return PLATFORM_BROWSER_CLOSED;
+}
+
 void platform_vibrate(int ms, int amplitude) {
     pthread_mutex_lock(&g_motion_lock);
     g_rumble_until = ms > 0 ? (int64_t)sa_time_ns() + (int64_t)ms * 1000000 : 0;

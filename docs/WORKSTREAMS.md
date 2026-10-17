@@ -41,12 +41,13 @@ duplicating work.
 | WS8 | OpenGL ES + EGL: bindings, GLSurfaceView, EGL window, compositing | WS0, WS10 for device | in progress (bindings, EGL, GLSurfaceView, window surfaces and tests/apps/gles done on host Mesa; FBO surfaces for switch-mesa; Switch GL on hardware, GLES1 verification, EGL15 syncs/images and SurfaceTexture left) | session 22, 2026-10-09 |
 | WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, bionic shim, JNI_OnLoad, System.load/loadLibrary and tests/apps/ndk done on x86-64 and AArch64 Linux; Switch code memory via svcMapProcessCodeMemory done, not run on hardware; NativeActivity, ANativeWindow and native EGL window surfaces done on the host, tests/apps/native; OpenSL ES buffer queue is in the shim and shares the WS7 mixer; ALooper, AInputQueue and AConfiguration done on the host (tests/apps/input); newlib struct translation, ALooper/input on the Switch (no pipe/poll in newlib) and AAudio left; session 25: shim_runtime.c (C++ runtime, locale, wide chars, semaphores, rwlocks, dl_iterate_phdr) done; shim_posix.c, the Switch tables shim_bsd.c/shim_newlib.c/vfd.c (not run on hardware) and in-process executables for ProcessBuilder (spawn.c, tests/apps/procs) done 2026-10-11) | session 25, 2026-10-11 (exec, Switch shim); session 25, 2026-10-09 (corpus shim gaps); session 16, 2026-10-07 |
 | WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO boots on hardware; launcher labels and icons landed (tests/apps/labeled); home screen redesign landed on the host (tests/launcher), not yet on hardware; audio, rumble, 1080p docked remain) | session 27, 2026-10-10 (home screen); session 7, 2026-10-02 |
-| WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | in progress (sockets, DNS, UDP, HttpURLConnection over HTTP/1.1 with transparent gzip, and ConnectivityManager done on the host (tests/dex/NetTest, tests/apps/net); java.util.zip and java.util.jar done (tests/dex/ZipTest); NIO selectors and socket channels done (tests/dex/SelectorTest, session 25); TLS, pooling/cookies and a device run left) | session 23, 2026-10-09 (zip, gzip); session 17, 2026-10-07 |
+| WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | in progress (sockets, DNS, UDP, HttpURLConnection over HTTP/1.1 with transparent gzip, and ConnectivityManager done on the host (tests/dex/NetTest, tests/apps/net); java.util.zip and java.util.jar done (tests/dex/ZipTest); NIO selectors and socket channels done (tests/dex/SelectorTest, session 25); TLS 1.2 client sockets, SSLEngine and https done (tests/tls, X509Test, 2026-10-11); pooling/cookies and a device run left) | 2026-10-11 (TLS); session 23, 2026-10-09 (zip, gzip); session 17, 2026-10-07 |
 | WS12 | VM performance and memory | none | not started | |
 | WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip with every tests/apps APK; real-app corpus with static gap scan, smoke run and docs/COMPATIBILITY.md (`tools/corpus.py`), including locally supplied proprietary apps (Old School RuneScape); screenshot runner and VmTest on CI remain) | session 25, 2026-10-10 (local apps, OSRS); session 24, 2026-10-09 (corpus); session 15, 2026-10-02 |
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
 | WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress (sensors with fused gravity/rotation/orientation, battery broadcasts, rumble waveforms, PowerManager, and location/telephony/camera answering as absent done on the host, tests/apps/sensors; the IMU axis signs, rumble and psm have not been run on a console) | session 18, 2026-10-08 |
 | WS16 | libcore API completeness: members and classes android.jar has in java.* that libcore lacks | none | in progress (session 23: java.lang, java.util and java.util.concurrent gaps first; session 25: FileChannel locks/mapping, regex Unicode classes, SAX, logging, ServiceLoader, generic signatures, Unsafe done; java.time, ResourceBundle, DOM left) | session 25, 2026-10-09 (corpus blockers); session 23, 2026-10-09 |
+| WS18 | Web content: system browser for web intents, android.webkit WebView without an engine | WS4, WS11 | in progress (browser intents with OAuth redirects and a text-rendering WebView done on the host, tests/apps/web; not run on hardware) | 2026-10-17 |
 | WS17 | Crypto: JCA provider framework (java.security, javax.crypto), built-in provider, AndroidKeyStore | none | in progress (provider framework, digests, HMAC, AES ECB/CBC/CTR/GCM, PBKDF2, OS-entropy SecureRandom and a software AndroidKeyStore done (tests/dex/CryptoTest, tests/apps/keystore); RSA, EC (P-256/384/521) and DH keys, signatures, ciphers and agreement done (tests/dex/PublicKeyTest); keystore key pairs, DSA, X25519/Ed25519 and certificates left) | session 24, 2026-10-09 |
 
 Parallelism: after WS0 lands, WS1, WS4, WS6, WS7, WS9, WS10, WS11, WS12,
@@ -315,11 +316,11 @@ behaviour clean (UnknownHostException) before full support.
 
 Status: sockets, DNS, UDP, HTTP/1.1 with transparent gzip and
 ConnectivityManager are in (see ARCHITECTURE 5.1), and so are
-java.util.zip and java.util.jar (5.2). Remaining: TLS (mbedtls;
-`javax.net.ssl` has only the exception classes and a TrustManagerFactory
-with no algorithms, https throws
-SSLHandshakeException), connection pooling, CookieManager, NIO socket
-channels, and running tests/apps/net on hardware.
+java.util.zip and java.util.jar (5.2), NIO channels and selectors, and
+TLS 1.2 client sockets and https over mbedtls with Android's CA set
+(5.6), client SSLEngine. Remaining: session resumption, client certificates,
+TLS server sockets, connection pooling, CookieManager, and running
+tests/apps/net and the TLS test on hardware.
 
 ## WS12: VM performance and memory
 
@@ -407,6 +408,20 @@ StampedLock, ForkJoin tasks.
 Acceptance: each batch has a `tests/dex` program that matches OpenJDK,
 and `api_check.py` shows no gaps in the packages it covers except the
 documented exclusions.
+
+## WS18: Web content
+
+Owns: `java/framework/android/webkit/**`, `android/app/SystemBrowser.java`,
+`android/net/http/SslError` and `SslCertificate`, `platform_open_url`.
+
+Scope: there is no browser engine. Web intents (Custom Tabs, AppAuth and
+other OAuth logins, "open in browser") go to the platform browser (the
+Switch's web applets) and redirects come back as intents. WebView shows
+HTML as styled text for help pages, licences and simple sites, with
+Android's client callbacks. Status: done on the host (ARCHITECTURE 6.9);
+the applets have not been run on a console. Later: network images,
+forms, and a WebView-to-applet hand-off for pages that need a real
+browser.
 
 ## WS17: Crypto (JCA)
 

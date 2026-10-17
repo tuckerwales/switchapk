@@ -47,6 +47,15 @@ public abstract class Signature extends SignatureSpi {
     }
 
     public final void initVerify(java.security.cert.Certificate certificate) throws InvalidKeyException {
+        // A critical key usage extension without digitalSignature forbids verifying with this key.
+        if (certificate instanceof java.security.cert.X509Certificate) {
+            java.security.cert.X509Certificate cert = (java.security.cert.X509Certificate) certificate;
+            java.util.Set<String> critical = cert.getCriticalExtensionOIDs();
+            if (critical != null && critical.contains("2.5.29.15")) {
+                boolean[] keyUsage = cert.getKeyUsage();
+                if (keyUsage != null && !keyUsage[0]) throw new InvalidKeyException("Wrong key usage");
+            }
+        }
         initVerify(certificate.getPublicKey());
     }
 

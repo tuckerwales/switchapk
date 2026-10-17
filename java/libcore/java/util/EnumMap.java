@@ -2,6 +2,8 @@ package java.util;
 
 @SuppressWarnings("rawtypes")
 public class EnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> implements java.io.Serializable, Cloneable {
+    private static final long serialVersionUID = 458661240069192865L;
+
     private final Class<K> keyType;
     private K[] keyUniverse;
     private Object[] vals;

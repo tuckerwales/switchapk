@@ -4,6 +4,7 @@ import java.util.function.BinaryOperator;
 import java.util.function.UnaryOperator;
 
 public class AtomicReference<V> implements java.io.Serializable {
+    private static final long serialVersionUID = -1848883965231344442L;
     private volatile V value;
 
     public AtomicReference(V initialValue) {

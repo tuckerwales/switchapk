@@ -1,6 +1,7 @@
 package java.util;
 
 public final class UUID implements java.io.Serializable, Comparable<UUID> {
+    private static final long serialVersionUID = -4856846361193249489L;
     private final long mostSigBits;
     private final long leastSigBits;
     private static Random numberGenerator;

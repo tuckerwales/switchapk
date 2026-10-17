@@ -9,6 +9,8 @@ import java.util.NoSuchElementException;
 
 /** Blocking deque protected by its own monitor. Also backs the other blocking queues. */
 public class LinkedBlockingDeque<E> extends AbstractQueue<E> implements BlockingDeque<E>, java.io.Serializable {
+    private static final long serialVersionUID = -387911632671998426L;
+
     private final ArrayDeque<E> q = new ArrayDeque<E>();
     private final int capacity;
 

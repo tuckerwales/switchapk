@@ -1,6 +1,7 @@
 package java.util;
 
 public class LinkedHashMap<K, V> extends HashMap<K, V> implements Map<K, V> {
+    private static final long serialVersionUID = 3801124242820219131L;
     static class Entry<K, V> extends HashMap.Node<K, V> {
         Entry<K, V> before, after;
 
@@ -31,7 +32,7 @@ public class LinkedHashMap<K, V> extends HashMap<K, V> implements Map<K, V> {
     public LinkedHashMap(Map<? extends K, ? extends V> m) {
         super();
         accessOrder = false;
-        putAll(m);
+        putMapEntries(m, false);
     }
 
     public LinkedHashMap(int initialCapacity, float loadFactor, boolean accessOrder) {

@@ -10,6 +10,8 @@ import java.util.Arrays;
 
 /** Base class of certificates; X509Certificate is the one implemented (CertificateFactory "X.509"). */
 public abstract class Certificate implements java.io.Serializable {
+    private static final long serialVersionUID = -3585440601605666277L;
+
     private final String type;
 
     protected Certificate(String type) {

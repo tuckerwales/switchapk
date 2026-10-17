@@ -1,6 +1,8 @@
 package java.net;
 
 public final class Inet6Address extends InetAddress {
+    private static final long serialVersionUID = 6880410070516793377L;
+
     Inet6Address(String hostName, byte[] addr) {
         super(hostName, addr);
     }

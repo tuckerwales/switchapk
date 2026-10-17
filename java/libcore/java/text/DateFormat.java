@@ -6,6 +6,8 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 public abstract class DateFormat extends Format {
+    private static final long serialVersionUID = 7218322306649953788L;
+
     public static final int FULL = 0;
     public static final int LONG = 1;
     public static final int MEDIUM = 2;

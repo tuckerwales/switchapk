@@ -1,6 +1,8 @@
 package java.util;
 
 public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> implements Cloneable, java.io.Serializable {
+    private static final long serialVersionUID = 1009687484059888093L;
+
     final Class<E> elementType;
     final E[] universe;
 

@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.function.Predicate;
 
 public final class Pattern implements java.io.Serializable {
+    private static final long serialVersionUID = 5073258162644648461L;
+
     public static final int UNIX_LINES = 0x01;
     public static final int CASE_INSENSITIVE = 0x02;
     public static final int COMMENTS = 0x04;

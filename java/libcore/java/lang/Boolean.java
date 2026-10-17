@@ -1,6 +1,8 @@
 package java.lang;
 
 public final class Boolean implements java.io.Serializable, Comparable<Boolean> {
+    private static final long serialVersionUID = -3665804199014368530L;
+
     public static final Boolean TRUE = new Boolean(true);
     public static final Boolean FALSE = new Boolean(false);
     @SuppressWarnings("unchecked")

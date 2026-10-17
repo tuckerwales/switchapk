@@ -5,6 +5,8 @@ package java.lang.annotation;
  * {@code java.lang.annotation.AnnotationFormatError}.
  */
 public class AnnotationFormatError extends Error {
+    private static final long serialVersionUID = -4256701562333669892L;
+
     public AnnotationFormatError(String message) {
         super(message);
     }

@@ -25,6 +25,14 @@ public class FileWriter extends OutputStreamWriter {
         super(new FileOutputStream(fileName), charset);
     }
 
+    public FileWriter(File file, java.nio.charset.Charset charset) throws IOException {
+        super(new FileOutputStream(file), charset);
+    }
+
+    public FileWriter(String fileName, java.nio.charset.Charset charset, boolean append) throws IOException {
+        super(new FileOutputStream(fileName, append), charset);
+    }
+
     public FileWriter(File file, java.nio.charset.Charset charset, boolean append) throws IOException {
         super(new FileOutputStream(file, append), charset);
     }

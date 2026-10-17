@@ -2,6 +2,8 @@ package java.util.concurrent.locks;
 
 /** Minimal AQS supporting exclusive mode for subclasses that implement tryAcquire/tryRelease. */
 public abstract class AbstractQueuedSynchronizer implements java.io.Serializable {
+    private static final long serialVersionUID = 7373984972572414691L;
+
     private volatile int state;
 
     protected AbstractQueuedSynchronizer() {

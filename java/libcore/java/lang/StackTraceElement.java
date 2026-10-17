@@ -1,6 +1,8 @@
 package java.lang;
 
 public final class StackTraceElement implements java.io.Serializable {
+    private static final long serialVersionUID = 6992337162326171013L;
+
     private final String declaringClass;
     private final String methodName;
     private final String fileName;

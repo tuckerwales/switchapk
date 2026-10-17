@@ -85,6 +85,13 @@ public class FileInputStream extends InputStream {
         }
     }
 
+    /** Closes a stream the app forgot to close; the VM does not run finalizers yet, so this only runs if called. */
+    protected void finalize() throws IOException {
+        if (fd != null && fd.fd > 2) {
+            close();
+        }
+    }
+
     public final FileDescriptor getFD() throws IOException {
         return fd;
     }

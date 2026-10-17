@@ -1,6 +1,28 @@
 package java.lang;
 
 public final class StringBuilder extends AbstractStringBuilder implements java.io.Serializable, Comparable<StringBuilder> {
+    private static final long serialVersionUID = 4383685877147921099L;
+
+    /** Java's serial form: the length, then the whole buffer (capacity included) as a char[]. */
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        s.defaultWriteObject();
+        s.writeInt(count);
+        char[] val = new char[capacity()];
+        System.arraycopy(value, 0, val, 0, count);
+        s.writeObject(val);
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        int c = s.readInt();
+        char[] val = (char[]) s.readObject();
+        if (c < 0 || c > val.length) {
+            throw new java.io.StreamCorruptedException("count value invalid");
+        }
+        value = val;
+        count = c;
+    }
+
     public StringBuilder() {
         super(16);
     }

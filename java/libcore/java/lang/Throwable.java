@@ -7,6 +7,8 @@ import java.util.Collections;
 import java.util.List;
 
 public class Throwable implements java.io.Serializable {
+    private static final long serialVersionUID = -3042686055658047285L;
+
     private String detailMessage;
     private Throwable cause = this;
     private transient Object backtrace;
@@ -15,7 +17,69 @@ public class Throwable implements java.io.Serializable {
 
     private static final StackTraceElement[] EMPTY_TRACE = new StackTraceElement[0];
 
-    private boolean suppressionDisabled;
+    private transient boolean suppressionDisabled;
+
+    /**
+     * Java's serial form. The stream carries an empty List (not null) when nothing was suppressed and null when
+     * suppression is disabled; a stack trace of one sentinel element means the trace was not writable.
+     */
+    private static final java.io.ObjectStreamField[] serialPersistentFields = {
+        new java.io.ObjectStreamField("detailMessage", String.class),
+        new java.io.ObjectStreamField("cause", Throwable.class),
+        new java.io.ObjectStreamField("stackTrace", StackTraceElement[].class),
+        new java.io.ObjectStreamField("suppressedExceptions", List.class),
+    };
+
+    private synchronized void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        java.io.ObjectOutputStream.PutField fields = s.putFields();
+        fields.put("detailMessage", detailMessage);
+        fields.put("cause", cause);
+        fields.put("stackTrace", getOurStackTrace());
+        List<Throwable> suppressed = suppressedExceptions;
+        if (suppressionDisabled) {
+            suppressed = null;
+        } else if (suppressed == null) {
+            suppressed = Collections.emptyList();
+        }
+        fields.put("suppressedExceptions", suppressed);
+        s.writeFields();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        java.io.ObjectInputStream.GetField fields = s.readFields();
+        detailMessage = (String) fields.get("detailMessage", null);
+        cause = (Throwable) fields.get("cause", this);
+        List<Throwable> suppressed = (List<Throwable>) fields.get("suppressedExceptions", null);
+        suppressedExceptions = null;
+        suppressionDisabled = (suppressed == null);
+        if (suppressed != null && !suppressed.isEmpty()) {
+            ArrayList<Throwable> copy = new ArrayList<Throwable>(suppressed.size());
+            for (Throwable t : suppressed) {
+                if (t == null) {
+                    throw new NullPointerException("Cannot suppress a null exception.");
+                }
+                if (t == this) {
+                    throw new IllegalArgumentException("Self-suppression not permitted");
+                }
+                copy.add(t);
+            }
+            suppressedExceptions = copy;
+        }
+        StackTraceElement[] trace = (StackTraceElement[]) fields.get("stackTrace", null);
+        if (trace == null || trace.length == 0
+                || (trace.length == 1 && trace[0].getLineNumber() == Integer.MIN_VALUE
+                        && "".equals(trace[0].getClassName()) && "".equals(trace[0].getMethodName()))) {
+            stackTrace = EMPTY_TRACE;
+        } else {
+            for (StackTraceElement ste : trace) {
+                if (ste == null) {
+                    throw new NullPointerException("null StackTraceElement in serial stream.");
+                }
+            }
+            stackTrace = trace.clone();
+        }
+    }
 
     public Throwable() {
         fillInStackTrace();

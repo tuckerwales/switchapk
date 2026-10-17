@@ -1,6 +1,8 @@
 package java.lang.reflect;
 
 public class Proxy implements java.io.Serializable {
+    private static final long serialVersionUID = -2222568056686623797L;
+
     protected InvocationHandler h;
 
     protected Proxy(InvocationHandler h) {

@@ -1,6 +1,8 @@
 package java.security;
 
 public abstract class SecureRandomSpi implements java.io.Serializable {
+    private static final long serialVersionUID = -2991854161009191830L;
+
     private final SecureRandomParameters params;
 
     public SecureRandomSpi() {

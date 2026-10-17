@@ -1,6 +1,8 @@
 package java.util;
 
 public final class Currency implements java.io.Serializable {
+    private static final long serialVersionUID = -158308464356906721L;
+
     private final String code;
 
     private Currency(String code) {

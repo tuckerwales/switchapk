@@ -1,6 +1,8 @@
 package java.util;
 
 public class IllegalFormatConversionException extends IllegalFormatException {
+    private static final long serialVersionUID = 17000126L;
+
     private final char c;
     private final Class<?> arg;
 

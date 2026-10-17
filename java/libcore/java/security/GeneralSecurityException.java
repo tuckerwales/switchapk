@@ -1,6 +1,8 @@
 package java.security;
 
 public class GeneralSecurityException extends Exception {
+    private static final long serialVersionUID = 894798122053539237L;
+
     public GeneralSecurityException() {
     }
 

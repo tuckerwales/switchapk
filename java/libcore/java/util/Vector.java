@@ -1,9 +1,35 @@
 package java.util;
 
 public class Vector<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
+    private static final long serialVersionUID = -2767605614048989439L;
     protected Object[] elementData;
     protected int elementCount;
     protected int capacityIncrement;
+
+    /** Java's serial form: the three fields, with the whole elementData array (capacity included). */
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        java.io.ObjectOutputStream.PutField fields = s.putFields();
+        Object[] data;
+        synchronized (this) {
+            fields.put("capacityIncrement", capacityIncrement);
+            fields.put("elementCount", elementCount);
+            data = elementData.clone();
+        }
+        fields.put("elementData", data);
+        s.writeFields();
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        java.io.ObjectInputStream.GetField gfields = s.readFields();
+        int count = gfields.get("elementCount", 0);
+        Object[] data = (Object[]) gfields.get("elementData", null);
+        if (data == null || count < 0 || count > data.length) {
+            throw new java.io.StreamCorruptedException("Inconsistent vector internals");
+        }
+        elementCount = count;
+        elementData = data.clone();
+        capacityIncrement = gfields.get("capacityIncrement", 0);
+    }
 
     public Vector(int initialCapacity, int capacityIncrement) {
         this.elementData = new Object[initialCapacity];

@@ -1349,6 +1349,10 @@ public final class Arrays {
                 elementHash = hashCode((float[]) element);
             } else if (element instanceof double[]) {
                 elementHash = hashCode((double[]) element);
+            } else if (element instanceof short[]) {
+                elementHash = hashCode((short[]) element);
+            } else if (element instanceof boolean[]) {
+                elementHash = hashCode((boolean[]) element);
             } else if (element != null) {
                 elementHash = element.hashCode();
             } else {
@@ -1400,6 +1404,8 @@ public final class Arrays {
             return equals((double[]) e1, (double[]) e2);
         } else if (e1 instanceof boolean[] && e2 instanceof boolean[]) {
             return equals((boolean[]) e1, (boolean[]) e2);
+        } else if (e1 instanceof short[] && e2 instanceof short[]) {
+            return equals((short[]) e1, (short[]) e2);
         }
         return e1.equals(e2);
     }
@@ -1450,6 +1456,8 @@ public final class Arrays {
                 buf.append(toString((char[]) element));
             } else if (element instanceof boolean[]) {
                 buf.append(toString((boolean[]) element));
+            } else if (element instanceof short[]) {
+                buf.append(toString((short[]) element));
             } else {
                 buf.append(String.valueOf(element));
             }

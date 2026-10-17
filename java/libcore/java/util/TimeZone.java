@@ -1,6 +1,8 @@
 package java.util;
 
 public abstract class TimeZone implements java.io.Serializable, Cloneable {
+    private static final long serialVersionUID = 3581463369166924961L;
+
     public static final int SHORT = 0;
     public static final int LONG = 1;
     private static TimeZone defaultZone;

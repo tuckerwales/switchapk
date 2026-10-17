@@ -1,6 +1,8 @@
 package java.util;
 
 public class IdentityHashMap<K, V> extends AbstractMap<K, V> implements Map<K, V>, java.io.Serializable, Cloneable {
+    private static final long serialVersionUID = 8188218128353913216L;
+
     private static final class Key {
         final Object obj;
 

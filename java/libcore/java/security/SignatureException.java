@@ -1,6 +1,8 @@
 package java.security;
 
 public class SignatureException extends GeneralSecurityException {
+    private static final long serialVersionUID = 7509989324975124438L;
+
     public SignatureException() {
     }
 

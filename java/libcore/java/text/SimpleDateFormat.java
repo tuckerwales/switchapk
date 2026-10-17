@@ -5,6 +5,8 @@ import java.util.Date;
 import java.util.Locale;
 
 public class SimpleDateFormat extends DateFormat {
+    private static final long serialVersionUID = 4774881970558875024L;
+
     private String pattern;
     private static final String[] MONTHS = {"January", "February", "March", "April", "May", "June", "July", "August",
         "September", "October", "November", "December"};

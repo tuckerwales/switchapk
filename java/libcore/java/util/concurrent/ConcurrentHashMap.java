@@ -10,6 +10,8 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public class ConcurrentHashMap<K, V> extends HashMap<K, V> implements ConcurrentMap<K, V> {
+    private static final long serialVersionUID = 7249069246763182397L;
+
     public ConcurrentHashMap() {
         super();
     }

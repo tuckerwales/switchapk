@@ -10,8 +10,10 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 public final class String implements java.io.Serializable, Comparable<String>, CharSequence {
-    private final char[] value;
-    private int hash;
+    private static final long serialVersionUID = -6849794470754667710L;
+
+    private final transient char[] value;
+    private transient int hash;
 
     public static final Comparator<String> CASE_INSENSITIVE_ORDER = new Comparator<String>() {
         public int compare(String a, String b) {

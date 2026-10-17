@@ -1,6 +1,8 @@
 package java.net;
 
 public class URISyntaxException extends Exception {
+    private static final long serialVersionUID = 2137979680897488891L;
+
     private final String input;
     private final int index;
 

@@ -1,7 +1,19 @@
 package java.util;
 
 public class Date implements java.io.Serializable, Cloneable, Comparable<Date> {
-    private long fastTime;
+    private static final long serialVersionUID = 7523967970034938905L;
+    private transient long fastTime;
+
+    /** Java's serial form: no fields, then the time in milliseconds. */
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        s.defaultWriteObject();
+        s.writeLong(getTime());
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        fastTime = s.readLong();
+    }
 
     public Date() {
         this(System.currentTimeMillis());

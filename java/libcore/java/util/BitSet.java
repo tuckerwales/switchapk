@@ -1,6 +1,8 @@
 package java.util;
 
 public class BitSet implements Cloneable, java.io.Serializable {
+    private static final long serialVersionUID = 7997698588986878753L;
+
     private long[] words;
 
     public BitSet() {

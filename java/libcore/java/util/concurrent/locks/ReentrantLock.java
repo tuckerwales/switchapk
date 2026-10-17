@@ -4,6 +4,8 @@ import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 public class ReentrantLock implements Lock, java.io.Serializable {
+    private static final long serialVersionUID = 7373984872572414699L;
+
     private Thread owner;
     private int holds;
 

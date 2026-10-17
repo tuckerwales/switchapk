@@ -420,6 +420,56 @@ start at `ARRAY_BASE_OFFSET` (16) and are rebased onto
 loads and stores, atomic because Java threads hold the GIL. Off-heap
 `allocateMemory` addresses are malloc'd pointers.
 
+### 5.4.1 Java serialization (WS16)
+
+`java.io.ObjectOutputStream` and `ObjectInputStream` implement the
+serialization stream format (protocol 2 by default, 1 on request) and
+aim to write exactly the bytes OpenJDK and Android write for the same
+objects, so files written on a phone read back here and the other way
+round. `tests/dex/SerialTest.java` compares the bytes with the host JVM.
+
+- `ObjectStreamClass` is the class descriptor: fields
+  (`serialPersistentFields` or the non-static, non-transient ones),
+  the writeObject/readObject/readObjectNoData/writeReplace/readResolve
+  methods, and the default serialVersionUID (Java's SHA-1 over the class
+  shape) when a class declares none. Stream descriptors are bound to
+  local classes by name and serialVersionUID; fields match by name.
+- Two natives on `ObjectStreamClass` (in `src/native/java_reflect.c`):
+  - `newInstanceNative(Class, Constructor)` allocates the class and runs
+    only the given constructor, the no-arg constructor of the first
+    non-serializable superclass. Serialized classes' own constructors
+    never run.
+  - `hasStaticInitializer(Class)` says whether the class has
+    `<clinit>`, which the default serialVersionUID includes. As on
+    Android it is the dex method, so a class whose static initializer
+    d8 folded into static values hashes without it.
+- A class that cannot be resolved does not stop a read: its data is
+  skipped, and the ClassNotFoundException is reported for every object
+  that refers to it, once the top-level readObject returns.
+- libcore classes carry Java's serial forms where apps are likely to
+  serialize them. Each has the same serialVersionUID and serial fields,
+  and the same custom data from writeObject, as OpenJDK. Covered so
+  far:
+  - boxes, String, StringBuilder and StringBuffer;
+  - Throwable;
+  - the collections;
+  - Date, UUID, Locale, BigInteger and BigDecimal;
+  - the atomics.
+
+  Where our internals differ, `serialPersistentFields` and
+  `putFields`/`readFields` translate. Examples: BigInteger's magnitude
+  bytes, AtomicBoolean's int, Locale's extension string.
+  serialVersionUIDs for 230 other libcore classes come from the JDK's
+  declared values (the JDK's computed ones would differ anyway).
+- HashMap inserts at the bucket tail and splits buckets on resize as
+  OpenJDK does, so iteration order (and with it the serial bytes)
+  matches Android.
+- Reflection reports what Android reports. Array classes take
+  public/private/protected from their component and are final and
+  abstract. Methods that dex marks `ACC_DECLARED_SYNCHRONIZED` are
+  `synchronized`; the interpreter needs no flag, since d8 compiles
+  their bodies to monitor-enter/exit.
+
 ### 5.5 Crypto (WS17)
 
 - The JCA provider architecture as in the JDK. `Provider` extends

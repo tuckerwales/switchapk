@@ -38,12 +38,70 @@ public final class Locale implements Cloneable, java.io.Serializable {
     private static volatile Locale defaultDisplayLocale;
     private static volatile Locale defaultFormatLocale;
 
-    private final String language;
-    private final String script;
-    private final String country;
-    private final String variant;
+    /* Not final only so that readObject can set them. */
+    private String language;
+    private String script;
+    private String country;
+    private String variant;
     /* extension key -> canonical value (lower case); the 'u' value is attributes then sorted keywords */
-    private final TreeMap<Character, String> extensions;
+    private TreeMap<Character, String> extensions;
+
+    /** Java's serial form: the four strings, the extensions as one string, and a hash code of -1. */
+    private static final java.io.ObjectStreamField[] serialPersistentFields = {
+        new java.io.ObjectStreamField("language", String.class),
+        new java.io.ObjectStreamField("country", String.class),
+        new java.io.ObjectStreamField("variant", String.class),
+        new java.io.ObjectStreamField("hashcode", int.class),
+        new java.io.ObjectStreamField("script", String.class),
+        new java.io.ObjectStreamField("extensions", String.class),
+    };
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+        java.io.ObjectOutputStream.PutField fields = out.putFields();
+        fields.put("language", language);
+        fields.put("script", script);
+        fields.put("country", country);
+        fields.put("variant", variant);
+        String ext = extensionString();
+        fields.put("extensions", ext.isEmpty() ? "" : ext);
+        fields.put("hashcode", -1);
+        out.writeFields();
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+        java.io.ObjectInputStream.GetField fields = in.readFields();
+        language = canonicalLanguage(lower((String) fields.get("language", "")));
+        script = (String) fields.get("script", "");
+        country = upper((String) fields.get("country", ""));
+        variant = (String) fields.get("variant", "");
+        extensions = new TreeMap<Character, String>();
+        String ext = (String) fields.get("extensions", "");
+        if (ext != null && !ext.isEmpty()) {
+            String[] parts = ext.split("-");
+            char key = 0;
+            StringBuilder val = new StringBuilder();
+            for (String p : parts) {
+                if (p.length() == 1 && key != 'x') {
+                    if (key != 0) {
+                        extensions.put(key, val.toString());
+                    }
+                    key = Character.toLowerCase(p.charAt(0));
+                    val.setLength(0);
+                } else {
+                    if (key == 0) {
+                        throw new java.io.StreamCorruptedException("bad locale extensions: " + ext);
+                    }
+                    if (val.length() > 0) {
+                        val.append('-');
+                    }
+                    val.append(lower(p));
+                }
+            }
+            if (key != 0) {
+                extensions.put(key, val.toString());
+            }
+        }
+    }
 
     public Locale(String language, String country, String variant) {
         if (language == null || country == null || variant == null) {

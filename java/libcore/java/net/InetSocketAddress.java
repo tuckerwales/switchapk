@@ -1,6 +1,8 @@
 package java.net;
 
 public class InetSocketAddress extends SocketAddress {
+    private static final long serialVersionUID = 5076001401234631237L;
+
     private final String hostname;
     private final InetAddress addr;
     private final int port;

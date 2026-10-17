@@ -3,10 +3,67 @@ package java.math;
 import java.util.Random;
 
 public class BigInteger extends Number implements Comparable<BigInteger> {
-    /** sign: -1, 0, 1 */
-    final int signum;
+    private static final long serialVersionUID = -8287574255936472291L;
+
+    /** sign: -1, 0, 1 (not final only so that readObject can set it) */
+    int signum;
     /** magnitude, little-endian 32-bit words, no trailing zero words */
-    final int[] mag;
+    int[] mag;
+
+    /** Java's serial form: signum and big-endian magnitude bytes, plus four cache fields Java writes as unset. */
+    private static final java.io.ObjectStreamField[] serialPersistentFields = {
+        new java.io.ObjectStreamField("signum", Integer.TYPE),
+        new java.io.ObjectStreamField("magnitude", byte[].class),
+        new java.io.ObjectStreamField("bitCount", Integer.TYPE),
+        new java.io.ObjectStreamField("bitLength", Integer.TYPE),
+        new java.io.ObjectStreamField("firstNonzeroByteNum", Integer.TYPE),
+        new java.io.ObjectStreamField("lowestSetBit", Integer.TYPE),
+    };
+
+    private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+        java.io.ObjectOutputStream.PutField fields = s.putFields();
+        fields.put("signum", signum);
+        fields.put("magnitude", abs().toByteArrayMagnitude());
+        fields.put("bitCount", -1);
+        fields.put("bitLength", -1);
+        fields.put("lowestSetBit", -2);
+        fields.put("firstNonzeroByteNum", -2);
+        s.writeFields();
+    }
+
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        java.io.ObjectInputStream.GetField fields = s.readFields();
+        int sign = fields.get("signum", -2);
+        byte[] magnitude = (byte[]) fields.get("magnitude", null);
+        if (sign < -1 || sign > 1 || magnitude == null) {
+            throw new java.io.StreamCorruptedException("BigInteger: Invalid signum value");
+        }
+        int[] m = bytesToMag(magnitude);
+        int len = m.length;
+        while (len > 0 && m[len - 1] == 0) {
+            len--;
+        }
+        if ((len == 0) != (sign == 0)) {
+            throw new java.io.StreamCorruptedException("BigInteger: signum-magnitude mismatch");
+        }
+        if (len != m.length) {
+            int[] t = new int[len];
+            System.arraycopy(m, 0, t, 0, len);
+            m = t;
+        }
+        mag = m;
+        signum = sign;
+    }
+
+    /** The magnitude as big-endian bytes without leading zeros (empty for zero). */
+    private byte[] toByteArrayMagnitude() {
+        int bytes = (bitLength() + 7) >>> 3;
+        byte[] out = new byte[bytes];
+        for (int i = 0; i < bytes; i++) {
+            out[bytes - 1 - i] = (byte) (mag[i >>> 2] >>> ((i & 3) * 8));
+        }
+        return out;
+    }
 
     public static final BigInteger ZERO = new BigInteger(0, new int[0]);
     public static final BigInteger ONE = valueOf(1);

@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.Iterator;
 
 public class CopyOnWriteArraySet<E> extends AbstractSet<E> implements java.io.Serializable {
+    private static final long serialVersionUID = 5457747651344034263L;
+
     private final CopyOnWriteArrayList<E> al;
 
     public CopyOnWriteArraySet() {

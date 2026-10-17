@@ -1,6 +1,8 @@
 package java.security;
 
 public class DigestException extends GeneralSecurityException {
+    private static final long serialVersionUID = 5821450303093652515L;
+
     public DigestException() {
     }
 

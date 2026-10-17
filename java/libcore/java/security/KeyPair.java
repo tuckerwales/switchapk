@@ -1,6 +1,8 @@
 package java.security;
 
 public final class KeyPair implements java.io.Serializable {
+    private static final long serialVersionUID = -7565189502268009837L;
+
     private final PrivateKey privateKey;
     private final PublicKey publicKey;
 

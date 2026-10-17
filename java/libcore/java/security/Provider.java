@@ -20,6 +20,8 @@ import java.util.Set;
  * added with {@link #putService}.
  */
 public abstract class Provider extends java.util.Properties {
+    private static final long serialVersionUID = -4298000515446427739L;
+
     private final String name;
     private final String versionStr;
     private final double version;

@@ -1,6 +1,8 @@
 package java.util;
 
 public class InvalidPropertiesFormatException extends java.io.IOException {
+    private static final long serialVersionUID = 7763056076009360219L;
+
     public InvalidPropertiesFormatException() {
         super();
     }

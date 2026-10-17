@@ -49,8 +49,11 @@ static FreeSlot *g_free[NCLASSES];
 static SaPtrMap g_page_set; /* page base -> page, for conservative checks */
 static size_t g_small_count;
 
+static bool g_classes_ready;
+
 static void init_classes(void) {
-    if (g_class_of[1]) return;
+    if (SA_LIKELY(g_classes_ready)) return;
+    g_classes_ready = true;
     int c = 0;
     for (int u = 0; u <= SMALL_MAX / 8; u++) {
         while (g_slot_sizes[c] < u * 8) c++;

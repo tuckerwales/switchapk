@@ -137,9 +137,15 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
   visible through `getAnnotation` on subclasses.
 
 ### 4.3 Interpreter
-- Non-recursive switch interpreter over a per-thread register stack
+- Non-recursive interpreter over a per-thread register stack
   (`rstack`). `vm_interpret(t, m, args)` runs until the entry frame
-  returns. Java-to-Java invokes push frames without C recursion; calls into
+  returns. Dispatch is threaded (GCC computed goto): every opcode handler
+  has a label (`case 0xNN: L_NN:`, `OPL(base, k)` for the macro-built
+  binary ops), `optab[256]` holds their addresses, and each handler ends
+  with `NEXT()`, which fetches the next instruction and jumps through the
+  table itself. The `switch` only scopes the handlers. `--trace` uses a
+  second table whose entries log first. Opcodes Dalvik leaves unused go
+  to `L_invalid` (VerifyError). Java-to-Java invokes push frames without C recursion; calls into
   natives and back into Java (`vm_call*`) recurse on the C stack.
 - Safepoints at backward branches and invokes: GC and GIL yield happen only
   there (and on allocation failure).
@@ -159,6 +165,14 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
     `vm_add_root` / `vm_remove_root` or JNI global refs.
   - Raw pointers into arrays (`ARRAY_DATA`) stay valid while the array is
     reachable: objects never move.
+- Allocation: objects up to 256 bytes go into size-class pages (15
+  classes from 16 to 256 bytes; 64 KiB `memalign`ed pages with a header,
+  an allocation bitmap and slots threaded on a per-class free list), so
+  allocating is a free-list pop and a memset. The page of a slot is its
+  address rounded down; `g_page_set` tells pages from other memory for
+  conservative checks (`vm_is_object`). Larger objects are calloc'd and
+  kept in `g_vm.objects` (address to size). The sweep rebuilds the free
+  lists and frees all but one empty page per class.
 - GC is triggered at safepoints when `heap_bytes > heap_threshold`
   (threshold = 2x live after last GC, minimum 24 MB) and on malloc failure.
 - Weak/soft references are cleared on every GC (no soft-reference

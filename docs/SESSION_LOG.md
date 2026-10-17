@@ -1133,4 +1133,17 @@ what is left in flight.
   on a slow first frame and passed on the rerun), VmTest, NetTest,
   X509Test and TlsTest pass, all 14 corpus apps draw, and the Switch
   build links. Not run on hardware.
+- 2026-10-17, VM performance (WS12, claimed): a benchmark
+  (tests/bench/run_bench.sh) and a callgrind profile showed a quarter of
+  the interpreter's time in dispatch (the switch, the instruction fetch
+  and a per-instruction trace check) and allocation 7x slower than the
+  JVM's interpreter (calloc plus a hash insert per object). Threaded
+  dispatch (computed goto, one jump per handler; GCC would not duplicate
+  a central one, so NEXT() is explicit) cut executed instructions by 20%;
+  a size-class page allocator for objects up to 256 bytes replaced
+  calloc and the hash insert. The benchmark total went from about
+  1850 ms to 1080 ms on the host (allocation 173 to 66 ms, HashMap 661
+  to 294 ms). All 21 dex tests, TlsTest, all 48 samples and the 14
+  corpus apps pass; the Switch build links. Not measured on
+  hardware.
 

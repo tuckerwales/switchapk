@@ -1146,4 +1146,8 @@ what is left in flight.
   to 294 ms). All 21 dex tests, TlsTest, all 48 samples and the 14
   corpus apps pass; the Switch build links. Not measured on
   hardware.
+  Follow-ups the same day: the size-class table was being rebuilt on every
+  allocation (a ready check read a valid 0 entry), and the literal ops
+  (add-int/lit8 and the rest) shared one handler with an inner switch;
+  each now has its own. Benchmark total about 910 ms, 2x the start.
 

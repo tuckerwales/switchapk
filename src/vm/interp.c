@@ -1023,49 +1023,40 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
         FLOAT_BINOPS(0xc6, BIN_OPERANDS_2ADDR())
         DOUBLE_BINOPS(0xcb, BIN_OPERANDS_2ADDR())
 
-        /* ---- literal ops ---- */
-        case 0xd0: L_d0: case 0xd1: L_d1: case 0xd2: L_d2: case 0xd3: L_d3: case 0xd4: L_d4: case 0xd5: L_d5: case 0xd6: L_d6: case 0xd7: L_d7:
-        case 0xd8: L_d8: case 0xd9: L_d9: case 0xda: L_da: case 0xdb: L_db: case 0xdc: L_dc: case 0xdd: L_dd: case 0xde: L_de: case 0xdf: L_df:
-        case 0xe0: L_e0: case 0xe1: L_e1: case 0xe2: L_e2: {
-            uint8_t op = inst & 0xff;
-            uint32_t rd;
-            int32_t x, lit;
-            int which;
-            if (op <= 0xd7) {
-                rd = A4;
-                x = RI(B4);
-                lit = S16(W1);
-                which = op - 0xd0;
-            } else {
-                rd = AA;
-                x = RI(W1 & 0xff);
-                lit = (int8_t)(W1 >> 8);
-                which = op - 0xd8;
-            }
-            pc += 2;
-            switch (which) {
-            case 0: SETI(rd, (int32_t)((uint32_t)x + (uint32_t)lit)); break;
-            case 1: SETI(rd, (int32_t)((uint32_t)lit - (uint32_t)x)); break;
-            case 2: SETI(rd, (int32_t)((uint32_t)x * (uint32_t)lit)); break;
-            case 3:
-            case 4:
-                if (lit == 0) {
-                    pc -= 2;
-                    vm_throw_new(t, "Ljava/lang/ArithmeticException;", "/ by zero");
-                    THROW();
-                }
-                if (which == 3) SETI(rd, (x == INT32_MIN && lit == -1) ? x : x / lit);
-                else SETI(rd, (x == INT32_MIN && lit == -1) ? 0 : x % lit);
-                break;
-            case 5: SETI(rd, x & lit); break;
-            case 6: SETI(rd, x | lit); break;
-            case 7: SETI(rd, x ^ lit); break;
-            case 8: SETI(rd, (int32_t)((uint32_t)x << (lit & 31))); break;
-            case 9: SETI(rd, x >> (lit & 31)); break;
-            case 10: SETI(rd, (int32_t)((uint32_t)x >> (lit & 31))); break;
-            }
-            NEXT();
-        }
+        /* ---- literal ops: lit16 (0xd0-0xd7, vA = vB op #CCCC) and lit8 (0xd8-0xe2, vAA = vBB op #CC) ---- */
+#define LIT16_OPERANDS() uint32_t rd = A4; int32_t x = RI(B4), lit = S16(W1)
+#define LIT8_OPERANDS() uint32_t rd = AA; int32_t x = RI(W1 & 0xff), lit = (int8_t)(W1 >> 8)
+#define LIT_DIVREM(OPERANDS, isdiv)                                                    \
+    {                                                                                  \
+        OPERANDS;                                                                      \
+        if (lit == 0) {                                                                \
+            vm_throw_new(t, "Ljava/lang/ArithmeticException;", "/ by zero");         \
+            THROW();                                                                   \
+        }                                                                              \
+        if (isdiv) SETI(rd, (x == INT32_MIN && lit == -1) ? x : x / lit);              \
+        else SETI(rd, (x == INT32_MIN && lit == -1) ? 0 : x % lit);                    \
+        pc += 2;                                                                       \
+        NEXT();                                                                        \
+    }
+        case 0xd0: L_d0: { LIT16_OPERANDS(); SETI(rd, (int32_t)((uint32_t)x + (uint32_t)lit)); pc += 2; NEXT(); }
+        case 0xd1: L_d1: { LIT16_OPERANDS(); SETI(rd, (int32_t)((uint32_t)lit - (uint32_t)x)); pc += 2; NEXT(); }
+        case 0xd2: L_d2: { LIT16_OPERANDS(); SETI(rd, (int32_t)((uint32_t)x * (uint32_t)lit)); pc += 2; NEXT(); }
+        case 0xd3: L_d3: LIT_DIVREM(LIT16_OPERANDS(), 1)
+        case 0xd4: L_d4: LIT_DIVREM(LIT16_OPERANDS(), 0)
+        case 0xd5: L_d5: { LIT16_OPERANDS(); SETI(rd, x & lit); pc += 2; NEXT(); }
+        case 0xd6: L_d6: { LIT16_OPERANDS(); SETI(rd, x | lit); pc += 2; NEXT(); }
+        case 0xd7: L_d7: { LIT16_OPERANDS(); SETI(rd, x ^ lit); pc += 2; NEXT(); }
+        case 0xd8: L_d8: { LIT8_OPERANDS(); SETI(rd, (int32_t)((uint32_t)x + (uint32_t)lit)); pc += 2; NEXT(); }
+        case 0xd9: L_d9: { LIT8_OPERANDS(); SETI(rd, (int32_t)((uint32_t)lit - (uint32_t)x)); pc += 2; NEXT(); }
+        case 0xda: L_da: { LIT8_OPERANDS(); SETI(rd, (int32_t)((uint32_t)x * (uint32_t)lit)); pc += 2; NEXT(); }
+        case 0xdb: L_db: LIT_DIVREM(LIT8_OPERANDS(), 1)
+        case 0xdc: L_dc: LIT_DIVREM(LIT8_OPERANDS(), 0)
+        case 0xdd: L_dd: { LIT8_OPERANDS(); SETI(rd, x & lit); pc += 2; NEXT(); }
+        case 0xde: L_de: { LIT8_OPERANDS(); SETI(rd, x | lit); pc += 2; NEXT(); }
+        case 0xdf: L_df: { LIT8_OPERANDS(); SETI(rd, x ^ lit); pc += 2; NEXT(); }
+        case 0xe0: L_e0: { LIT8_OPERANDS(); SETI(rd, (int32_t)((uint32_t)x << (lit & 31))); pc += 2; NEXT(); }
+        case 0xe1: L_e1: { LIT8_OPERANDS(); SETI(rd, x >> (lit & 31)); pc += 2; NEXT(); }
+        case 0xe2: L_e2: { LIT8_OPERANDS(); SETI(rd, (int32_t)((uint32_t)x >> (lit & 31))); pc += 2; NEXT(); }
 
         case 0xfa: L_fa:
         case 0xfb: L_fb:

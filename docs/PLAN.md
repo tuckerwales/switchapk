@@ -429,9 +429,9 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [ ] the browser applet on hardware (title takeover and applet mode)
   - [ ] network images, forms, CSS layout; a real engine is out of reach
 - [ ] WS12 VM performance
-  - [x] threaded dispatch (computed goto) and a size-class page
-    allocator; tests/bench/run_bench.sh about 1.7x faster on the host
-    (allocation 2.6x, HashMap 2.2x), 20% fewer instructions executed
+  - [x] threaded dispatch (computed goto), one handler per literal op,
+    and a size-class page allocator; tests/bench/run_bench.sh about 2x
+    faster on the host (about 1850 to 910 ms; allocation 3x, HashMap 3x)
   - [ ] measure on hardware (the A57's branch predictor should gain more
     from threading than x86 does)
   - [ ] inline caches for virtual and interface calls, quickening, a

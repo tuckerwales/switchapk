@@ -1151,3 +1151,17 @@ what is left in flight.
   (add-int/lit8 and the rest) shared one handler with an inner switch;
   each now has its own. Benchmark total about 910 ms, 2x the start.
 
+- 2026-10-17, OSRS input, audio and a run script: on the host, taps and
+  D-pad keys reach the client's native code (traced with the new
+  `SWITCHAPK_TRACE_NATIVE`), and GameTextInput's input connection is
+  registered; typing is untested until a login screen is reachable.
+  The OpenSL ES shim covers every import the client uses and now logs
+  engine and player creation, but the client opens no audio at its
+  error screen. Its "onUpdateInternetAvailable not yet available" error
+  was a timing problem (the native is registered after the first
+  network callback); ConnectivityManager now repeats
+  onCapabilitiesChanged 1.5 s after onAvailable, as Android does after
+  validation, and the native call then lands. `tools/run_osrs.sh`
+  builds, assembles the APK and runs the client headless on a Linux PC
+  with screenshots and a summary of lookups, connections, audio and
+  errors. VmTest and the net and web samples pass.

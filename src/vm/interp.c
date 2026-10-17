@@ -100,9 +100,25 @@ static void throw_cce(VMThread *t, Class *from, Class *to) {
 }
 
 /* Executes a native (or intrinsic) method with arguments in args. */
+/* Debugging aid: SWITCHAPK_TRACE_NATIVE=<text> logs each call of a native method whose name contains text (for
+ * example onTouchEvent, to see input reach a game's native code). */
+static void trace_native(Method *m) {
+    static const char *filter;
+    static int state; /* 0 unread, 1 off, 2 on */
+    if (state == 0) {
+        filter = getenv("SWITCHAPK_TRACE_NATIVE");
+        state = filter && *filter ? 2 : 1;
+    }
+    if (state != 2 || !strstr(m->name, filter)) return;
+    char buf[512];
+    vm_method_pretty(m, buf, sizeof buf);
+    LOGI("native call %s", buf);
+}
+
 static void call_native(VMThread *t, Method *m, uint64_t *args) {
     JValue ret;
     ret.raw = 0;
+    if (SA_UNLIKELY(g_vm.trace_native)) trace_native(m);
     Object *sync = NULL;
     if (m->access & ACC_SYNCHRONIZED) {
         sync = (m->access & ACC_STATIC) ? vm_class_mirror(t, m->clazz) : (Object *)(uintptr_t)args[0];

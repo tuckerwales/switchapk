@@ -109,6 +109,11 @@ to find framework APIs apps call that we do not implement.
 `SWITCHAPK_TRACE_THROW=1` logs every throw (`W/throw:` with method and
 line), including exceptions the app catches: the quickest way to find
 what an app's own crash screen is hiding.
+`SWITCHAPK_TRACE_NATIVE=<text>` logs each call of a native method whose
+name contains the text (`I/interp: native call ...`), for example
+`onTouchEventNative` to see input reach a game's C++ side, or a method
+name to see whether a RegisterNatives binding is in place when Java
+calls it.
 
 ## Building test APKs
 

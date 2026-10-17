@@ -28,6 +28,8 @@ NativeFn vm_lookup_native(const char *cls, const char *name, const char *desc) {
 
 bool vm_init(void) {
     memset(&g_vm, 0, sizeof g_vm);
+    const char *tn = getenv("SWITCHAPK_TRACE_NATIVE");
+    g_vm.trace_native = tn && *tn;
     pthread_mutex_init(&g_vm.class_lock, NULL);
     pthread_mutex_init(&g_vm.gil_mutex, NULL);
     pthread_cond_init(&g_vm.gil_cond, NULL);

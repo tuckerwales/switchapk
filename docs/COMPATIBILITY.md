@@ -119,7 +119,7 @@ Still logged on the way, none fatal: `javax.net.ssl` missing
 (Crashlytics settings fetch, Firebase), `X500Principal` (measurement),
 `PendingIntent` without FLAG_IMMUTABLE from measurement code targeting S+,
 `onUpdateInternetAvailable` called before the client registered its
-natives (the app catches it), "requires the Google Play Store". Gone
+natives (the app catches it; fixed 2026-10-17, see below), "requires the Google Play Store". Gone
 since: `FileChannel.lock` (Firebase installations' lock) and Firebase
 datastore's "Bad file descriptor" (`ParcelFileDescriptor` now holds a
 real descriptor, which its native shared counter truncates and maps).
@@ -144,6 +144,39 @@ result there and says nothing about switchapk. Next steps:
 - The client opens `imgui.ini` with a relative path. Native relative
   paths now fail as under Android's read-only "/" (ENOENT/EROFS), so it
   no longer writes into the host's working directory.
+
+Input, audio and network state (2026-10-17, host). Taps and keys reach
+the native client: with `SWITCHAPK_TRACE_NATIVE=Native` a tap logs two
+`GameActivity.onTouchEventNative` calls (down and up) and D-pad centre
+logs `onKeyDownNative`/`onKeyUpNative`; `setInputConnectionNative`
+registers GameTextInput's connection. Typing into the game's own text
+fields needs its login screen, so it is untested. Every OpenSL ES import
+is provided by the shim (`tests/apps/audio` plays through the same path),
+but the client creates no audio engine at the error screen; the shim now
+logs `D/opensl: slCreateEngine` and each player's format so a run that
+gets further shows it. The `onUpdateInternetAvailable` error above came
+from timing: the client registers that native with RegisterNatives after
+its first network callback. ConnectivityManager now sends
+`onCapabilitiesChanged` again 1.5 s after `onAvailable`, as Android does
+once a network validates, and the client's native side then receives the
+network state.
+
+To try it on a Linux PC with an ordinary network (no proxy re-terminating
+TLS, port 43594 open):
+
+```
+tools/run_osrs.sh path/to/osrs.apkm        # or base.apk plus splits, or .apks
+tools/run_osrs.sh --again --seconds 180    # rerun the APK assembled last time
+```
+
+It checks the build tools and packages, fetches the toolchains, builds,
+assembles the APK, checks that it carries libraries for the PC's
+architecture (x86_64, or arm64-v8a on an AArch64 machine), runs the
+client headless with a screenshot every 5 seconds (or `--script` your
+own) and writes `build/osrs-run/summary.txt`: name lookups and
+connections, audio setup, browser requests and errors. The host build
+has no window, so this shows how far the client gets, not a playable
+game.
 
 ## How gaps are found
 

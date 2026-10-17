@@ -1119,3 +1119,18 @@ what is left in flight.
   checks). TlsTest drives it over a blocking SocketChannel (handshake,
   ALPN, an HTTP request, close_notify both ways, a wrong-host rejection)
   and matches the reference JVM. PR #28 opened for the TLS work.
+- 2026-10-17, web content (WS18, new): web intents that nothing in the
+  app handles open the platform browser (Switch WebPage applet with a
+  callback URL in title-takeover mode, WifiWebAuth browser otherwise;
+  scripted on the host), with the app paused underneath and the OAuth
+  redirect delivered as an intent; PackageManager reports a browser
+  package. android.webkit is there in full (a subagent wrote the API
+  surface, CookieManager, URLUtil and MimeTypeMap); WebView renders HTML
+  as styled text without JavaScript. Found on the way: manifest `<data>`
+  elements were never parsed, so intent filters with schemes or hosts
+  never matched; they are now, with android.os.PatternMatcher and
+  wildcard hosts. tests/apps/web passes; all 48 samples (gles flaked once
+  on a slow first frame and passed on the rerun), VmTest, NetTest,
+  X509Test and TlsTest pass, all 14 corpus apps draw, and the Switch
+  build links. Not run on hardware.
+

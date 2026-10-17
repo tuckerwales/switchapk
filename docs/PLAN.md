@@ -421,6 +421,13 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
     keystore key pairs
   - [ ] ChaCha20-Poly1305, 3DES; certificates and CertificateFactory
     (with WS11 TLS)
+- [ ] WS18 web content
+  - [x] system browser for web intents with OAuth redirects (Switch web
+    applet; scripted on the host; tests/apps/web)
+  - [x] android.webkit API, WebView rendering HTML as styled text (no
+    JavaScript), CookieManager, URLUtil, MimeTypeMap (tests/apps/web)
+  - [ ] the browser applet on hardware (title takeover and applet mode)
+  - [ ] network images, forms, CSS layout; a real engine is out of reach
 - [ ] WS12 VM performance
 - [ ] WS14 AndroidX compatibility
 - [ ] docs/COMPATIBILITY.md with a tested APK corpus
@@ -587,6 +594,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
+
+- 2026-10-17 (WS18, touches WS10, WS4): new
+  `platform_open_url(url, callback, out_url, size)` in platform.h (Switch
+  web applets, a scripted browser on the host; new headless script
+  command `browser <url>|close`) and the static native
+  `android.app.SystemBrowser.nOpenUrl` (src/android/android_net.c, GIL
+  released, no Java fields read from C). ActivityThread sends unresolved
+  web ACTION_VIEW intents to it, and manifest `<data>` elements are now
+  parsed into intent filters. ARCHITECTURE 6.9 and 7.
 
 - 2026-10-11 (WS11, touches WS0 build, WS17, WS13 packaging): both
   builds link mbedtls 2.28 (host: libmbedtls-dev, also in CI; Switch:

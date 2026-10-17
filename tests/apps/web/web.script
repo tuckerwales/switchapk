@@ -1,0 +1,14 @@
+wait 6000
+idle 500
+screenshot 1-index.png
+tap 90 34
+wait 5000
+idle 500
+browser com.example.web:/oauth?code=abc&state=s1
+wait 4000
+idle 500
+browser close
+wait 4000
+idle 500
+screenshot 2-auth.png
+quit

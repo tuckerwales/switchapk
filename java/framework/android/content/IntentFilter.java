@@ -32,6 +32,7 @@ public class IntentFilter implements Parcelable {
     private ArrayList<String> mDataTypes;
     private ArrayList<String> mDataHosts;
     private ArrayList<String> mDataPaths;
+    private ArrayList<android.os.PatternMatcher> mDataPathMatchers;
 
     public static class MalformedMimeTypeException extends android.util.AndroidException {
         public MalformedMimeTypeException() {}
@@ -62,6 +63,7 @@ public class IntentFilter implements Parcelable {
         if (o.mDataTypes != null) mDataTypes = new ArrayList<String>(o.mDataTypes);
         if (o.mDataHosts != null) mDataHosts = new ArrayList<String>(o.mDataHosts);
         if (o.mDataPaths != null) mDataPaths = new ArrayList<String>(o.mDataPaths);
+        if (o.mDataPathMatchers != null) mDataPathMatchers = new ArrayList<android.os.PatternMatcher>(o.mDataPathMatchers);
     }
 
     public final void setPriority(int priority) { mPriority = priority; }
@@ -100,6 +102,8 @@ public class IntentFilter implements Parcelable {
     public final void addDataPath(String path, int type) {
         if (mDataPaths == null) mDataPaths = new ArrayList<String>();
         mDataPaths.add(path);
+        if (mDataPathMatchers == null) mDataPathMatchers = new ArrayList<android.os.PatternMatcher>();
+        mDataPathMatchers.add(new android.os.PatternMatcher(path, type));
     }
 
     public final void addCategory(String category) {
@@ -126,8 +130,20 @@ public class IntentFilter implements Parcelable {
             match = MATCH_CATEGORY_SCHEME;
             if (mDataHosts != null) {
                 String host = data != null ? data.getHost() : null;
-                if (host == null || !mDataHosts.contains(host)) return NO_MATCH_DATA;
+                if (host == null || !hostMatches(host)) return NO_MATCH_DATA;
                 match = MATCH_CATEGORY_HOST;
+                if (mDataPathMatchers != null) {
+                    String path = data.getPath();
+                    boolean any = false;
+                    for (android.os.PatternMatcher pm : mDataPathMatchers) {
+                        if (pm.match(path)) {
+                            any = true;
+                            break;
+                        }
+                    }
+                    if (!any) return NO_MATCH_DATA;
+                    match = MATCH_CATEGORY_PATH;
+                }
             }
         }
         if (mDataTypes != null) {
@@ -140,6 +156,19 @@ public class IntentFilter implements Parcelable {
             match = MATCH_CATEGORY_TYPE;
         }
         return match + MATCH_ADJUSTMENT_NORMAL;
+    }
+
+    /** "*" matches any host, "*.example.com" the domain and its subdomains, as in AOSP's AuthorityEntry. */
+    private boolean hostMatches(String host) {
+        for (String h : mDataHosts) {
+            if (h.equals("*") || h.equalsIgnoreCase(host)) return true;
+            if (h.startsWith("*")) {
+                String suffix = h.substring(1);
+                if (host.regionMatches(true, host.length() - suffix.length(), suffix, 0, suffix.length())) return true;
+                if (suffix.startsWith(".") && host.equalsIgnoreCase(suffix.substring(1))) return true;
+            }
+        }
+        return false;
     }
 
     public final int match(String action, String type, String scheme, Uri data, Set<String> categories, String logTag) {

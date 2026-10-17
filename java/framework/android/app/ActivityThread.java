@@ -844,6 +844,8 @@ public final class ActivityThread {
                     } else if ("category".equals(name) && filter != null) {
                         String category = attrString(parser, android.R.attr.name, "name");
                         if (category != null) filter.addCategory(category);
+                    } else if ("data".equals(name) && filter != null) {
+                        readFilterData(filter, parser);
                     }
                 } else if (type == XmlPullParser.END_TAG) {
                     String name = parser.getName();
@@ -892,6 +894,28 @@ public final class ActivityThread {
     }
 
     /** An activity-alias runs its target's class with the target's attributes (PackageParser.parseActivityAlias). */
+    /** A filter's &lt;data&gt; element; as in AOSP, the parts of all its data elements combine. */
+    private static void readFilterData(IntentFilter filter, android.content.res.XmlResourceParser parser) {
+        String scheme = attrString(parser, android.R.attr.scheme, "scheme");
+        if (scheme != null) filter.addDataScheme(scheme);
+        String host = attrString(parser, android.R.attr.host, "host");
+        if (host != null) filter.addDataAuthority(host, attrString(parser, android.R.attr.port, "port"));
+        String path = attrString(parser, android.R.attr.path, "path");
+        if (path != null) filter.addDataPath(path, android.os.PatternMatcher.PATTERN_LITERAL);
+        path = attrString(parser, android.R.attr.pathPrefix, "pathPrefix");
+        if (path != null) filter.addDataPath(path, android.os.PatternMatcher.PATTERN_PREFIX);
+        path = attrString(parser, android.R.attr.pathPattern, "pathPattern");
+        if (path != null) filter.addDataPath(path, android.os.PatternMatcher.PATTERN_SIMPLE_GLOB);
+        String mime = attrString(parser, android.R.attr.mimeType, "mimeType");
+        if (mime != null) {
+            try {
+                filter.addDataType(mime);
+            } catch (IntentFilter.MalformedMimeTypeException e) {
+                Log.w(TAG, "bad mimeType " + mime + " in the manifest");
+            }
+        }
+    }
+
     private static void resolveAliases() {
         for (int i = 0; i < sActivities.size(); i++) {
             ActivityInfo alias = sActivities.get(i).info;

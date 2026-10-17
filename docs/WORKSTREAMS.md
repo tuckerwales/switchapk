@@ -47,6 +47,7 @@ duplicating work.
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
 | WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress (sensors with fused gravity/rotation/orientation, battery broadcasts, rumble waveforms, PowerManager, and location/telephony/camera answering as absent done on the host, tests/apps/sensors; the IMU axis signs, rumble and psm have not been run on a console) | session 18, 2026-10-08 |
 | WS16 | libcore API completeness: members and classes android.jar has in java.* that libcore lacks | none | in progress (session 23: java.lang, java.util and java.util.concurrent gaps first; session 25: FileChannel locks/mapping, regex Unicode classes, SAX, logging, ServiceLoader, generic signatures, Unsafe done; java.time, ResourceBundle, DOM left) | session 25, 2026-10-09 (corpus blockers); session 23, 2026-10-09 |
+| WS18 | Web content: system browser for web intents, android.webkit WebView without an engine | WS4, WS11 | in progress (browser intents with OAuth redirects and a text-rendering WebView done on the host, tests/apps/web; not run on hardware) | 2026-10-17 |
 | WS17 | Crypto: JCA provider framework (java.security, javax.crypto), built-in provider, AndroidKeyStore | none | in progress (provider framework, digests, HMAC, AES ECB/CBC/CTR/GCM, PBKDF2, OS-entropy SecureRandom and a software AndroidKeyStore done (tests/dex/CryptoTest, tests/apps/keystore); RSA, EC (P-256/384/521) and DH keys, signatures, ciphers and agreement done (tests/dex/PublicKeyTest); keystore key pairs, DSA, X25519/Ed25519 and certificates left) | session 24, 2026-10-09 |
 
 Parallelism: after WS0 lands, WS1, WS4, WS6, WS7, WS9, WS10, WS11, WS12,
@@ -407,6 +408,20 @@ StampedLock, ForkJoin tasks.
 Acceptance: each batch has a `tests/dex` program that matches OpenJDK,
 and `api_check.py` shows no gaps in the packages it covers except the
 documented exclusions.
+
+## WS18: Web content
+
+Owns: `java/framework/android/webkit/**`, `android/app/SystemBrowser.java`,
+`android/net/http/SslError` and `SslCertificate`, `platform_open_url`.
+
+Scope: there is no browser engine. Web intents (Custom Tabs, AppAuth and
+other OAuth logins, "open in browser") go to the platform browser (the
+Switch's web applets) and redirects come back as intents. WebView shows
+HTML as styled text for help pages, licences and simple sites, with
+Android's client callbacks. Status: done on the host (ARCHITECTURE 6.9);
+the applets have not been run on a console. Later: network images,
+forms, and a WebView-to-applet hand-off for pages that need a real
+browser.
 
 ## WS17: Crypto (JCA)
 

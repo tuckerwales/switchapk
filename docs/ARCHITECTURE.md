@@ -1605,6 +1605,53 @@ loads and stores, atomic because Java threads hold the GIL. Off-heap
   (multi-touch), gamepad, Wi-Fi, audio output, both screen orientations
   and the accelerometer and gyroscope when the sensor service lists them.
 
+### 6.9 Web content (WS18)
+
+- No browser engine runs inside switchapk. Two things stand in for one.
+- System browser: `ActivityThread.startActivity` hands ACTION_VIEW on an
+  http(s) URL that nothing in the app resolves (Custom Tabs, AppAuth,
+  "open in browser") to `android.app.SystemBrowser`. The top activity
+  pauses and stops as if another app's activity came up, and
+  `platform_open_url` runs on a "browser" thread with a callback prefix:
+  the request's `redirect_uri` when the app handles it, else the app's
+  first BROWSABLE non-web scheme. A callback URL comes back as a
+  BROWSABLE ACTION_VIEW intent to the activity that takes it (OAuth
+  redirect receivers, which typically reach their caller with
+  CLEAR_TOP|SINGLE_TOP); otherwise the top activity resumes, which
+  AppAuth reads as a cancel. PackageManager reports a `com.android.browser`
+  package (queryIntentActivities for web URLs, getPackageInfo with a
+  signature) so apps that look for a browser find one.
+- `android.webkit.WebView` renders HTML as styled text in a ScrollView:
+  `<head>`, scripts, styles and comments are dropped, lists, `<pre>`,
+  tables (as rows) and headings become spans through `Html.fromHtml`,
+  links become ClickableSpans that navigate (shouldOverrideUrlLoading
+  first), images load from assets, files and data: URLs (not the
+  network). Pages come from `file:///android_asset/`,
+  `file:///android_res/`, files, content: and data: URLs, `loadData` /
+  `loadDataWithBaseURL`, and http(s) through HttpURLConnection with
+  CookieManager cookies, the settings' user agent and manual redirects
+  (each one offered to shouldOverrideUrlLoading, so OAuth redirects
+  caught inside a WebView work). Callbacks follow Android's order:
+  onPageStarted, progress, onReceivedTitle, onPageCommitVisible,
+  onPageFinished; errors go to both onReceivedError forms and show a
+  "Webpage not available" page. Non-text responses go to the
+  DownloadListener. There is no JavaScript: `evaluateJavascript` answers
+  "null" and JavaScript interfaces are kept but never called. History,
+  saveState/restoreState, find, HitTestResult for the last link.
+- The rest of android.webkit is the full API 35 surface: WebSettings
+  (`WebSettingsImpl`, Chromium's defaults for API 29), the clients,
+  CookieManager (`CookieManagerImpl`, RFC 6265 in memory: domains,
+  paths, expiry, Secure, prefixes), URLUtil, MimeTypeMap (Android 10's
+  table), back/forward lists, handlers and singletons;
+  android.net.http.SslError and SslCertificate.
+- Manifest `<data>` elements are parsed into intent filters (schemes,
+  hosts with `*.` wildcards, ports, path, pathPrefix and pathPattern via
+  `android.os.PatternMatcher`, MIME types); before, filters had no data
+  and so never matched an intent that carried any.
+- Test: `tests/apps/web` (asset page, link tap, back, loadDataWithBaseURL,
+  cookies, URLUtil and MimeTypeMap, then two browser logins: a redirect
+  and a cancel).
+
 ## 7. Platform layer (src/platform/platform.h)
 
 Single C interface implemented once per target:
@@ -1618,6 +1665,16 @@ Single C interface implemented once per target:
   `fn` runs after every wake and push, without platform locks held (the
   main ALooper's wake, 6.4)
 - text: `platform_request_text(id, initial, hint, input_type, max_len)`
+- browser (WS18): `platform_open_url(url, callback, out_url, size)`
+  shows `url` and blocks until the browser closes (callers use their own
+  thread). PLATFORM_BROWSER_CALLBACK when it reached a URL starting with
+  `callback` (copied to `out_url`), CLOSED when the user left it,
+  UNAVAILABLE when there is none. Switch: the WebPage applet with
+  `webConfigSetCallbackUrl` when running as an Application (title
+  takeover; it needs the application's whitelist), else the WifiWebAuth
+  browser, which cannot report a URL. Headless: the script plays the
+  browser (`browser <url>` navigates, `browser close` closes) and every
+  request is logged.
 - entropy (WS17): `platform_random_bytes(buf, len)` fills `buf` with
   cryptographically secure bytes and returns false if it cannot.
   Headless uses getrandom(2) (`/dev/urandom` before Linux 3.17); the

@@ -1300,3 +1300,14 @@ what is left in flight.
   10 ms, same entries and CRCs as the original APK, plays) and as an XAPK
   with a dex-carrying feature split; tests/launcher/check_launcher.sh
   lists and launches an .apkm. NRO builds; dex tests and samples pass.
+- 2026-10-18, TreeMap as a red-black tree (WS16): TreeMap was a sorted
+  array (O(n) inserts, quadratic for large maps) whose sub-maps,
+  descending maps and key sets were snapshot copies, so writes through
+  them were lost. It is now a red-black tree written for switchapk, with
+  live, range-checked sub-map and descending views (IllegalArgumentException
+  for keys out of range), navigable key set views, fail-fast iterators and
+  immutable snapshot entries from the navigation methods, as the JDK
+  specifies; the serial form is unchanged. TreeSet is backed by any
+  NavigableMap, so its subsets and descending set are views too. New
+  tests/dex/TreeMapTest (randomized operations against a reference, every
+  view kind, 300k operations); all dex tests pass.

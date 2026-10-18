@@ -1350,3 +1350,19 @@ what is left in flight.
   Calendar.toInstant. api_check: 0 missing except Instant.atOffset,
   atZone and now(Clock), which need ZoneId, ZoneOffset and Clock (not
   yet). New tests/dex/TimeTest; all dex tests pass.
+- 2026-10-18, missing java.* classes, batch 2 (WS16): Scanner (on-demand
+  buffering, locale-aware numbers, findInLine/findWithinHorizon/skip,
+  tokens/findAll), ResourceBundle with Control, ListResourceBundle and
+  PropertyResourceBundle (candidate locales, default-locale fallback,
+  class and .properties bundles through the class loader), java.sql
+  Date/Time/Timestamp/SQLException, StampedLock, ClassValue,
+  LongAccumulator, DoubleAdder, DoubleAccumulator. CharsetDecoder and
+  CharsetEncoder were stubs (no error actions, no decodeLoop/encodeLoop,
+  multi-byte characters split across buffers became U+FFFD); they now
+  follow the JDK's coder state machine with streaming UTF-8 (JDK
+  malformed lengths), ISO-8859-1, US-ASCII and UTF-16 coders, and
+  CoderResult, MalformedInputException, UnmappableCharacterException and
+  CoderMalfunctionError are complete. DecimalFormatSymbols now has CLDR
+  separators per locale (it always used English ones) and its full API.
+  All with android.jar's signatures. New tests/dex/MiscApiTest; all dex
+  tests and samples pass.

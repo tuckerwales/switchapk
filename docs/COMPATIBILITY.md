@@ -251,11 +251,15 @@ What it took, by the first blocker each fix removed:
 | A removed window loses focus while still added (apps call setFlags from onWindowFocusChanged(false)) | Shattered PD |
 | openFd refuses compressed assets like Android (was a descriptor that could not be mapped) | Mindustry (Arc falls back to streams) |
 
+Fixed 2026-10-18: Unciv's Kotlin reflection ("Unresolved class: class java.lang.Object" in
+StandardKTypes) needed `ClassLoader.getResource` to return URLs for APK entries (kotlin-reflect loads its
+`.kotlin_builtins` through it); Simon Tatham's Puzzles no longer hits Compose stubs (full RenderNode,
+RenderEffect, android.view.contentcapture).
+
 Still open:
 
 | Gap | Apps | Evidence |
 |---|---|---|
-| Compose: `View.getContentCaptureSession`, `RenderNode.getMatrix` and `setClipToOutline` auto-stub | Simon Tatham's Puzzles | run: STUB lines |
 | Executables share the app's loaded libraries instead of private copies, and cannot be killed (destroy() ends their streams) | DroidFish, Simon Tatham's Puzzles | spawn.c limits; not seen to matter yet |
 | Mindustry's map previews fail decoding a save chunk (EOFException in `ShortChunkSaveVersion.readMap`; was `Pixmap.setRaw` index -1024) | Mindustry | run, caught by the app; the same save decodes like the JDK through InflaterInputStream and DataInputStream, single and 8 threads, so the cause is in what the app does around it |
 | AppCompat/AndroidX surface: accessibility, android.transition, android.icu, AppOpsManager, window insets | Andor's Trail, DroidFish, Simple Calculator, Simon Tatham's Puzzles, Unciv | static scan, 80 to 190 SDK classes each |

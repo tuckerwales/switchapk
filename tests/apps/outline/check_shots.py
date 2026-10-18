@@ -18,7 +18,8 @@ from shotlib import check  # noqa: E402
 
 PAGE = 0xFF101820
 YELLOW = 0xFFFFF59D
-CHECKS = 3
+GREEN = 0xFF4CAF50
+CHECKS = 12
 
 
 def main():
@@ -33,6 +34,13 @@ def main():
         (95, 203, YELLOW, "inside the arc"),
         (144, 180, YELLOW, "top edge"),
         (222, 330, YELLOW, "center"),
+        # RenderNode (NodeView at 700,180): 200 px square at 50,50 scaled 0.5 about its center -> 800..900,
+        # 280..380, its 40 px outline radius scaled to 20.
+        (850, 330, GREEN, "node center"),
+        (850, 282, GREEN, "node top edge"),
+        (760, 240, PAGE, "node scaled away"),
+        (801, 281, PAGE, "node outline corner"),
+        (905, 330, PAGE, "node right of content"),
     ])
     if len(sys.argv) > 2:
         with open(sys.argv[2], errors="replace") as f:

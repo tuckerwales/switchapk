@@ -1258,3 +1258,16 @@ what is left in flight.
   View.get/setContentCaptureSession are in; a view has a session only if
   one is set on it or an ancestor, so normally null. The services sample
   gains a 26th step checking all of this.
+- 2026-10-18, Compose layers (WS1 with WS3): RenderNode was a thin
+  stand-in (no pivot, X/Y rotation, clip to outline or clip rect,
+  getMatrix), and Jetpack Compose draws every graphics layer through it.
+  It now follows hwui's RenderProperties: a transform about the pivot
+  (Camera for 3D), clipping to bounds, a clip rect and the outline,
+  alpha and compositing layers, and the remaining API (shadow colors,
+  projection flags, force dark). New RenderEffect (offset and color
+  filter effects drawn; blurs drawn unblurred; no RuntimeShader). A
+  helper added android.view.contentcapture as a device without the
+  service has it. tests/apps/outline compares RenderNode matrices with
+  View's and checks a scaled, outline-clipped node drawn from onDraw;
+  Simon Tatham's Puzzles hits no stubs.
+

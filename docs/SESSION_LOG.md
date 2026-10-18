@@ -1322,3 +1322,19 @@ what is left in flight.
   refusal, live sub-map and descending views sharing the lock, and the JDK
   serial forms. New tests/dex/ConcurrentSkipListTest (including 4 writer
   and 2 reader threads); all dex tests pass.
+- 2026-10-18, fork/join and executor gaps (WS16): ForkJoinTask,
+  RecursiveTask, RecursiveAction, CountedCompleter, ForkJoinWorkerThread,
+  ThreadLocalRandom, CompletionService and ExecutorCompletionService were
+  missing (Mindustry, Unciv, Vector Pinball, Andor's Trail, Simple
+  Calculator, Puzzles and OSRS reference them), ForkJoinPool was a fixed
+  ThreadPoolExecutor (wrong supertype; nested joins would deadlock), and
+  ExecutorService lacked the timed invokeAll/invokeAny (invokeAny also ran
+  tasks one after another). Now: a fork/join pool with a shared deque
+  (forks first, submissions last), on-demand daemon workers, joins that run
+  the joined task or other queued work instead of blocking, managedBlock
+  compensation, JDK exception reporting (join rethrows a copy made in the
+  joining thread, get wraps), CountedCompleter completion chains, and the
+  JDK's timed invokeAll/invokeAny. ThreadLocalRandom is per thread with
+  SplittableRandom's generator. All with android.jar's signatures (api_check
+  0 missing). New tests/dex/ForkJoinTest (stable over repeated runs); all
+  dex tests pass; the six corpus apps that reference these still draw.

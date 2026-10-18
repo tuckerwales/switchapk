@@ -1221,3 +1221,14 @@ what is left in flight.
   serialVersionUIDs depended on it). run_dex_test.sh keeps JVM output
   after a NUL character (grep -a). New tests/dex/ChmTest; SerialTest
   gains map and lock round trips, which match the JVM byte for byte.
+- 2026-10-18, Switch home screen speed (WS10): browsing the APK list was
+  slow because every animated frame redrew the whole screen with the
+  path rasterizer (callgrind: 89% in rounded-rect fills for tile shadows,
+  gradients and glow rings). The launcher now caches shared tile layers,
+  the grow animation in 12 steps, the selected icon's scaled copy and the
+  static chrome, and composites with integer blits; the new
+  `--launcher-bench` mode measures it: 28 ms to 1.5 ms per frame on the
+  host (worst 47 ms to 3.4 ms). `platform_present` swizzles with NEON.
+  Screenshots match the old renderer except that scrolling tiles sit on
+  whole pixels; tests/launcher/check_launcher.sh passes and the NRO
+  builds. Not run on hardware.

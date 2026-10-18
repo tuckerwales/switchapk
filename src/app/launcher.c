@@ -52,6 +52,8 @@
 #define PANEL_BOTTOM 632
 #define BAR_TOP 662
 
+#define GROW_STEPS 12 /* cached frames of the selection animation */
+
 #define REPEAT_DELAY_NS 380000000LL
 #define REPEAT_RATE_NS 70000000LL
 #define DRAG_SLOP 22
@@ -290,6 +292,146 @@ static SavedTarget push_target(uint32_t *px, int w, int h) {
 static void pop_target(SavedTarget s) {
     g_t = s.t;
     g_clip = s.clip;
+}
+
+/* ---- pre-rendered layers ---------------------------------------------------------- */
+
+/* A premultiplied ARGB image with an anchor point (ax, ay) inside it; blits place the anchor. Drawing the tiles
+ * with the path rasterizer every frame cost about 30 ms on the host (several times that on the console), so the
+ * parts that never change are drawn once and composited here with integer arithmetic. */
+typedef struct {
+    uint32_t *px;
+    int w, h;
+    int ax, ay;
+} Layer;
+
+static void premultiply(uint32_t *px, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        uint32_t c = px[i], a = c >> 24;
+        if (a == 255) continue;
+        uint32_t rb = (c & 0xFF00FFu) * a + 0x800080u;
+        rb = ((rb + ((rb >> 8) & 0xFF00FFu)) >> 8) & 0xFF00FFu;
+        uint32_t g = (c & 0x00FF00u) * a + 0x008000u;
+        g = ((g + ((g >> 8) & 0x00FF00u)) >> 8) & 0x00FF00u;
+        px[i] = (a << 24) | rb | g;
+    }
+}
+
+/* Draws with `draw` into a size x size canvas around its center, then trims the transparent margin. */
+static Layer make_layer(int size, void (*draw)(float cx, float cy, const void *arg), const void *arg) {
+    uint32_t *px = new_canvas(size, size);
+    SavedTarget s = push_target(px, size, size);
+    draw((float)size / 2, (float)size / 2, arg);
+    pop_target(s);
+    int l = size, t = size, r = -1, b = -1;
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+            if (px[(size_t)y * size + x] >> 24) {
+                if (x < l) l = x;
+                if (x > r) r = x;
+                if (y < t) t = y;
+                if (y > b) b = y;
+            }
+    Layer ly = {NULL, 0, 0, 0, 0};
+    if (r < 0) {
+        free(px);
+        return ly;
+    }
+    ly.w = r - l + 1;
+    ly.h = b - t + 1;
+    ly.ax = size / 2 - l;
+    ly.ay = size / 2 - t;
+    ly.px = sa_malloc((size_t)ly.w * ly.h * sizeof *ly.px);
+    for (int y = 0; y < ly.h; y++) memcpy(ly.px + (size_t)y * ly.w, px + (size_t)(y + t) * size + l, (size_t)ly.w * 4);
+    free(px);
+    premultiply(ly.px, (size_t)ly.w * ly.h);
+    return ly;
+}
+
+static void free_layer(Layer *ly) {
+    free(ly->px);
+    ly->px = NULL;
+}
+
+/* d over an opaque destination, s premultiplied and scaled by alpha (0..256). */
+static inline uint32_t over_px(uint32_t d, uint32_t s, uint32_t alpha) {
+    if (alpha < 256) {
+        uint32_t rb = ((s & 0xFF00FFu) * alpha >> 8) & 0xFF00FFu;
+        uint32_t ag = (((s >> 8) & 0xFF00FFu) * alpha) & 0xFF00FF00u;
+        s = ag | rb;
+    }
+    uint32_t ia = 255 - (s >> 24);
+    if (ia == 0) return s | 0xFF000000u;
+    uint32_t rb = (d & 0xFF00FFu) * ia + 0x800080u;
+    rb = ((rb + ((rb >> 8) & 0xFF00FFu)) >> 8) & 0xFF00FFu;
+    uint32_t g = (d & 0x00FF00u) * ia + 0x008000u;
+    g = ((g + ((g >> 8) & 0x00FF00u)) >> 8) & 0x00FF00u;
+    return 0xFF000000u | ((s & 0xFFFFFFu) + rb + g);
+}
+
+/* Composites ly with its anchor at the pixel (x, y) of the screen target. */
+static void blit_layer(const Layer *ly, int x, int y, uint32_t alpha) {
+    if (!ly->px || alpha == 0) return;
+    int x0 = x - ly->ax, y0 = y - ly->ay;
+    int l = x0 < g_clip.l ? g_clip.l : x0, t = y0 < g_clip.t ? g_clip.t : y0;
+    int r = x0 + ly->w > g_clip.r ? g_clip.r : x0 + ly->w, b = y0 + ly->h > g_clip.b ? g_clip.b : y0 + ly->h;
+    for (int py = t; py < b; py++) {
+        uint32_t *d = g_t.px + (size_t)py * g_t.stride;
+        const uint32_t *sp = ly->px + (size_t)(py - y0) * ly->w - x0;
+        for (int px = l; px < r; px++) {
+            uint32_t sc = sp[px];
+            if (sc) d[px] = over_px(d[px], sc, alpha);
+        }
+    }
+}
+
+/* Composites ly scaled by `scale` about its anchor, placed at (cx, cy), with bilinear filtering. With replace,
+ * stores the filtered pixels instead (for rendering into a transparent canvas). */
+static void blit_scaled(const Layer *ly, float cx, float cy, float scale, uint32_t alpha, bool replace) {
+    if (!ly->px || alpha == 0 || scale <= 0) return;
+    if (!replace && fabsf(scale - 1.0f) < 0.002f) {
+        blit_layer(ly, (int)lroundf(cx), (int)lroundf(cy), alpha);
+        return;
+    }
+    float fl = cx - (float)ly->ax * scale, ft = cy - (float)ly->ay * scale;
+    int l = (int)floorf(fl), t = (int)floorf(ft);
+    int r = (int)ceilf(fl + (float)ly->w * scale), b = (int)ceilf(ft + (float)ly->h * scale);
+    if (l < g_clip.l) l = g_clip.l;
+    if (t < g_clip.t) t = g_clip.t;
+    if (r > g_clip.r) r = g_clip.r;
+    if (b > g_clip.b) b = g_clip.b;
+    const int32_t step = (int32_t)(65536.0f / scale);
+    for (int py = t; py < b; py++) {
+        /* source position of this pixel's center, 16.16, minus half a texel for the bilinear taps */
+        int32_t sy = (int32_t)((((float)py + 0.5f - ft) / scale - 0.5f) * 65536.0f);
+        int y0 = sy >> 16;
+        uint32_t wy = (uint32_t)(sy & 0xFFFF) >> 8;
+        int32_t sx = (int32_t)((((float)l + 0.5f - fl) / scale - 0.5f) * 65536.0f);
+        uint32_t *d = g_t.px + (size_t)py * g_t.stride;
+        for (int px = l; px < r; px++, sx += step) {
+            int x0 = sx >> 16;
+            uint32_t wx = (uint32_t)(sx & 0xFFFF) >> 8;
+            uint32_t c[4] = {0, 0, 0, 0};
+            for (int k = 0; k < 4; k++) {
+                int xx = x0 + (k & 1), yy = y0 + (k >> 1);
+                if (xx >= 0 && yy >= 0 && xx < ly->w && yy < ly->h) c[k] = ly->px[(size_t)yy * ly->w + xx];
+            }
+            if (!(c[0] | c[1] | c[2] | c[3])) continue;
+            /* 8-bit weights summing to 256, so two channels share each 32-bit multiply */
+            uint32_t w0 = (256 - wx) * (256 - wy) >> 8, w1 = wx * (256 - wy) >> 8, w2 = (256 - wx) * wy >> 8;
+            uint32_t w3 = 256 - w0 - w1 - w2;
+            uint32_t rb = (c[0] & 0xFF00FFu) * w0 + (c[1] & 0xFF00FFu) * w1 + (c[2] & 0xFF00FFu) * w2 +
+                          (c[3] & 0xFF00FFu) * w3;
+            uint32_t ag = ((c[0] >> 8) & 0xFF00FFu) * w0 + ((c[1] >> 8) & 0xFF00FFu) * w1 +
+                          ((c[2] >> 8) & 0xFF00FFu) * w2 + ((c[3] >> 8) & 0xFF00FFu) * w3;
+            uint32_t sc = ((rb >> 8) & 0xFF00FFu) | (ag & 0xFF00FF00u);
+            d[px] = replace ? sc : over_px(d[px], sc, alpha);
+        }
+    }
+}
+
+static void blit_layer_scaled(const Layer *ly, float cx, float cy, float scale, uint32_t alpha) {
+    blit_scaled(ly, cx, cy, scale, alpha, false);
 }
 
 static uint32_t *render_background(uint32_t glow_a, uint32_t glow_b) {
@@ -576,6 +718,7 @@ typedef struct {
     int64_t size;
     int64_t mtime;
     uint32_t *icon; /* TILE_ICON x TILE_ICON */
+    uint32_t *icon_pm; /* the same, premultiplied, made on first draw */
     bool loaded;
     float hl;       /* 0..1 selection highlight, animated */
 } Item;
@@ -592,6 +735,17 @@ struct Launcher {
     char *state_path;
     char *cache_dir;
     uint32_t *bg;
+
+    /* Pre-rendered parts (see draw_tiles): every tile's card is the same, so it is drawn once. */
+    Layer card;      /* shadows, card and edge of an unselected tile */
+    Layer card_sel;  /* the selected tile at full size, rings included */
+    Layer grow_steps[GROW_STEPS]; /* the tile part way through the grow animation, made on first use */
+    Layer badge;     /* the "NEW" pill */
+    Layer sel_icon;  /* the selected item's icon at the grown size, for the steady state */
+    const uint32_t *sel_icon_src;
+    uint32_t *chrome; /* background, header, panel frame, hints: everything that does not move */
+    char chrome_key[160];
+    Hits chrome_hits;
 
     Item *items;
     int count;
@@ -620,6 +774,9 @@ struct Launcher {
 
     char *chosen;
 };
+
+static void build_layers(Launcher *l);
+static void free_layers(Launcher *l);
 
 static int64_t played_time(const Launcher *l, const char *file) {
     for (int i = 0; i < l->nplayed; i++)
@@ -676,10 +833,12 @@ static void free_items(Launcher *l) {
         free(it->package);
         free(it->version);
         free(it->icon);
+        free(it->icon_pm);
     }
     free(l->items);
     l->items = NULL;
     l->count = 0;
+    l->sel_icon_src = NULL;
 }
 
 /* Lists the folder; labels and icons come later, a few per frame (load_some). */
@@ -857,6 +1016,7 @@ Launcher *launcher_create(const char *apk_dir, const char *state_dir) {
     l->cache_dir = sa_sprintf("%s/icons", state_dir);
     sa_mkdirs(l->cache_dir);
     l->bg = render_background(0x3009B4E0, 0x2AE8343A);
+    build_layers(l);
     load_state(l);
     scan(l);
     return l;
@@ -870,6 +1030,8 @@ void launcher_destroy(Launcher *l) {
     free(l->focus);
     free(l->chosen);
     free(l->bg);
+    free(l->chrome);
+    free_layers(l);
     free(l->dir);
     free(l->state_path);
     free(l->cache_dir);
@@ -921,42 +1083,132 @@ static void format_played(int64_t when, char *out, size_t n) {
 
 static float tile_x(const Launcher *l, int i) { return MARGIN + ((float)i - l->cam) * TILE_STRIDE; }
 
-static void draw_tile(Launcher *l, int i) {
-    Item *it = &l->items[i];
-    const float hl = it->hl;
-    const float cx = tile_x(l, i) + TILE / 2.0f, cy = TILE_TOP + TILE / 2.0f;
+/* The parts of a tile around its center (cx, cy) with highlight hl, as vector drawing. They are rendered once
+ * into layers (build_layers); the frame composites those. */
+enum { PART_RINGS_UNDER = 1, PART_CARD = 2, PART_RINGS_OVER = 4 };
+
+typedef struct {
+    float hl;
+    int parts;
+} TilePaint;
+
+static void draw_tile_parts(float cx, float cy, const void *arg) {
+    const TilePaint *tp = arg;
+    const float hl = tp->hl;
     const float half = TILE / 2.0f * (1.0f + TILE_GROW * hl);
     const float L = cx - half, T = cy - half, R = cx + half, B = cy + half;
     const float rad = TILE_RADIUS * (1.0f + TILE_GROW * hl);
-
-    fill_rrect(L + 4, T + 14, R - 4, B + 14, rad, 0x30000000);
-    fill_rrect(L, T + 6, R, B + 6, rad, 0x38000000);
-    if (hl > 0.01f) {
+    if ((tp->parts & PART_RINGS_UNDER) && hl > 0.01f) {
         for (int k = 4; k >= 1; k--) {
             float e = 7 + (float)k * 4;
             int a = (int)(30 * hl / k);
             stroke_rrect_hgrad(L - e, T - e, R + e, B + e, rad + e, 4, alpha(COL_BLUE, a), alpha(COL_RED, a));
         }
     }
-    grad_rrect(L, T, R, B, rad, COL_CARD_HI, COL_CARD);
-    stroke_rrect(L + 0.5f, T + 0.5f, R - 0.5f, B - 0.5f, rad, 1, 0x14FFFFFF);
-    if (it->icon) {
-        float ih = TILE_ICON / 2.0f * (1.0f + TILE_GROW * hl);
-        draw_bitmap(it->icon, TILE_ICON, TILE_ICON, cx - ih, cy - ih, cx + ih, cy + ih);
-    } else {
-        /* still loading: a soft placeholder */
-        fill_rrect(cx - 56, cy - 56, cx + 56, cy + 56, 26, 0x14FFFFFF);
+    if (tp->parts & PART_CARD) {
+        fill_rrect(L + 4, T + 14, R - 4, B + 14, rad, 0x30000000);
+        fill_rrect(L, T + 6, R, B + 6, rad, 0x38000000);
+        grad_rrect(L, T, R, B, rad, COL_CARD_HI, COL_CARD);
+        stroke_rrect(L + 0.5f, T + 0.5f, R - 0.5f, B - 0.5f, rad, 1, 0x14FFFFFF);
     }
-    if (hl > 0.01f) {
+    if ((tp->parts & PART_RINGS_OVER) && hl > 0.01f) {
         const float e = 7;
         int a = (int)(255 * hl);
         stroke_rrect_hgrad(L - e, T - e, R + e, B + e, rad + e, 4.5f, alpha(COL_BLUE, a), alpha(COL_RED, a));
     }
-    if (it->loaded && played_time(l, it->file) == 0) {
-        const float bw = 50, bh = 24;
-        fill_rrect(R - bw - 12, T + 12, R - 12, T + 12 + bh, bh / 2, COL_RED);
-        draw_text_center("NEW", R - 12 - bw / 2, T + 12 + 17, 14, 0xFFFFFFFF, true, 0);
+}
+
+static void draw_badge(float cx, float cy, const void *arg) {
+    (void)arg;
+    const float bw = 50, bh = 24;
+    fill_rrect(cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2, bh / 2, COL_RED);
+    draw_text_center("NEW", cx, cy - bh / 2 + 17, 14, 0xFFFFFFFF, true, 0);
+}
+
+static void build_layers(Launcher *l) {
+    const int size = 2 * (TILE + 80);
+    TilePaint card = {0, PART_CARD};
+    TilePaint sel = {1, PART_RINGS_UNDER | PART_CARD | PART_RINGS_OVER};
+    l->card = make_layer(size, draw_tile_parts, &card);
+    l->card_sel = make_layer(size, draw_tile_parts, &sel);
+    l->badge = make_layer(80, draw_badge, NULL);
+}
+
+static void free_layers(Launcher *l) {
+    free_layer(&l->card);
+    free_layer(&l->card_sel);
+    for (int i = 0; i < GROW_STEPS; i++) free_layer(&l->grow_steps[i]);
+    free_layer(&l->badge);
+    free_layer(&l->sel_icon);
+}
+
+static void make_grow_step(Launcher *l, int k) {
+    if (l->grow_steps[k].px) return;
+    TilePaint tp = {(float)k / GROW_STEPS, PART_RINGS_UNDER | PART_CARD | PART_RINGS_OVER};
+    l->grow_steps[k] = make_layer(2 * (TILE + 80), draw_tile_parts, &tp);
+}
+
+/* Renders one missing animation step; called on idle frames so browsing never waits for one. */
+static bool warm_grow_steps(Launcher *l) {
+    for (int k = 1; k < GROW_STEPS; k++)
+        if (!l->grow_steps[k].px) {
+            make_grow_step(l, k);
+            return true;
+        }
+    return false;
+}
+
+static Layer icon_layer(Item *it) {
+    if (!it->icon_pm) {
+        it->icon_pm = sa_malloc((size_t)TILE_ICON * TILE_ICON * sizeof *it->icon_pm);
+        memcpy(it->icon_pm, it->icon, (size_t)TILE_ICON * TILE_ICON * sizeof *it->icon_pm);
+        premultiply(it->icon_pm, (size_t)TILE_ICON * TILE_ICON);
     }
+    return (Layer){it->icon_pm, TILE_ICON, TILE_ICON, TILE_ICON / 2, TILE_ICON / 2};
+}
+
+static void draw_tile(Launcher *l, int i) {
+    Item *it = &l->items[i];
+    const float hl = it->hl;
+    /* whole pixels while scrolling, so the cached layers blit 1:1 */
+    const float cx = roundf(tile_x(l, i) + TILE / 2.0f), cy = TILE_TOP + TILE / 2.0f;
+    const float grow = 1.0f + TILE_GROW * hl;
+    const float half = TILE / 2.0f * grow;
+    const float T = cy - half, R = cx + half;
+
+    if (hl <= 0.01f) {
+        blit_layer(&l->card, (int)cx, (int)cy, 256);
+    } else if (hl >= 0.99f) {
+        blit_layer(&l->card_sel, (int)cx, (int)cy, 256);
+    } else {
+        /* growing or shrinking: the nearest cached step of the animation */
+        int k = (int)lroundf(hl * GROW_STEPS);
+        if (k < 1) k = 1;
+        if (k > GROW_STEPS - 1) k = GROW_STEPS - 1;
+        make_grow_step(l, k);
+        blit_layer(&l->grow_steps[k], (int)cx, (int)cy, 256);
+    }
+    if (it->icon && hl >= 0.99f) {
+        if (l->sel_icon_src != it->icon) {
+            /* scale once per selection instead of every frame */
+            Layer ic = icon_layer(it);
+            int size = (int)ceilf(TILE_ICON * (1.0f + TILE_GROW)) + 2;
+            free_layer(&l->sel_icon);
+            l->sel_icon = (Layer){new_canvas(size, size), size, size, size / 2, size / 2};
+            SavedTarget saved = push_target(l->sel_icon.px, size, size);
+            blit_scaled(&ic, (float)(size / 2), (float)(size / 2), 1.0f + TILE_GROW, 256, true);
+            pop_target(saved);
+            l->sel_icon_src = it->icon;
+        }
+        blit_layer(&l->sel_icon, (int)cx, (int)cy, 256);
+    } else if (it->icon) {
+        Layer ic = icon_layer(it);
+        blit_layer_scaled(&ic, cx, cy, grow, 256);
+    } else {
+        /* still loading: a soft placeholder */
+        fill_rrect(cx - 56, cy - 56, cx + 56, cy + 56, 26, 0x14FFFFFF);
+    }
+    if (it->loaded && played_time(l, it->file) == 0) blit_layer(&l->badge, (int)(R - 12 - 25), (int)(T + 12 + 12), 256);
     /* name under every tile, brighter for the selected one */
     uint32_t c = hl > 0.5f ? COL_TEXT : COL_DIM;
     draw_text_center(it->label ? it->label : it->file, cx, TILE_TOP + TILE + 38, 19, c, hl > 0.5f, TILE + 12);
@@ -964,20 +1216,28 @@ static void draw_tile(Launcher *l, int i) {
             (uint32_t)i);
 }
 
-static void draw_details(Launcher *l) {
-    const Item *it = &l->items[l->sel];
+#define PLAY_W 236
+#define PLAY_H 76
+
+/* The details panel's frame and Play button, which do not depend on the selection (part of the chrome). */
+static void draw_panel_frame(Hits *hits) {
     const float L = MARGIN, R = UI_W - MARGIN, T = PANEL_TOP, B = PANEL_BOTTOM;
     grad_rrect(L, T, R, B, 28, 0xC8143448, 0xC80D2636);
     stroke_rrect(L + 0.5f, T + 0.5f, R - 0.5f, B - 0.5f, 28, 1, 0x18FFFFFF);
 
-    /* Play button */
-    const float bw = 236, bh = 76, bl = R - 40 - bw, bt = (T + B) / 2 - bh / 2;
+    const float bw = PLAY_W, bh = PLAY_H, bl = R - 40 - bw, bt = (T + B) / 2 - bh / 2;
     fill_rrect(bl, bt + 6, bl + bw, bt + bh + 6, bh / 2, 0x40000000);
     grad_rrect(bl, bt, bl + bw, bt + bh, bh / 2, COL_ACCENT_HI, COL_ACCENT);
     button_glyph("A", bl + 46, bt + bh / 2, 19, COL_ON_ACCENT, COL_ACCENT);
     draw_text("Play", bl + 82, bt + bh / 2 + 11, 32, COL_ON_ACCENT, true);
-    add_hit(&l->hits, bl, bt, bl + bw, bt + bh, HIT_BUTTON, UI_BTN_A);
+    add_hit(hits, bl, bt, bl + bw, bt + bh, HIT_BUTTON, UI_BTN_A);
+}
 
+/* The selected app's name, package, version, size and when it was last played. */
+static void draw_details(Launcher *l) {
+    const Item *it = &l->items[l->sel];
+    const float L = MARGIN, R = UI_W - MARGIN, T = PANEL_TOP;
+    const float bl = R - 40 - PLAY_W;
     const float tx = L + 40, max_w = bl - tx - 32;
     draw_text_fit(it->label ? it->label : it->file, tx, T + 66, 38, COL_TEXT, true, max_w);
 
@@ -1054,20 +1314,51 @@ static void draw_toast(Launcher *l, int64_t now) {
     draw_text_center(l->toast, cx, T + 29, 21, COL_TEXT, false, 0);
 }
 
-static void draw_launcher(Launcher *l, uint32_t *screen, int64_t now) {
-    ui_begin(screen);
-    memcpy(screen, l->bg, (size_t)UI_W * UI_H * sizeof *screen);
-    l->hits.n = 0;
-    char sub[48] = "";
-    if (!l->loading && l->count > 0) snprintf(sub, sizeof sub, "%d app%s", l->count, l->count == 1 ? "" : "s");
+static const char *list_heading(const Launcher *l) {
+    if (l->sort == SORT_NAME) return "All apps, A to Z";
+    return played_time(l, l->items[0].file) == 0 ? "All apps" : "Recently played";
+}
+
+/* Everything on the home screen that changes only with the status bar, the sort or the app count: drawn into
+ * l->chrome when its key changes, then copied under each frame. */
+static void update_chrome(Launcher *l) {
+    char key[sizeof l->chrome_key];
+    snprintf(key, sizeof key, "%s|%d|%d|%d|%d|%d|%d|%s", l->status.clock, l->status.has_battery, l->status.battery,
+             l->status.charging, l->status.wifi, l->count, l->sort, list_heading(l));
+    if (l->chrome && !strcmp(key, l->chrome_key)) return;
+    snprintf(l->chrome_key, sizeof l->chrome_key, "%s", key);
+    if (!l->chrome) l->chrome = sa_malloc((size_t)UI_W * UI_H * sizeof *l->chrome);
+    memcpy(l->chrome, l->bg, (size_t)UI_W * UI_H * sizeof *l->chrome);
+    SavedTarget saved = push_target(l->chrome, UI_W, UI_H);
+    l->chrome_hits.n = 0;
+    char sub[48];
+    snprintf(sub, sizeof sub, "%d app%s", l->count, l->count == 1 ? "" : "s");
     draw_header(sub, &l->status);
     draw_bottom_bar();
+    draw_text(list_heading(l), MARGIN, 140, 22, COL_DIM, true);
+    draw_panel_frame(&l->chrome_hits);
+    const Hint h[] = {
+        {"A", "Play", UI_BTN_A},
+        {"Y", l->sort == SORT_NAME ? "Sort: A to Z" : "Sort: Recent", UI_BTN_Y},
+        {"X", "Refresh", UI_BTN_X},
+        {"+", "Exit", UI_BTN_PLUS},
+    };
+    draw_hints(&l->chrome_hits, h, (int)SA_ARRAY_LEN(h));
+    pop_target(saved);
+}
 
-    if (l->loading) {
-        draw_loading(l);
-        return;
-    }
-    if (l->count == 0) {
+static void draw_launcher(Launcher *l, uint32_t *screen, int64_t now) {
+    ui_begin(screen);
+    l->hits.n = 0;
+    if (l->loading || l->count == 0) {
+        memcpy(screen, l->bg, (size_t)UI_W * UI_H * sizeof *screen);
+        char sub[48] = "";
+        draw_header(sub, &l->status);
+        draw_bottom_bar();
+        if (l->loading) {
+            draw_loading(l);
+            return;
+        }
         draw_empty(l);
         static const Hint h[] = {{"X", "Refresh", UI_BTN_X}, {"+", "Exit", UI_BTN_PLUS}};
         draw_hints(&l->hits, h, (int)SA_ARRAY_LEN(h));
@@ -1075,9 +1366,9 @@ static void draw_launcher(Launcher *l, uint32_t *screen, int64_t now) {
         return;
     }
 
-    const char *heading = l->sort == SORT_NAME ? "All apps, A to Z" : "Recently played";
-    if (l->sort == SORT_RECENT && played_time(l, l->items[0].file) == 0) heading = "All apps";
-    draw_text(heading, MARGIN, 140, 22, COL_DIM, true);
+    update_chrome(l);
+    memcpy(screen, l->chrome, (size_t)UI_W * UI_H * sizeof *screen);
+    l->hits = l->chrome_hits;
     int first = (int)floorf(l->cam) - 1, last = (int)ceilf(l->cam) + VISIBLE_TILES + 1;
     if (first < 0) first = 0;
     if (last > l->count) last = l->count;
@@ -1090,13 +1381,6 @@ static void draw_launcher(Launcher *l, uint32_t *screen, int64_t now) {
     char pos[32];
     snprintf(pos, sizeof pos, "%d / %d", l->sel + 1, l->count);
     draw_text(pos, MARGIN, BAR_TOP + 36, 21, COL_FAINT, false);
-    const Hint h[] = {
-        {"A", "Play", UI_BTN_A},
-        {"Y", l->sort == SORT_NAME ? "Sort: A to Z" : "Sort: Recent", UI_BTN_Y},
-        {"X", "Refresh", UI_BTN_X},
-        {"+", "Exit", UI_BTN_PLUS},
-    };
-    draw_hints(&l->hits, h, (int)SA_ARRAY_LEN(h));
     draw_toast(l, now);
 }
 
@@ -1222,7 +1506,10 @@ int launcher_frame(Launcher *l, uint32_t *screen, const UiInput *in, const UiSta
     if (toast_now != l->toast_shown) l->dirty = true;
     l->toast_shown = toast_now;
 
-    if (!l->dirty && !moving) return UI_IDLE;
+    if (!l->dirty && !moving) {
+        warm_grow_steps(l);
+        return UI_IDLE;
+    }
     l->dirty = false;
     draw_launcher(l, screen, now);
     return UI_REDRAW;

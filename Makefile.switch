@@ -129,6 +129,10 @@ clean:
 # Every sample under tests/apps (a directory with AndroidManifest.xml) goes in switch/switchapk/apks.
 # Apps with native code (native/build.sh, needs clang and lld) are always rebuilt with arm64-v8a libraries
 # (NDK_ARM64=1): a host build only carries x86_64 ones.
+# FDROID=1 (the default) also adds the open-source corpus apps (tests/corpus/corpus.json) that
+# `tools/corpus.py fetch` has downloaded, checked against their pinned sha256. Proprietary corpus apps
+# are never packaged. FDROID=0 leaves them out.
+FDROID ?= 1
 SAMPLE_APPS := $(sort $(patsubst tests/apps/%/AndroidManifest.xml,%,$(wildcard tests/apps/*/AndroidManifest.xml)))
 SD := $(BUILD)/sd
 
@@ -144,7 +148,8 @@ dist: $(BUILD)/switchapk.nro
 	    fi; \
 	    cp build/apps/$$app/$$app.apk $(SD)/switch/switchapk/apks/; \
 	done
-	cd $(SD) && zip -qr ../switchapk-sd.zip switch
+	if [ "$(FDROID)" = 1 ]; then python3 tools/corpus.py dist $(SD)/switch/switchapk/apks || exit 1; fi
+	cd $(SD) && zip -qr -n .apk ../switchapk-sd.zip switch
 	@echo "$(BUILD)/switchapk-sd.zip: unzip at the root of the SD card"
 
 .PHONY: dist

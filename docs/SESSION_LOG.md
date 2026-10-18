@@ -1284,3 +1284,9 @@ what is left in flight.
   were reported as members). New tests/dex/NestedClassTest. Mindustry
   reaches its main menu with every preview; this also fixes gameplay
   for every block with its own building (turrets, conveyors, cores).
+- 2026-10-18, F-Droid apps in the SD zip: `make -f Makefile.switch dist`
+  now adds the open-source corpus apps (new `tools/corpus.py dist`, which
+  copies each fetched APK after checking its pinned sha256 and never
+  copies a proprietary one), so the CI artifact is ready to test on a
+  Switch. CI fetches them once (cached by the corpus.json hash) and checks
+  the zip has all 13 and no local APK. `FDROID=0` leaves them out.

@@ -30,6 +30,8 @@ bool vm_init(void) {
     memset(&g_vm, 0, sizeof g_vm);
     const char *tn = getenv("SWITCHAPK_TRACE_NATIVE");
     g_vm.trace_native = tn && *tn;
+    const char *tc = getenv("SWITCHAPK_TRACE_CALLS");
+    g_vm.trace_calls = tc && *tc;
     pthread_mutex_init(&g_vm.class_lock, NULL);
     pthread_mutex_init(&g_vm.gil_mutex, NULL);
     pthread_cond_init(&g_vm.gil_cond, NULL);

@@ -139,8 +139,23 @@ public class File implements Serializable, Comparable<File> {
         return new java.net.URL("file://" + getAbsolutePath());
     }
 
+    /** As Java: "file:" and the absolute path, quoted, with a trailing slash for a directory. */
     public java.net.URI toURI() {
-        return java.net.URI.create("file://" + getAbsolutePath());
+        String p = getAbsolutePath();
+        if (!p.startsWith("/")) {
+            p = "/" + p;
+        }
+        if (!p.endsWith("/") && isDirectory()) {
+            p = p + "/";
+        }
+        if (p.startsWith("//")) {
+            p = "//" + p;
+        }
+        try {
+            return new java.net.URI("file", null, p, null);
+        } catch (java.net.URISyntaxException e) {
+            throw new Error(e);
+        }
     }
 
     private long[] stat() {

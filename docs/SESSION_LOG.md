@@ -1232,3 +1232,17 @@ what is left in flight.
   Screenshots match the old renderer except that scrolling tiles sit on
   whole pixels; tests/launcher/check_launcher.sh passes and the NRO
   builds. Not run on hardware.
+- 2026-10-18, class loader resources as URLs (WS16): Unciv's Kotlin
+  reflection failed ("Unresolved class: java.lang.Object") because
+  kotlin-reflect loads its builtins with ClassLoader.getResource and
+  ours always returned null (getResources too, so ServiceLoader-style
+  scans found nothing). Class loaders now resolve resources as Android
+  does: parent first, then BaseDexClassLoader.findResource, which
+  returns `jar:file:<apk>!/<entry>` URLs for the app's APK entries.
+  New java.net.JarURLConnection (and an implementation over JarFile),
+  URL paths for opaque jar: URLs, URI's quoting constructors and
+  File.toURI as the JDK writes them, and the APK path is absolute on
+  the host as on a device. New tests/dex/JarUrlTest. Found with the
+  new `SWITCHAPK_TRACE_CALLS`. Unciv starts with no exceptions; all
+  dex tests, samples and corpus apps pass.
+

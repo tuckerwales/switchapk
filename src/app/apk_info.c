@@ -9,6 +9,7 @@
 
 #include "../core/res.h"
 #include "../core/zip.h"
+#include "bundle.h"
 #include "../gfx/gfx.h"
 
 #define LOG_TAG "apk"
@@ -47,7 +48,14 @@ static char *fallback_label(const char *path) {
     const char *base = path ? strrchr(path, '/') : NULL;
     base = base ? base + 1 : (path && path[0] ? path : "app");
     char *s = sa_strdup(base);
-    if (ends_with_ci(s, ".apk") && strlen(s) > 4) s[strlen(s) - 4] = 0;
+    static const char *const exts[] = {".apk", ".apkm", ".apks", ".xapk"};
+    for (size_t i = 0; i < SA_ARRAY_LEN(exts); i++) {
+        size_t n = strlen(s), m = strlen(exts[i]);
+        if (n > m && ends_with_ci(s, exts[i])) {
+            s[n - m] = 0;
+            break;
+        }
+    }
     if (!s[0]) {
         free(s);
         return sa_strdup("app");
@@ -123,7 +131,11 @@ static uint32_t *decode_icon(const uint8_t *data, size_t len, int *w, int *h) {
 bool apk_read_identity(const char *path, int density_dpi, ApkIdentity *out) {
     memset(out, 0, sizeof *out);
     out->label = fallback_label(path);
-    ZipArchive *z = zip_open(path);
+    /* A bundle's identity is its base APK's; resolving merges it on first sight, so launching it later is quick. */
+    char err[256];
+    char *apk = bundle_resolve(path, err, sizeof err);
+    ZipArchive *z = apk ? zip_open(apk) : NULL;
+    free(apk);
     if (!z) return false;
 
     size_t mlen = 0;

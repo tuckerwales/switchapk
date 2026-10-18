@@ -1290,3 +1290,13 @@ what is left in flight.
   copies a proprietary one), so the CI artifact is ready to test on a
   Switch. CI fetches them once (cached by the corpus.json hash) and checks
   the zip has all 13 and no local APK. `FDROID=0` leaves them out.
+- 2026-10-18, split bundles on the Switch: the launcher lists and runs
+  `.apkm`, `.apks` and `.xapk` files. src/app/bundle.c merges a bundle once
+  into `apks/.switchapk-bundles/<name>.apk` (base APK plus the splits'
+  lib/ and assets/, compressed data copied as is by a new zip writer,
+  stored entries 4-byte aligned), keyed by the bundle's size and mtime.
+  Encrypted bundles fail with a clear reason. Tested with Frozen Bubble
+  split into base, ABI, assets and density splits as an APKM (merged in
+  10 ms, same entries and CRCs as the original APK, plays) and as an XAPK
+  with a dex-carrying feature split; tests/launcher/check_launcher.sh
+  lists and launches an .apkm. NRO builds; dex tests and samples pass.

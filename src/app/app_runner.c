@@ -5,6 +5,7 @@
 #include "../vm/vm.h"
 #include "../android/android.h"
 #include "../platform/platform.h"
+#include "bundle.h"
 
 #include <unistd.h>
 
@@ -46,7 +47,14 @@ static bool load_dexes(ZipArchive *zip) {
     return true;
 }
 
-int app_run_apk(const char *path, const char *data_dir, void *stack_hi) {
+int app_run_apk(const char *bundle_or_apk, const char *data_dir, void *stack_hi) {
+    /* A split bundle (.apkm, .apks, .xapk) runs as its merged APK, built once beside it. */
+    char err[256];
+    char *path = bundle_resolve(bundle_or_apk, err, sizeof err);
+    if (!path) {
+        LOGE("cannot open %s: %s", bundle_or_apk, err);
+        return 1;
+    }
     ZipArchive *zip = zip_open(path);
     if (!zip) {
         LOGE("cannot open %s", path);

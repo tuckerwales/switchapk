@@ -2,7 +2,7 @@
  * Nintendo Switch entry point (switchapk.nro).
  *
  * Without arguments it opens the home screen (launcher.c): a carousel of the
- * .apk files in sdmc:/switch/switchapk/apks with their own icons and names,
+ * .apk files (and .apkm, .apks, .xapk split bundles) in sdmc:/switch/switchapk/apks with their own icons and names,
  * sorted by last played. With an APK path as argv[1] (nxlink, forwarders,
  * "Try again") it runs that APK directly.
  * The chosen APK runs on a VM thread with a large stack while this thread
@@ -16,6 +16,7 @@
 #include "../gfx/gfx.h"
 #include "../platform/platform.h"
 #include "launcher.h"
+#include "bundle.h"
 
 #include <switch.h>
 #include <pthread.h>
@@ -223,7 +224,7 @@ int main(int argc, char **argv) {
     char *apk = NULL;
     if (argc > 1) {
         size_t n = strlen(argv[1]);
-        if (n > 4 && !strcasecmp(argv[1] + n - 4, ".apk")) apk = sa_strdup(argv[1]);
+        if (n > 4 && bundle_is_runnable(argv[1])) apk = sa_strdup(argv[1]);
     }
     if (!apk) {
         Launcher *l = launcher_create(APK_DIR, LAUNCHER_DIR);

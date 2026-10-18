@@ -71,7 +71,11 @@ Needs a Switch running homebrew (Atmosphere + hbmenu).
 
 1. Unzip `build/switch/switchapk-sd.zip` at the root of the SD card. It
    creates `switch/switchapk/switchapk.nro` and `switch/switchapk/apks/`
-   with the sample apps. Put other APKs in that `apks` folder.
+   with the sample apps. Put other APKs in that `apks` folder. Split
+   bundles work too: `.apkm` (APKMirror), `.apks` (SAI, bundletool) and
+   `.xapk` (APKPure) are merged into one APK the first time the list reads
+   them (cached in `apks/.switchapk-bundles`). Encrypted APKMs cannot be
+   opened; export the app unencrypted instead.
 2. Start hbmenu in full-memory mode (hold R while starting a game, not
    from the Album applet: applet mode has far less memory) and open
    switchapk.

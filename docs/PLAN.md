@@ -601,6 +601,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-18 (launcher): split bundles. `ZipEntry` gains `flags`,
+  `mod_time` and `mod_date`; new `zip_extract_to_file` and a raw-copy
+  writer (`zipw_create`, `zipw_copy_entry`, `zipw_finish`) in
+  src/core/zip.c. New src/app/bundle.c: `bundle_resolve` turns a
+  .apkm/.apks/.xapk path into a merged APK path (cached beside it), and
+  `app_run_apk` and `apk_read_identity` accept bundle paths.
 - 2026-10-18 (WS16): new native `java.lang.Class.getDeclaredClassesNative()`
   (src/native/java_lang.c) reading the MemberClasses annotation.
   Class.getDeclaredClasses and getClasses return member classes as ART;

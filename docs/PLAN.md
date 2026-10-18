@@ -519,7 +519,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    and `toGenericString`, Character code point helpers (the Character
    tables are approximations outside Latin, Greek, Cyrillic and CJK), and
    the checked/navigable `Collections` wrappers. Still missing as whole
-   areas: java.time, ResourceBundle, org.w3c.dom and DocumentBuilder,
+   areas: java.time beyond Duration, Instant and the temporal core (no
+   LocalDate/LocalDateTime, zones, Clock or DateTimeFormatter yet), ResourceBundle, org.w3c.dom and DocumentBuilder,
    MulticastChannel and pipes, a default serialVersionUID hash.
 
 9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`). All 13

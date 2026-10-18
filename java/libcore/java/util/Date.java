@@ -50,6 +50,18 @@ public class Date implements java.io.Serializable, Cloneable, Comparable<Date> {
         return new Date(fastTime);
     }
 
+    public static Date from(java.time.Instant instant) {
+        try {
+            return new Date(instant.toEpochMilli());
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException(ex);
+        }
+    }
+
+    public java.time.Instant toInstant() {
+        return java.time.Instant.ofEpochMilli(getTime());
+    }
+
     public long getTime() {
         return fastTime;
     }

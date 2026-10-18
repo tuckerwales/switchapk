@@ -1338,3 +1338,15 @@ what is left in flight.
   SplittableRandom's generator. All with android.jar's signatures (api_check
   0 missing). New tests/dex/ForkJoinTest (stable over repeated runs); all
   dex tests pass; the six corpus apps that reference these still draw.
+- 2026-10-18, java.time core (WS16): java.time was absent (Unciv, Simple
+  Calculator, Andor's Trail and OSRS reference it, mostly Duration through
+  AccessibilityNodeInfo, and Instant). Added Duration and Instant with the
+  JDK's arithmetic, ISO-8601 text (ISO_INSTANT formatting for any year,
+  parsing with offsets) and error messages; DateTimeException; the
+  temporal core (Temporal, TemporalAccessor, TemporalAdjuster,
+  TemporalAmount, TemporalUnit, TemporalField, TemporalQuery, ChronoUnit,
+  ChronoField, ValueRange, UnsupportedTemporalTypeException);
+  DateTimeParseException and ResolverStyle; Date.from/toInstant and
+  Calendar.toInstant. api_check: 0 missing except Instant.atOffset,
+  atZone and now(Clock), which need ZoneId, ZoneOffset and Clock (not
+  yet). New tests/dex/TimeTest; all dex tests pass.

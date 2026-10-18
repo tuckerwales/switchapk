@@ -1246,3 +1246,15 @@ what is left in flight.
   new `SWITCHAPK_TRACE_CALLS`. Unciv starts with no exceptions; all
   dex tests, samples and corpus apps pass.
 
+- 2026-10-18, android.view.contentcapture: the package was missing, so
+  calls such as View.getContentCaptureSession() (Jetpack Compose) were
+  auto-stubbed. All classes android.jar declares are in, with exact
+  signatures (api_check: 0 missing): ContentCaptureManager behaves like a
+  device without a content capture service (capture disabled, no
+  conditions, data share and removal dropped) and is returned by
+  getSystemService for ContentCaptureManager.class or "content_capture"
+  (new hidden Context.CONTENT_CAPTURE_MANAGER_SERVICE). The value classes
+  keep their builder values, equals and toString as in AOSP.
+  View.get/setContentCaptureSession are in; a view has a session only if
+  one is set on it or an ancestor, so normally null. The services sample
+  gains a 26th step checking all of this.

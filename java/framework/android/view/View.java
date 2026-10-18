@@ -5817,6 +5817,22 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
 
     public final boolean isImportantForContentCapture() { return false; }
 
+    private android.view.contentcapture.ContentCaptureSession mContentCaptureSession;
+
+    public void setContentCaptureSession(android.view.contentcapture.ContentCaptureSession contentCaptureSession) {
+        mContentCaptureSession = contentCaptureSession;
+    }
+
+    /**
+     * Like AOSP: this view's explicit session, else the parent's. AOSP then falls back to the
+     * ContentCaptureManager's main session; without a content capture service there is none, so null.
+     */
+    public final android.view.contentcapture.ContentCaptureSession getContentCaptureSession() {
+        if (mContentCaptureSession != null) return mContentCaptureSession;
+        if (mParent instanceof View) return ((View) mParent).getContentCaptureSession();
+        return null;
+    }
+
     public boolean isVisibleToUserForAutofill(int virtualId) { return false; }
 
     private static final AtomicInteger sNextAutofillViewId = new AtomicInteger(1);

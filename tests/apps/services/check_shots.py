@@ -12,7 +12,8 @@ red cell per step; the band turns green when all passed. With the log, the
 framework's own lines are checked too: leak warnings for the receiver and
 connection LeakActivity left behind, the target-O block on implicit broadcasts
 to manifest receivers, the logged notification, the dropped channel-less
-notification and the one a blocked channel swallowed.
+notification and the one a blocked channel swallowed. The last step checks
+android.view.contentcapture as a device without a content capture service has it.
 """
 import os
 import sys
@@ -22,7 +23,7 @@ from shotlib import close, pixel, read_png  # noqa: E402
 
 GREEN = 0xFF43A047
 WHITE = 0xFFFFFFFF
-STEPS = 25
+STEPS = 26
 
 LOG_LINES = [
     "has leaked IntentReceiver com.example.services.LeakActivity$1",
@@ -31,6 +32,7 @@ LOG_LINES = [
     "notify 3 [Hello] World channel=c1",
     "No Channel found for pkg=com.example.services, channelId=null, id=1",
     "blocked by channel off: 4",
+    "SVC: ok content capture",
     "SVC: done steps=%d failed=0" % STEPS,
 ]
 

@@ -20,6 +20,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.LocusId;
 import android.content.ServiceConnection;
 import android.graphics.Color;
 import android.os.BatteryManager;
@@ -30,6 +31,12 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.contentcapture.ContentCaptureCondition;
+import android.view.contentcapture.ContentCaptureContext;
+import android.view.contentcapture.ContentCaptureManager;
+import android.view.contentcapture.DataRemovalRequest;
+import android.view.contentcapture.DataShareRequest;
+import android.view.contentcapture.DataShareWriteAdapter;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.ArrayList;
@@ -457,6 +464,38 @@ public class MainActivity extends Activity {
                 "autocancel true icon true remote input true", "active 1 id=3", "recovered true",
                 "raise refused Chat 2 3", "lowered 2 group channels 1", "messages 2 Ann:hi", "reply typed",
                 "after delete 0"));
+
+        // No content capture service: the manager reports capture off and views have no session.
+        step("content capture", 100, () -> {
+            ContentCaptureManager ccm = getSystemService(ContentCaptureManager.class);
+            T.ev("manager " + (ccm != null) + " by name " + (getSystemService("content_capture") == ccm)
+                    + " enabled " + ccm.isContentCaptureEnabled() + " conditions " + ccm.getContentCaptureConditions()
+                    + " service " + ccm.getServiceComponentName());
+            T.ev("session " + mBand.getContentCaptureSession() + " " + new View(this).getContentCaptureSession());
+            LocusId id = new LocusId("chat_42");
+            Bundle extras = new Bundle();
+            extras.putString("k", "v");
+            ContentCaptureContext ctx = new ContentCaptureContext.Builder(id).setExtras(extras).build();
+            T.ev("context " + ctx.getLocusId().getId() + " " + id.equals(ctx.getLocusId()) + " "
+                    + ctx.getExtras().getString("k") + " " + ctx);
+            T.ev("for locus " + ContentCaptureContext.forLocusId("x").getLocusId().getId());
+            ContentCaptureCondition cond = new ContentCaptureCondition(id, ContentCaptureCondition.FLAG_IS_REGEX);
+            T.ev("condition " + cond.equals(new ContentCaptureCondition(new LocusId("chat_42"), 2)) + " " + cond);
+            DataRemovalRequest removal = new DataRemovalRequest.Builder()
+                    .addLocusId(id, DataRemovalRequest.FLAG_IS_PREFIX).build();
+            T.ev("removal " + removal.isForEverything() + " " + removal.getLocusIdRequests().size() + " "
+                    + removal.getLocusIdRequests().get(0).getFlags() + " " + removal.getPackageName());
+            ccm.removeData(removal);
+            ccm.shareData(new DataShareRequest(id, "text/plain"), Runnable::run, new DataShareWriteAdapter() {
+                @Override
+                public void onWrite(android.os.ParcelFileDescriptor destination) { T.ev("share write"); }
+
+                @Override
+                public void onRejected() { T.ev("share rejected"); }
+            });
+        }, expect("manager true by name true enabled false conditions null service null", "session null null",
+                "context chat_42 true v Context[id=LocusId[7_chars], hasExtras]", "for locus x",
+                "condition true LocusId[7_chars] (IS_REGEX)", "removal false 1 1 com.example.services"));
     }
 
     @Override

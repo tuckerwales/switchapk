@@ -1366,3 +1366,22 @@ what is left in flight.
   separators per locale (it always used English ones) and its full API.
   All with android.jar's signatures. New tests/dex/MiscApiTest; all dex
   tests and samples pass.
+- 2026-10-18, past the first screen (corpus): four agents drove every
+  corpus app into real use (gameplay, menus, dialogs). Fixed from their
+  findings, each verified with their reproduction scripts:
+  SoundPool.Builder defaults maxStreams to 1 instead of throwing
+  (Solitaire crashed starting any game); TextView's constructor no longer
+  calls the overridable setKeyListener/setInputType (AppCompatEditText
+  with appcompat 1.4+ crashed, e.g. Puzzles' Custom dialog);
+  android:tint alone defaults ImageView's tint mode to SRC_ATOP (Puzzles'
+  chooser icons were erased by a transparent tint); GradientDrawable
+  draws a color-filtered fill at fill alpha 0 as AOSP does (Simple Mobile
+  Tools dialogs had no background); RippleDrawable.mutate refreshes its
+  mask (white pills behind Material text buttons); AlertController paints
+  AOSP's section backgrounds (Holo dialogs had no panel: Frozen Bubble,
+  Blockinger); Html collapses whitespace as AOSP (Puzzles' help and
+  feedback text); and an uncaught exception on any thread now logs FATAL
+  EXCEPTION and ends the app, as Android's default handler, instead of
+  leaving it hung (Replica Island's GL thread). Mindustry and Unciv play;
+  DroidFish, Vector Pinball, Frozen Bubble, Blockinger, Calculator,
+  Shattered PD and Pixel Dungeon reach gameplay.

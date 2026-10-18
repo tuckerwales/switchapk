@@ -143,12 +143,24 @@ public class AlertController {
     private static final int A_ITEM_LAYOUT = 5;
     private static final int A_SHOW_TITLE = 6;
     private static final int A_SCROLL_OFFSET = 7;
+    private static final int A_FULL_DARK = 8;
+    private static final int A_TOP_DARK = 9;
+    private static final int A_CENTER_DARK = 10;
+    private static final int A_BOTTOM_DARK = 11;
+    private static final int A_FULL_BRIGHT = 12;
+    private static final int A_TOP_BRIGHT = 13;
+    private static final int A_CENTER_BRIGHT = 14;
+    private static final int A_BOTTOM_BRIGHT = 15;
+    private static final int A_BOTTOM_MEDIUM = 16;
+    private static final int A_NEEDS_DEFAULT_BACKGROUNDS = 17;
 
     static int[] alertAttrs() {
         if (sAlertAttrs == null) {
             sAlertAttrs = InternalRes.attrs("android:layout", "buttonPanelSideLayout", "listLayout",
                     "multiChoiceItemLayout", "singleChoiceItemLayout", "listItemLayout", "showTitle",
-                    "selectionScrollOffset");
+                    "selectionScrollOffset", "android:fullDark", "android:topDark", "android:centerDark",
+                    "android:bottomDark", "android:fullBright", "android:topBright", "android:centerBright",
+                    "android:bottomBright", "android:bottomMedium", "needsDefaultBackgrounds");
         }
         return sAlertAttrs;
     }
@@ -387,6 +399,9 @@ public class AlertController {
                 content.setScrollIndicators(indicators, View.SCROLL_INDICATOR_TOP | View.SCROLL_INDICATOR_BOTTOM);
             }
         }
+        final TypedArray a = mContext.obtainStyledAttributes(null, alertAttrs(), android.R.attr.alertDialogStyle, 0);
+        setBackground(a, topPanel, contentPanel, customPanel, buttonPanel, hasTopPanel, hasCustomPanel, hasButtonPanel);
+        a.recycle();
         final ListView listView = mListView;
         if (listView != null && mAdapter != null) {
             listView.setAdapter(mAdapter);
@@ -394,6 +409,80 @@ public class AlertController {
             if (checkedItem > -1) {
                 listView.setItemChecked(checkedItem, true);
                 listView.setSelectionFromTop(checkedItem, mSelectionScrollOffset);
+            }
+        }
+    }
+
+    /**
+     * AOSP's section backgrounds: each visible section (title, content, custom view, buttons) gets the style's top,
+     * center or bottom drawable (full when alone), dark or bright by section. Holo dialogs draw their panel this way
+     * (their window background is transparent); Material styles set these to null, which clears them.
+     */
+    private void setBackground(TypedArray a, View topPanel, View contentPanel, View customPanel, View buttonPanel,
+                               boolean hasTitle, boolean hasCustomView, boolean hasButtons) {
+        int fullDark = 0, topDark = 0, centerDark = 0, bottomDark = 0, fullBright = 0, topBright = 0;
+        int centerBright = 0, bottomBright = 0, bottomMedium = 0;
+        if (a.getBoolean(A_NEEDS_DEFAULT_BACKGROUNDS, true)) {
+            fullDark = InternalRes.drawable("popup_full_dark");
+            topDark = InternalRes.drawable("popup_top_dark");
+            centerDark = InternalRes.drawable("popup_center_dark");
+            bottomDark = InternalRes.drawable("popup_bottom_dark");
+            fullBright = InternalRes.drawable("popup_full_bright");
+            topBright = InternalRes.drawable("popup_top_bright");
+            centerBright = InternalRes.drawable("popup_center_bright");
+            bottomBright = InternalRes.drawable("popup_bottom_bright");
+            bottomMedium = InternalRes.drawable("popup_bottom_medium");
+        }
+        topBright = a.getResourceId(A_TOP_BRIGHT, topBright);
+        topDark = a.getResourceId(A_TOP_DARK, topDark);
+        centerBright = a.getResourceId(A_CENTER_BRIGHT, centerBright);
+        centerDark = a.getResourceId(A_CENTER_DARK, centerDark);
+        final View[] views = new View[4];
+        final boolean[] light = new boolean[4];
+        View lastView = null;
+        boolean lastLight = false;
+        int pos = 0;
+        if (hasTitle) {
+            views[pos] = topPanel;
+            light[pos] = false;
+            pos++;
+        }
+        // text content sits on the dark background, a list on the light one; a hidden panel gets none
+        views[pos] = contentPanel == null || contentPanel.getVisibility() == View.GONE ? null : contentPanel;
+        light[pos] = mListView != null;
+        pos++;
+        if (hasCustomView) {
+            views[pos] = customPanel;
+            light[pos] = mForceInverseBackground;
+            pos++;
+        }
+        if (hasButtons) {
+            views[pos] = buttonPanel;
+            light[pos] = true;
+        }
+        boolean setView = false;
+        for (pos = 0; pos < views.length; pos++) {
+            final View v = views[pos];
+            if (v == null) continue;
+            if (lastView != null) {
+                lastView.setBackgroundResource(!setView ? (lastLight ? topBright : topDark)
+                        : (lastLight ? centerBright : centerDark));
+                setView = true;
+            }
+            lastView = v;
+            lastLight = light[pos];
+        }
+        if (lastView != null) {
+            if (setView) {
+                bottomBright = a.getResourceId(A_BOTTOM_BRIGHT, bottomBright);
+                bottomMedium = a.getResourceId(A_BOTTOM_MEDIUM, bottomMedium);
+                bottomDark = a.getResourceId(A_BOTTOM_DARK, bottomDark);
+                // lists use the bright background, buttons the medium one
+                lastView.setBackgroundResource(lastLight ? (hasButtons ? bottomMedium : bottomBright) : bottomDark);
+            } else {
+                fullBright = a.getResourceId(A_FULL_BRIGHT, fullBright);
+                fullDark = a.getResourceId(A_FULL_DARK, fullDark);
+                lastView.setBackgroundResource(lastLight ? fullBright : fullDark);
             }
         }
     }

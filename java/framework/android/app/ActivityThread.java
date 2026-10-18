@@ -68,6 +68,7 @@ public final class ActivityThread {
             public void run() { dispatchPlatform(); }
         });
         String apk = args != null && args.length > 0 && args[0] != null ? args[0] : "";
+        installCrashHandler();
         try {
             boot(apk);
         } catch (Exception e) {
@@ -75,6 +76,29 @@ public final class ActivityThread {
             System.exit(1);
         }
         Looper.loop();
+    }
+
+    /**
+     * As AOSP's RuntimeInit.KillApplicationHandler: an exception that escapes any thread logs "FATAL EXCEPTION" and
+     * ends the process, instead of leaving the app running without that thread (a hang). Crash reporters that the app
+     * installs usually call the previous default handler, so they still end here.
+     */
+    private static void installCrashHandler() {
+        if (Thread.getDefaultUncaughtExceptionHandler() != null) return;
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            private volatile boolean mCrashing;
+
+            public void uncaughtException(Thread t, Throwable e) {
+                try {
+                    if (mCrashing) return;
+                    mCrashing = true;
+                    Log.e("AndroidRuntime", "FATAL EXCEPTION: " + t.getName() + "\nProcess: "
+                            + (sPackageName != null ? sPackageName : "?") + ", PID: " + android.os.Process.myPid(), e);
+                } finally {
+                    System.exit(10);
+                }
+            }
+        });
     }
 
     /** framework-internal. Pause, stop and destroy, then leave the process. */

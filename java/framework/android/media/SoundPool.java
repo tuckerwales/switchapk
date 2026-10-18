@@ -50,7 +50,7 @@ public class SoundPool {
     }
 
     public static class Builder {
-        private int mMax;
+        private int mMax = 1; // AOSP's default
         private AudioAttributes mAttr;
         private int mSession;
         private Context mContext;
@@ -78,7 +78,6 @@ public class SoundPool {
         }
 
         public SoundPool build() {
-            if (mMax <= 0) throw new UnsupportedOperationException("maxStreams not set");
             int stream = mAttr != null ? mAttr.getVolumeControlStream() : AudioManager.STREAM_MUSIC;
             return new SoundPool(mMax, stream, 0);
         }

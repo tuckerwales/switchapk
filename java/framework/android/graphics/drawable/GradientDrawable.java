@@ -228,7 +228,10 @@ public class GradientDrawable extends Drawable {
         final int currFillAlpha = modulateAlpha(prevFillAlpha);
         final int currStrokeAlpha = modulateAlpha(prevStrokeAlpha);
         final boolean haveStroke = currStrokeAlpha > 0 && mStrokePaint != null && mStrokePaint.getStrokeWidth() > 0;
-        final boolean haveFill = currFillAlpha > 0 || mFillPaint.getShader() != null;
+        // As AOSP, a fill with a color filter is drawn even at fill alpha 0: with no solid color the fill color comes
+        // from the drawable's alpha (set below). Only a provably invisible fill is skipped.
+        final boolean haveFill = currFillAlpha > 0 || mFillPaint.getShader() != null
+                || (mColorFilter != null ? mColorFilter : mTintFilter) != null;
         final GradientState st = mGradientState;
         final ColorFilter colorFilter = mColorFilter != null ? mColorFilter : mTintFilter;
         mFillPaint.setAlpha(currFillAlpha);
@@ -249,7 +252,7 @@ public class GradientDrawable extends Drawable {
                     if (haveFill) canvas.drawRoundRect(mRect, rad, rad, mFillPaint);
                     if (haveStroke) canvas.drawRoundRect(mRect, rad, rad, mStrokePaint);
                 } else {
-                    if (haveFill && (mFillPaint.getColor() != 0 || colorFilter != null || mFillPaint.getShader() != null)) canvas.drawRect(mRect, mFillPaint);
+                    if ((mFillPaint.getColor() != 0 || colorFilter != null || mFillPaint.getShader() != null)) canvas.drawRect(mRect, mFillPaint);
                     if (haveStroke) canvas.drawRect(mRect, mStrokePaint);
                 }
                 break;

@@ -273,6 +273,56 @@ NATIVE(Class_getEnclosingClassNative) {
     R_OBJ(ctx.result);
 }
 
+typedef struct {
+    VMThread *t;
+    Class **out;
+    uint32_t n;
+} MemberCtx;
+
+static void member_classes_ann(DexFile *d, const char *type, uint32_t vis, const uint8_t *el, void *ctx) {
+    SA_UNUSED(vis);
+    MemberCtx *c = ctx;
+    if (strcmp(type, "Ldalvik/annotation/MemberClasses;") != 0 || c->out) return;
+    uint32_t n = dex_uleb128(&el);
+    for (uint32_t i = 0; i < n; i++) {
+        const char *ename = dex_string(d, dex_uleb128(&el));
+        DexEncodedValue v;
+        dex_read_encoded_value(&el, &v);
+        if (strcmp(ename, "value") != 0 || v.type != DEV_ARRAY) continue;
+        const uint8_t *ap = v.array;
+        uint32_t count = dex_uleb128(&ap);
+        c->out = sa_calloc(count ? count : 1, sizeof(Class *));
+        for (uint32_t k = 0; k < count; k++) {
+            DexEncodedValue item;
+            dex_read_encoded_value(&ap, &item);
+            if (item.type != DEV_TYPE) continue;
+            Class *m = vm_resolve_type(c->t, d, item.u.idx);
+            /* A member class R8 dropped without pruning the annotation is skipped. */
+            if (!m) c->t->exception = NULL;
+            else c->out[c->n++] = m;
+        }
+    }
+}
+
+/* The classes named by the MemberClasses annotation, as ART's getDeclaredClasses. */
+NATIVE(Class_getDeclaredClassesNative) {
+    UNUSED_ARGS();
+    Class *c = this_class(args);
+    MemberCtx ctx = {t, NULL, 0};
+    if (c->dex && !c->is_array && !c->prim) {
+        DexClassDef cd;
+        dex_class_def(c->dex, (uint32_t)c->class_def_idx, &cd);
+        dex_class_annotations(c->dex, &cd, member_classes_ann, &ctx);
+    }
+    Class *arrc = vm_array_class_of(t, g_vm.wk.Class);
+    ArrayObject *a = vm_alloc_array(t, arrc, (int32_t)ctx.n);
+    if (a) {
+        for (uint32_t i = 0; i < ctx.n; i++) ARRAY_DATA(a, Object *)[i] = vm_class_mirror(t, ctx.out[i]);
+    }
+    free(ctx.out);
+    if (a) R_OBJ(a);
+}
+
 static void enclosing_method_ann(DexFile *d, const char *type, uint32_t vis, const uint8_t *el, void *ctx) {
     SA_UNUSED(vis);
     AnnCtx *c = ctx;
@@ -819,6 +869,7 @@ static const NativeMethodReg g_regs[] = {
     {"Ljava/lang/Class;", "getInnerClassName", "()Ljava/lang/String;", Class_getInnerClassName},
     {"Ljava/lang/Class;", "isInnerClassNative", "()Z", Class_isInnerClassNative},
     {"Ljava/lang/Class;", "getEnclosingClassNative", "()Ljava/lang/Class;", Class_getEnclosingClassNative},
+    {"Ljava/lang/Class;", "getDeclaredClassesNative", "()[Ljava/lang/Class;", Class_getDeclaredClassesNative},
     {"Ljava/lang/Class;", "getEnclosingMethodDesc", "()Ljava/lang/String;", Class_getEnclosingMethodDesc},
 
     {"Ljava/lang/String;", "intern", "()Ljava/lang/String;", String_intern},

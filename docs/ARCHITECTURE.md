@@ -397,6 +397,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   logger logs at INFO through a handler that writes to `android.util.Log`
   (found by reflection, since libcore cannot link the framework), with
   Android's tag rules.
+- Nested classes come from the dex system annotations, as ART: member
+  classes from `MemberClasses` (`Class.getDeclaredClasses`, native
+  `getDeclaredClassesNative`; members R8 removed without pruning the
+  annotation are skipped), the declaring class from `EnclosingClass`, and
+  local classes are those with an `EnclosingMethod` and a name.
 - Generic signatures: `AnnotationParser.signature(owner, kind, token)`
   reads the `dalvik.annotation.Signature` system annotation natively
   (`src/native/java_annotation.c`); `libcore.reflect.GenericSignatureParser`

@@ -92,11 +92,11 @@ public final class Class<T> implements java.io.Serializable, GenericDeclaration,
     }
 
     public boolean isLocalClass() {
-        return false;
+        return getEnclosingMethodDesc() != null && !isAnonymousClass();
     }
 
     public boolean isMemberClass() {
-        return isInnerClassNative() && getInnerClassName() != null;
+        return isInnerClassNative() && getInnerClassName() != null && getEnclosingMethodDesc() == null;
     }
 
     public Class<?> getEnclosingClass() {
@@ -454,12 +454,23 @@ public final class Class<T> implements java.io.Serializable, GenericDeclaration,
         return p != null ? (TypeVariable<Class<T>>[]) p.formalTypeParameters.clone() : new TypeVariable[0];
     }
 
+    private native Class<?>[] getDeclaredClassesNative();
+
     public Class<?>[] getDeclaredClasses() {
-        return new Class<?>[0];
+        return getDeclaredClassesNative();
     }
 
+    /** The public member classes of this class and its superclasses, as ART. */
     public Class<?>[] getClasses() {
-        return new Class<?>[0];
+        java.util.ArrayList<Class<?>> result = new java.util.ArrayList<Class<?>>();
+        for (Class<?> c = this; c != null; c = c.getSuperclass()) {
+            for (Class<?> member : c.getDeclaredClasses()) {
+                if (java.lang.reflect.Modifier.isPublic(member.getModifiers())) {
+                    result.add(member);
+                }
+            }
+        }
+        return result.toArray(new Class<?>[result.size()]);
     }
 
     public String toString() {

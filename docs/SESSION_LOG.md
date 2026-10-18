@@ -1270,4 +1270,17 @@ what is left in flight.
   service has it. tests/apps/outline compares RenderNode matrices with
   View's and checks a scaled, outline-clipped node drawn from onDraw;
   Simon Tatham's Puzzles hits no stubs.
-
+- 2026-10-18, member classes (WS16): Mindustry's map previews failed
+  (EOFException, `Pixmap.setRaw` index -1024) because
+  Class.getDeclaredClasses always returned an empty array. Mindustry's
+  Block.initBuilding finds each block's Building subclass through it, so
+  every block got a plain Building, whose read() skips block-specific
+  save data and misaligned the rest of the map. Found by parsing the
+  default maps in Python (all decode cleanly) and comparing with a
+  `SWITCHAPK_TRACE_CALLS` trace (the duo turret read as a plain
+  Building). getDeclaredClasses now reads the MemberClasses annotation,
+  getClasses collects public members up the superclass chain, and
+  isLocalClass/isMemberClass tell local classes apart (local classes
+  were reported as members). New tests/dex/NestedClassTest. Mindustry
+  reaches its main menu with every preview; this also fixes gameplay
+  for every block with its own building (turrets, conveyors, cores).

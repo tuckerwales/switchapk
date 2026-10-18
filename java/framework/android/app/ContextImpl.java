@@ -367,6 +367,9 @@ public class ContextImpl extends Context {
         if (INPUT_SERVICE.equals(name)) return android.hardware.input.InputManager.getInstance();
         if (DISPLAY_SERVICE.equals(name)) return new android.hardware.display.DisplayManager(getOuterContext());
         if (AUTOFILL_MANAGER_SERVICE.equals(name)) return android.view.autofill.AutofillManager.getInstance();
+        if (CONTENT_CAPTURE_MANAGER_SERVICE.equals(name)) {
+            return android.view.contentcapture.ContentCaptureManager.getInstance();
+        }
         if (USER_SERVICE.equals(name)) {
             if (sUserManager == null) sUserManager = new android.os.UserManager();
             return sUserManager;
@@ -422,6 +425,9 @@ public class ContextImpl extends Context {
         if (serviceClass == android.hardware.input.InputManager.class) return INPUT_SERVICE;
         if (serviceClass == android.hardware.display.DisplayManager.class) return DISPLAY_SERVICE;
         if (serviceClass == android.view.autofill.AutofillManager.class) return AUTOFILL_MANAGER_SERVICE;
+        if (serviceClass == android.view.contentcapture.ContentCaptureManager.class) {
+            return CONTENT_CAPTURE_MANAGER_SERVICE;
+        }
         if (serviceClass == android.os.UserManager.class) return USER_SERVICE;
         if (serviceClass == android.location.LocationManager.class) return LOCATION_SERVICE;
         if (serviceClass == android.telephony.TelephonyManager.class) return TELEPHONY_SERVICE;

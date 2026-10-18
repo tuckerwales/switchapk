@@ -54,7 +54,11 @@ int app_run_apk(const char *path, const char *data_dir, void *stack_hi) {
     }
     g_app_zip = zip;
     free(g_app_apk_path);
-    g_app_apk_path = sa_strdup(path);
+    /* absolute, as on Android (class loader resource URLs and sourceDir are built from it); the host may be given a
+     * relative path, the Switch passes sdmc:/... */
+    char cwd[1024];
+    if (path[0] != '/' && !strchr(path, ':') && getcwd(cwd, sizeof cwd)) g_app_apk_path = sa_sprintf("%s/%s", cwd, path);
+    else g_app_apk_path = sa_strdup(path);
     android_res_init(framework_res_path(), zip);
     if (!load_dexes(zip)) return 1;
     extern void platform_set_data_root(const char *root, const char *package);

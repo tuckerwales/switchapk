@@ -40,6 +40,50 @@ public class BaseDexClassLoader extends ClassLoader {
         addNativePaths(libPaths.toArray(new String[0]));
     }
 
+    /** Entries of the app's APK, as jar: URLs (the VM's class path is the running app's APK). */
+    protected java.net.URL findResource(String name) {
+        if (name == null || name.startsWith("/") || !hasAppResource(name)) {
+            return null;
+        }
+        String apk = appApkPath();
+        try {
+            return apk == null ? null : new java.net.URL(jarUrl(apk, name));
+        } catch (java.net.MalformedURLException e) {
+            return null;
+        }
+    }
+
+    private static native String appApkPath();
+
+    /** "jar:file:<apk>!/<name>" with both parts percent-encoded where a URI needs it (spaces, %, #, ?). */
+    private static String jarUrl(String apk, String name) {
+        return "jar:file:" + quote(apk) + "!/" + quote(name);
+    }
+
+    private static String quote(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : s.getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+            int c = b & 0xFF;
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+                    || "-._~/!$&'()*+,;=:@".indexOf(c) >= 0) {
+                sb.append((char) c);
+            } else {
+                sb.append('%').append(Character.toUpperCase(Character.forDigit(c >> 4, 16)))
+                        .append(Character.toUpperCase(Character.forDigit(c & 15, 16)));
+            }
+        }
+        return sb.toString();
+    }
+
+
+    private static native boolean hasAppResource(String name);
+
+    protected Enumeration<java.net.URL> findResources(String name) {
+        java.net.URL url = findResource(name);
+        return url == null ? java.util.Collections.<java.net.URL>emptyEnumeration()
+                : java.util.Collections.enumeration(java.util.Collections.singletonList(url));
+    }
+
     public String findLibrary(String name) {
         String file = System.mapLibraryName(name);
         List<String> dirs;

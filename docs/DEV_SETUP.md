@@ -114,6 +114,10 @@ to find framework APIs apps call that we do not implement.
 `SWITCHAPK_TRACE_THROW=1` logs every throw (`W/throw:` with method and
 line), including exceptions the app catches: the quickest way to find
 what an app's own crash screen is hiding.
+`SWITCHAPK_TRACE_CALLS=<text>` logs entry into each bytecode method whose
+name (`class.method(args)`) contains the text, indented by call depth: a
+cheap way to follow what library code does (Kotlin reflection, say)
+without `--trace`, which logs every instruction.
 `SWITCHAPK_TRACE_NATIVE=<text>` logs each call of a native method whose
 name contains the text (`I/interp: native call ...`), for example
 `onTouchEventNative` to see input reach a game's C++ side, or a method

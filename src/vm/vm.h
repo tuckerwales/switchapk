@@ -249,6 +249,7 @@ typedef struct {
     bool stub_missing_framework; /* synthesize missing android.* methods */
     bool trace;                  /* instruction tracing */
     bool trace_native;           /* SWITCHAPK_TRACE_NATIVE is set: log matching native calls */
+    bool trace_calls;            /* SWITCHAPK_TRACE_CALLS is set: log matching bytecode method entries */
     int verbose_calls;
     const char *app_data_dir;
     const char *app_package;

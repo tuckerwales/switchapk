@@ -29,9 +29,54 @@ public final class URI implements Comparable<URI>, java.io.Serializable {
     }
 
     public URI(String scheme, String authority, String path, String query, String fragment) throws URISyntaxException {
-        this((scheme != null ? scheme + ":" : "") + (authority != null ? "//" + authority : "") + (path != null ? path : "")
-                + (query != null ? "?" + query : "") + (fragment != null ? "#" + fragment : ""));
+        this((scheme != null ? scheme + ":" : "") + (authority != null ? "//" + quote(authority, AUTHORITY_EXTRA) : "")
+                + (path != null ? quote(path, PATH_EXTRA) : "") + (query != null ? "?" + quote(query, URIC_EXTRA) : "")
+                + (fragment != null ? "#" + quote(fragment, URIC_EXTRA) : ""));
     }
+
+    /* Legal beyond the unreserved characters, per component, for the quoting constructors. */
+    private static final String PATH_EXTRA = ",;:$&+=/@";
+    private static final String USERINFO_EXTRA = ",;:$&+=";
+    private static final String AUTHORITY_EXTRA = ",;:$&+=@[]";
+    private static final String URIC_EXTRA = ";/?:@&=+$,[]";
+
+    /**
+     * As the JDK's multi-argument constructors quote a component: ASCII characters that are not legal there, and
+     * always '%', become %XX of their UTF-8 bytes; other non-ASCII characters stay unless they are spaces or controls.
+     */
+    private static String quote(String s, String extra) {
+        StringBuilder sb = null;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            boolean ok;
+            if (c < 0x80) {
+                ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+                        || "_-!.~'()*".indexOf(c) >= 0 || extra.indexOf(c) >= 0;
+            } else {
+                ok = !Character.isSpaceChar(c) && !Character.isISOControl(c);
+            }
+            if (ok) {
+                if (sb != null) {
+                    sb.append(c);
+                }
+                continue;
+            }
+            if (sb == null) {
+                sb = new StringBuilder(s.substring(0, i));
+            }
+            int end = i + 1;
+            if (Character.isHighSurrogate(c) && end < s.length()) {
+                end++;
+            }
+            for (byte b : s.substring(i, end).getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+                sb.append('%').append(HEX[(b >> 4) & 15]).append(HEX[b & 15]);
+            }
+            i = end - 1;
+        }
+        return sb == null ? s : sb.toString();
+    }
+
+    private static final char[] HEX = "0123456789ABCDEF".toCharArray();
 
     private static String build(String scheme, String userInfo, String host, int port, String path, String query,
             String fragment) {
@@ -42,7 +87,7 @@ public final class URI implements Comparable<URI>, java.io.Serializable {
         if (host != null) {
             sb.append("//");
             if (userInfo != null) {
-                sb.append(userInfo).append('@');
+                sb.append(quote(userInfo, USERINFO_EXTRA)).append('@');
             }
             sb.append(host);
             if (port != -1) {
@@ -50,13 +95,13 @@ public final class URI implements Comparable<URI>, java.io.Serializable {
             }
         }
         if (path != null) {
-            sb.append(path);
+            sb.append(quote(path, PATH_EXTRA));
         }
         if (query != null) {
-            sb.append('?').append(query);
+            sb.append('?').append(quote(query, URIC_EXTRA));
         }
         if (fragment != null) {
-            sb.append('#').append(fragment);
+            sb.append('#').append(quote(fragment, URIC_EXTRA));
         }
         return sb.toString();
     }

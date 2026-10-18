@@ -29,6 +29,23 @@ NATIVE(ClassLoader_getResourceBytes) {
     R_OBJ(a);
 }
 
+extern char *g_app_apk_path;
+
+/* ClassLoader.appApkPath(): the APK whose entries are the class path's resources, or null. */
+NATIVE(ClassLoader_appApkPath) {
+    UNUSED_ARGS();
+    R_OBJ(g_app_apk_path ? vm_new_string_utf8(t, g_app_apk_path) : NULL);
+}
+
+/* ClassLoader.hasAppResource(name): whether the APK has that entry, without extracting it. */
+NATIVE(ClassLoader_hasAppResource) {
+    UNUSED_ARGS();
+    char *name = nat_str(A_OBJ(0));
+    bool found = name && g_app_zip && zip_find(g_app_zip, name) != NULL;
+    free(name);
+    R_BOOL(found);
+}
+
 NATIVE(Runtime_nativeLoad) {
     UNUSED_ARGS();
     char *name = nat_str(A_OBJ(0));
@@ -53,6 +70,9 @@ NATIVE(System_nativeArch) {
 
 static const NativeMethodReg g_regs[] = {
     {"Ljava/lang/ClassLoader;", "getResourceBytes", "(Ljava/lang/String;)[B", ClassLoader_getResourceBytes},
+    {"Ljava/lang/ClassLoader;", "appApkPath", "()Ljava/lang/String;", ClassLoader_appApkPath},
+    {"Ldalvik/system/BaseDexClassLoader;", "appApkPath", "()Ljava/lang/String;", ClassLoader_appApkPath},
+    {"Ldalvik/system/BaseDexClassLoader;", "hasAppResource", "(Ljava/lang/String;)Z", ClassLoader_hasAppResource},
     {"Ljava/lang/Runtime;", "nativeLoad", "(Ljava/lang/String;Z)Ljava/lang/String;", Runtime_nativeLoad},
     {"Ljava/lang/System;", "nativeArch", "()Ljava/lang/String;", System_nativeArch},
 };

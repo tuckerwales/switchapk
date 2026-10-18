@@ -48,15 +48,26 @@ public final class URL implements java.io.Serializable {
     }
 
     public String getPath() {
+        if (uri.isOpaque()) {
+            /* jar:file:/a.apk!/x has the path file:/a.apk!/x, as in Java */
+            String ssp = uri.getRawSchemeSpecificPart();
+            int q = ssp.indexOf('?');
+            return q < 0 ? ssp : ssp.substring(0, q);
+        }
         return uri.getRawPath() == null ? "" : uri.getRawPath();
     }
 
     public String getFile() {
-        String q = uri.getRawQuery();
+        String q = getQuery();
         return getPath() + (q != null ? "?" + q : "");
     }
 
     public String getQuery() {
+        if (uri.isOpaque()) {
+            String ssp = uri.getRawSchemeSpecificPart();
+            int q = ssp.indexOf('?');
+            return q < 0 ? null : ssp.substring(q + 1);
+        }
         return uri.getRawQuery();
     }
 
@@ -90,6 +101,9 @@ public final class URL implements java.io.Serializable {
         }
         if (p.equals("https")) {
             return new HttpsURLConnectionImpl(this);
+        }
+        if (p.equals("jar")) {
+            return new JarURLConnectionImpl(this);
         }
         throw new java.net.MalformedURLException("unknown protocol: " + p);
     }
@@ -128,7 +142,7 @@ public final class URL implements java.io.Serializable {
         }
 
         public java.io.InputStream getInputStream() throws java.io.IOException {
-            return new java.io.FileInputStream(url.getPath());
+            return new java.io.FileInputStream(JarURLConnection.decode(url.getPath()));
         }
     }
 }

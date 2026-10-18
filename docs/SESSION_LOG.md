@@ -1232,3 +1232,42 @@ what is left in flight.
   Screenshots match the old renderer except that scrolling tiles sit on
   whole pixels; tests/launcher/check_launcher.sh passes and the NRO
   builds. Not run on hardware.
+- 2026-10-18, class loader resources as URLs (WS16): Unciv's Kotlin
+  reflection failed ("Unresolved class: java.lang.Object") because
+  kotlin-reflect loads its builtins with ClassLoader.getResource and
+  ours always returned null (getResources too, so ServiceLoader-style
+  scans found nothing). Class loaders now resolve resources as Android
+  does: parent first, then BaseDexClassLoader.findResource, which
+  returns `jar:file:<apk>!/<entry>` URLs for the app's APK entries.
+  New java.net.JarURLConnection (and an implementation over JarFile),
+  URL paths for opaque jar: URLs, URI's quoting constructors and
+  File.toURI as the JDK writes them, and the APK path is absolute on
+  the host as on a device. New tests/dex/JarUrlTest. Found with the
+  new `SWITCHAPK_TRACE_CALLS`. Unciv starts with no exceptions; all
+  dex tests, samples and corpus apps pass.
+
+- 2026-10-18, android.view.contentcapture: the package was missing, so
+  calls such as View.getContentCaptureSession() (Jetpack Compose) were
+  auto-stubbed. All classes android.jar declares are in, with exact
+  signatures (api_check: 0 missing): ContentCaptureManager behaves like a
+  device without a content capture service (capture disabled, no
+  conditions, data share and removal dropped) and is returned by
+  getSystemService for ContentCaptureManager.class or "content_capture"
+  (new hidden Context.CONTENT_CAPTURE_MANAGER_SERVICE). The value classes
+  keep their builder values, equals and toString as in AOSP.
+  View.get/setContentCaptureSession are in; a view has a session only if
+  one is set on it or an ancestor, so normally null. The services sample
+  gains a 26th step checking all of this.
+- 2026-10-18, Compose layers (WS1 with WS3): RenderNode was a thin
+  stand-in (no pivot, X/Y rotation, clip to outline or clip rect,
+  getMatrix), and Jetpack Compose draws every graphics layer through it.
+  It now follows hwui's RenderProperties: a transform about the pivot
+  (Camera for 3D), clipping to bounds, a clip rect and the outline,
+  alpha and compositing layers, and the remaining API (shadow colors,
+  projection flags, force dark). New RenderEffect (offset and color
+  filter effects drawn; blurs drawn unblurred; no RuntimeShader). A
+  helper added android.view.contentcapture as a device without the
+  service has it. tests/apps/outline compares RenderNode matrices with
+  View's and checks a scaled, outline-clipped node drawn from onDraw;
+  Simon Tatham's Puzzles hits no stubs.
+

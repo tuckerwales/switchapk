@@ -61,6 +61,8 @@ public abstract class Context {
     public static final String NOTIFICATION_SERVICE = "notification";
     public static final String ACCESSIBILITY_SERVICE = "accessibility";
     public static final String AUTOFILL_MANAGER_SERVICE = "autofill";
+    /** framework-internal (hidden in AOSP); apps use getSystemService(ContentCaptureManager.class). */
+    public static final String CONTENT_CAPTURE_MANAGER_SERVICE = "content_capture";
     public static final String CAPTIONING_SERVICE = "captioning";
     public static final String KEYGUARD_SERVICE = "keyguard";
     public static final String LOCATION_SERVICE = "location";

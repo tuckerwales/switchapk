@@ -115,6 +115,17 @@ static void trace_native(Method *m) {
     LOGI("native call %s", buf);
 }
 
+/* Debugging aid: SWITCHAPK_TRACE_CALLS=<text> logs entry into each bytecode method whose pretty name
+ * (class.method(args)) contains text, indented by call depth, to follow library code without --trace. */
+static void trace_call(VMThread *t, Method *m) {
+    static const char *filter;
+    if (!filter) filter = getenv("SWITCHAPK_TRACE_CALLS");
+    char buf[512];
+    vm_method_pretty(m, buf, sizeof buf);
+    if (!strstr(buf, filter)) return;
+    LOGI("call %*s%s", t->depth > 60 ? 60 : t->depth, "", buf);
+}
+
 static void call_native(VMThread *t, Method *m, uint64_t *args) {
     JValue ret;
     ret.raw = 0;
@@ -265,6 +276,7 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
 
     LOAD_FRAME();
     pc = 0;
+    if (SA_UNLIKELY(g_vm.trace_calls)) trace_call(t, m);
 
     /* synchronized entry */
     if (m->access & ACC_SYNCHRONIZED) {
@@ -937,6 +949,7 @@ JValue vm_interpret(VMThread *t, Method *entry_m, uint64_t *args) {
             fr = nf;
             LOAD_FRAME();
             pc = 0;
+            if (SA_UNLIKELY(g_vm.trace_calls)) trace_call(t, m);
             if (m->access & ACC_SYNCHRONIZED) {
                 Object *so = (m->access & ACC_STATIC) ? vm_class_mirror(t, m->clazz)
                                                        : RL(m->code.registers_size - m->code.ins_size);

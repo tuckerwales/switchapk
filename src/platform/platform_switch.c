@@ -20,6 +20,7 @@
 #include "../gfx/gfx.h"
 
 #include <switch.h>
+#include <arm_neon.h>
 #include <malloc.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -147,7 +148,14 @@ void platform_present(const uint32_t *argb, int w, int h, int stride) {
         if (ox + n > FB_W) n = FB_W - ox;
         uint32_t *d = (uint32_t *)base + (size_t)(y + oy) * (size_t)pitch + ox;
         const uint32_t *s = argb + (size_t)y * (size_t)stride;
-        for (int x = 0; x < n; x++) {
+        int x = 0;
+        /* 16 pixels at a time: split into byte planes (B, G, R, A in memory), store as R, G, B, opaque */
+        for (; x + 16 <= n; x += 16) {
+            uint8x16x4_t px = vld4q_u8((const uint8_t *)(s + x));
+            uint8x16x4_t out = {{px.val[2], px.val[1], px.val[0], vdupq_n_u8(0xFF)}};
+            vst4q_u8((uint8_t *)(d + x), out);
+        }
+        for (; x < n; x++) {
             /* 0xAARRGGBB -> RGBA8888 bytes (R in the low byte) */
             const uint32_t c = s[x];
             d[x] = 0xFF000000u | ((c & 0xFFu) << 16) | (c & 0xFF00u) | ((c >> 16) & 0xFFu);

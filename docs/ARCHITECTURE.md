@@ -1829,6 +1829,21 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
   `--splash <apk>`, `--error-screen <apk>`, scripted and screenshotted by
   the headless platform). A frame that changes nothing returns UI_IDLE and
   is not presented.
+  - Drawing cost: the gfx path rasterizer is too slow to redraw the
+    screen every frame on the console (about 30 ms per frame on the host
+    before caching), so the launcher draws only what moves. It keeps:
+    - shared pre-rendered layers (premultiplied, with an anchor): the
+      tile card, the selected tile with its rings, 12 steps of the grow
+      animation (filled in on idle frames) and the NEW badge;
+    - a premultiplied copy of each icon, and the selected icon scaled once
+      per selection;
+    - a "chrome" copy of the background, header, panel frame and hints,
+      redrawn only when the status bar, sort or app count changes.
+    A frame copies the chrome, blits the visible tiles at whole-pixel
+    positions with integer blending, and draws the labels and details
+    text: 1.5 ms per frame on the host (was 28 ms), measured by
+    `switchapk-host --launcher-bench <apk dir>`. On the Switch,
+    `platform_present` converts ARGB to the framebuffer's RGBA with NEON.
   - Carousel of tiles (D-pad, stick, swipe; L/R page, ZL/ZR ends; key
     repeat on hold), a details panel (label, package, versionName, size,
     last played) with a Play button, and button hints that are also touch

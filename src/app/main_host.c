@@ -139,11 +139,63 @@ static int host_ui_loop(UiFrameFn fn, void *ctx, uint32_t *screen) {
     }
 }
 
+/* --launcher-bench: loads the APK folder, then browses it with synthetic 60 Hz input (a press every few frames, as
+ * when holding the D-pad) and prints how long the launcher takes per drawn frame. */
+static void launcher_bench(const char *dir, const char *state, uint32_t *screen) {
+    Launcher *l = launcher_create(dir, state);
+    UiStatus st;
+    memset(&st, 0, sizeof st);
+    snprintf(st.clock, sizeof st.clock, "12:34");
+    st.has_battery = true;
+    st.battery = 80;
+    st.wifi = 3;
+    int64_t now = 1000000000LL;
+    const int64_t frame = 16666667LL;
+    UiInput in;
+    memset(&in, 0, sizeof in);
+    for (int i = 0; i < 2000; i++) { /* finish loading icons */
+        in.now_ns = now += frame;
+        launcher_frame(l, screen, &in, &st);
+    }
+    enum { FRAMES = 600 };
+    static double ms[FRAMES];
+    int drawn = 0;
+    double total = 0, worst = 0;
+    for (int f = 0; f < FRAMES; f++) {
+        memset(&in, 0, sizeof in);
+        int phase = f % 120;
+        uint32_t b = phase < 60 ? UI_BTN_RIGHT : UI_BTN_LEFT;
+        if (phase % 8 == 0) in.down = b;
+        in.held = b;
+        in.now_ns = now += frame;
+        uint64_t t0 = sa_time_ns();
+        int rc = launcher_frame(l, screen, &in, &st);
+        double d = (double)(sa_time_ns() - t0) / 1e6;
+        if (rc != UI_REDRAW) continue;
+        ms[drawn++] = d;
+        total += d;
+        if (d > worst) worst = d;
+    }
+    for (int i = 1; i < drawn; i++) { /* insertion sort for the median */
+        double v = ms[i];
+        int j = i - 1;
+        for (; j >= 0 && ms[j] > v; j--) ms[j + 1] = ms[j];
+        ms[j + 1] = v;
+    }
+    printf("launcher bench: %d of %d frames drawn, mean %.2f ms, median %.2f ms, max %.2f ms\n", drawn, FRAMES,
+           drawn ? total / drawn : 0, drawn ? ms[drawn / 2] : 0, worst);
+    launcher_destroy(l);
+}
+
 static int run_ui(const char *mode, const char *target, const char *data_dir) {
     gfx_font_init_default();
     uint32_t *screen = sa_calloc((size_t)UI_W * UI_H, sizeof *screen);
     int rc = 0;
-    if (!strcmp(mode, "launcher")) {
+    if (!strcmp(mode, "bench")) {
+        char *state = sa_sprintf("%s/launcher", data_dir);
+        launcher_bench(target, state, screen);
+        free(state);
+    } else if (!strcmp(mode, "launcher")) {
         char *state = sa_sprintf("%s/launcher", data_dir);
         Launcher *l = launcher_create(target, state);
         int r = host_ui_loop(frame_launcher, l, screen);
@@ -189,6 +241,7 @@ static void *vm_main(void *arg) {
         else if (!strcmp(a, "--screen") && i + 1 < ma->argc) i++; /* platform_init reads it */
         else if (!strcmp(a, "--apk-info")) apk_info = true;
         else if (!strcmp(a, "--launcher")) ui_mode = "launcher";
+        else if (!strcmp(a, "--launcher-bench")) ui_mode = "bench";
         else if (!strcmp(a, "--splash")) ui_mode = "splash";
         else if (!strcmp(a, "--error-screen")) ui_mode = "error";
         else if (!strcmp(a, "--nro-icon")) ui_mode = "icon";

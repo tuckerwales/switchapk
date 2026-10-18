@@ -103,6 +103,11 @@ build/host/switchapk-host [--data build/data] [--screen 1280x720@240] \
     [--script tests/apps/hello/hello.script] [--screenshots build/shots] app.apk
 ```
 
+`switchapk-host --launcher-bench <apk dir>` loads the folder into the home
+screen and browses it with synthetic 60 Hz input, printing the mean, median
+and worst time per drawn frame (keep it well under 16 ms on the host; the
+console is several times slower).
+
 Useful flags: `-v` / `-vv` (debug/verbose logs), `--trace` (every
 instruction), `--framework path/to/framework.dex`. Look for `STUB:` lines
 to find framework APIs apps call that we do not implement.

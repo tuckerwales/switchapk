@@ -528,8 +528,7 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    the apps past the first screen (a per-app smoke script that starts a
    game), the AppCompat/AndroidX surface the static scan ranks highest
    (accessibility, android.transition, android.icu, AppOpsManager,
-   window insets; WS14), Mindustry's map preview decode error (zip and
-   DataInputStream ruled out), and ActionBarView for Holo decors (they
+   window insets; WS14), and ActionBarView for Holo decors (they
    use the Toolbar decor now). DroidFish (Stockfish) and Simon Tatham's
    Puzzles (its generator) run their bundled executables in-process
    (spawn.c). Old School RuneScape draws its own "Error connecting to
@@ -602,6 +601,17 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-18 (launcher): split bundles. `ZipEntry` gains `flags`,
+  `mod_time` and `mod_date`; new `zip_extract_to_file` and a raw-copy
+  writer (`zipw_create`, `zipw_copy_entry`, `zipw_finish`) in
+  src/core/zip.c. New src/app/bundle.c: `bundle_resolve` turns a
+  .apkm/.apks/.xapk path into a merged APK path (cached beside it), and
+  `app_run_apk` and `apk_read_identity` accept bundle paths.
+- 2026-10-18 (WS16): new native `java.lang.Class.getDeclaredClassesNative()`
+  (src/native/java_lang.c) reading the MemberClasses annotation.
+  Class.getDeclaredClasses and getClasses return member classes as ART;
+  isLocalClass/isMemberClass now separate local classes (EnclosingMethod)
+  from member classes.
 - 2026-10-17 (WS16): Java serialization. New natives on
   `java.io.ObjectStreamClass`: `newInstanceNative(Class, Constructor)` and
   `hasStaticInitializer(Class)` (src/native/java_reflect.c). Reflection now

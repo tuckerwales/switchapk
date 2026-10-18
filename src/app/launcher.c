@@ -8,6 +8,7 @@
  * a frame is mostly bitmap blits; frames that change nothing are skipped.
  */
 #include "launcher.h"
+#include "bundle.h"
 #include "apk_info.h"
 #include "../gfx/gfx.h"
 
@@ -849,7 +850,7 @@ static void scan(Launcher *l) {
         struct dirent *e;
         while ((e = readdir(d)) != NULL) {
             size_t n = strlen(e->d_name);
-            if (e->d_name[0] == '.' || n <= 4 || strcasecmp(e->d_name + n - 4, ".apk") != 0) continue;
+            if (e->d_name[0] == '.' || n <= 4 || !bundle_is_runnable(e->d_name)) continue;
             l->items = sa_realloc(l->items, (size_t)(l->count + 1) * sizeof *l->items);
             Item *it = &l->items[l->count++];
             memset(it, 0, sizeof *it);

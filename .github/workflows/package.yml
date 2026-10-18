@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   package:
-    name: Build NRO and sample APKs
+    name: Build NRO, sample APKs and F-Droid apps
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -82,6 +82,27 @@ jobs:
           test -f third_party/sqlite/sqlite3.c
           test -f third_party/sqlite/sqlite3.h
 
+      # The open-source corpus apps go in the SD zip too. Versions and sha256 are pinned in
+      # tests/corpus/corpus.json, so the cache key follows that file.
+      - name: Restore F-Droid app cache
+        id: fdroid
+        uses: actions/cache/restore@v6
+        with:
+          path: build/corpus/apks
+          key: fdroid-apks-${{ hashFiles('tests/corpus/corpus.json') }}
+
+      - name: Fetch F-Droid apps
+        if: steps.fdroid.outputs.cache-hit != 'true'
+        run: python3 tools/corpus.py fetch
+
+      - name: Save F-Droid app cache
+        if: steps.fdroid.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        continue-on-error: true
+        with:
+          path: build/corpus/apks
+          key: ${{ steps.fdroid.outputs.cache-primary-key }}
+
       - name: Build host binary and framework.dex
         run: make -j"$(nproc)"
 
@@ -108,13 +129,24 @@ jobs:
             fi
           done
           unzip -l build/apps/ndk/ndk.apk | grep -q 'lib/arm64-v8a/libndktest.so'
+          for pkg in $(python3 -c 'import json; print(" ".join("%s_%d" % (a["package"], a["version_code"]) for a in json.load(open("tests/corpus/corpus.json"))["apps"] if a.get("source") != "local"))'); do
+            if ! grep -q "switch/switchapk/apks/${pkg}.apk" /tmp/sd-list.txt; then
+              echo "missing F-Droid app ${pkg}.apk"
+              fail=1
+            fi
+          done
+          if grep -q '_local\.apk' /tmp/sd-list.txt; then
+            echo "a proprietary corpus APK is in the zip"
+            fail=1
+          fi
           test "$fail" = 0
           ls -lh build/switch/switchapk.nro build/switch/switchapk-sd.zip
           {
             echo "## SD card package"
             echo
             echo "Unzip \`switchapk-sd.zip\` at the root of the SD card."
-            echo "That creates \`switch/switchapk/switchapk.nro\` and \`switch/switchapk/apks/\`."
+            echo "That creates \`switch/switchapk/switchapk.nro\` and \`switch/switchapk/apks/\`"
+            echo "(the sample apps and the open-source F-Droid corpus apps)."
             echo
             echo '```'
             cat /tmp/sd-list.txt

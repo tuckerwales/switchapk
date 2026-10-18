@@ -41,17 +41,28 @@ make -f Makefile.switch       # build/switch/switchapk.nro (run `make` first for
 make -f Makefile.switch dist  # build/switch/switchapk-sd.zip: NRO + sample APKs in the SD layout
 ```
 
+`dist` also packs the open-source F-Droid apps of the real-app corpus
+(`tests/corpus/corpus.json`) that `python3 tools/corpus.py fetch` has
+downloaded, each checked against its pinned sha256, so a device test needs
+only the zip. Apps not fetched are skipped with a note; `FDROID=0` leaves
+them all out. Proprietary corpus apps (source local, such as Old School
+RuneScape) are never packaged. The F-Droid APKs are unmodified upstream
+builds; their sources are linked from each app's F-Droid page.
+
 ## CI
 
 `.github/workflows/package.yml` (Package NRO) runs on every push, on pull
 requests from forks, and from the Actions tab (workflow dispatch). The
 runner is Ubuntu 24.04 with JDK 17. It fetches the SDK and devkitPro
 (cached between runs), then runs `make` and `make -f Makefile.switch dist`.
-The SD zip includes every app under `tests/apps`. `dist` always rebuilds an
+The SD zip includes every app under `tests/apps` and the F-Droid corpus
+apps (fetched once and cached by the hash of `tests/corpus/corpus.json`;
+about 350 MB, so the zip is around 360 MB). `dist` always rebuilds an
 app that has `native/build.sh` with `NDK_ARM64=1`, so its APK carries
 arm64-v8a libraries; that needs clang, lld and `libc6-dev-arm64-cross`,
 which the workflow installs. The workflow checks that each sample APK is
-in the zip and that each native APK has an arm64-v8a library. The `switchapk-sd` artifact is
+in the zip, that each native APK has an arm64-v8a library, that every
+F-Droid corpus app is in and that no proprietary one is. The `switchapk-sd` artifact is
 `build/switch/switchapk-sd.zip`, kept for 14 days. Unzip it at the root of the SD card, the same as a local build.
 
 ## Run on a Switch
@@ -60,7 +71,11 @@ Needs a Switch running homebrew (Atmosphere + hbmenu).
 
 1. Unzip `build/switch/switchapk-sd.zip` at the root of the SD card. It
    creates `switch/switchapk/switchapk.nro` and `switch/switchapk/apks/`
-   with the sample apps. Put other APKs in that `apks` folder.
+   with the sample apps. Put other APKs in that `apks` folder. Split
+   bundles work too: `.apkm` (APKMirror), `.apks` (SAI, bundletool) and
+   `.xapk` (APKPure) are merged into one APK the first time the list reads
+   them (cached in `apks/.switchapk-bundles`). Encrypted APKMs cannot be
+   opened; export the app unencrypted instead.
 2. Start hbmenu in full-memory mode (hold R while starting a game, not
    from the Album applet: applet mode has far less memory) and open
    switchapk.

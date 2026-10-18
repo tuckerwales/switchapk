@@ -70,7 +70,8 @@ src/nativeloader/ nativeloader.h, elf_loader.c (ELF loader, dl*), shim_libc.c
                  properties, zlib, GL lookup)
 src/app/         main_host.c (host driver), app_runner.c (APK runner),
                  main_switch.c (Switch entry), launcher.c (home screen, splash,
-                 error screen; shared with the host), apk_info.c (labels/icons)
+                 error screen; shared with the host), apk_info.c (labels/icons),
+                 bundle.c (.apkm/.apks/.xapk split bundles merged into one APK)
 java/libcore/    java.*, javax.*, sun.*, libcore.*, dalvik.* classes
 java/framework/  android.*, com.android.internal.*, org.json, org.xmlpull
 third_party/     stb (image, truetype), sqlite (fetched, gitignored)
@@ -397,6 +398,11 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   logger logs at INFO through a handler that writes to `android.util.Log`
   (found by reflection, since libcore cannot link the framework), with
   Android's tag rules.
+- Nested classes come from the dex system annotations, as ART: member
+  classes from `MemberClasses` (`Class.getDeclaredClasses`, native
+  `getDeclaredClassesNative`; members R8 removed without pruning the
+  annotation are skipped), the declaring class from `EnclosingClass`, and
+  local classes are those with an `EnclosingMethod` and a name.
 - Generic signatures: `AnnotationParser.signature(owner, kind, token)`
   reads the `dalvik.annotation.Signature` system annotation natively
   (`src/native/java_annotation.c`); `libcore.reflect.GenericSignatureParser`
@@ -1858,7 +1864,21 @@ Switch implementation (`platform_switch.c`, `main_switch.c`):
     `<file>.cache` per APK (label, package, version, 148 px PNG icon;
     stale when the APK's size or mtime changes). With the cache the list
     opens without reading any APK; otherwise a progress screen reads them.
-  - `argv[1]` ending in `.apk` skips the list (nxlink, Try again). A
+  - Split bundles (`.apkm` from APKMirror, `.apks` from SAI or bundletool,
+    `.xapk` from APKPure) are listed and run like APKs. `bundle_resolve`
+    (`src/app/bundle.c`) merges one on first use into
+    `<apks>/.switchapk-bundles/<name>.apk` (hidden, so not listed): the base
+    APK whole minus `META-INF/`, plus the `lib/` and `assets/` entries of the
+    splits, compressed data copied as is through `zipw_copy_entry`. Density
+    and language splits are dropped (the base resolves at default
+    configurations), as `tools/corpus.py import` does. The base is the only
+    APK with `classes.dex`, else `base.apk`, else the one dex holder whose
+    name is not a split's. A `.src` sidecar records the bundle's size and
+    mtime, so a replaced bundle is merged again. Encrypted bundles are
+    refused with a reason on the error screen. `apk_read_identity` and
+    `app_run_apk` both resolve, so the launcher's first read does the merge
+    and the launch reuses it.
+  - `argv[1]` ending in `.apk` (or a bundle extension) skips the list (nxlink, Try again). A
     splash with the app's icon shows while the VM boots. When the app ends
     the NRO reloads itself through hbloader (`envSetNextLoad`), back to the
     list. A non-zero exit opens the error screen with the last 64 INFO+

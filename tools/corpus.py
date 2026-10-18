@@ -9,6 +9,8 @@ Usage:
   tools/corpus.py run [id...]       boot each APK headless with a smoke script, collect log signals
   tools/corpus.py report            aggregate scans and runs into docs/COMPATIBILITY.md
   tools/corpus.py all [id...]       fetch, scan, run, report
+  tools/corpus.py dist dir          copy the fetched F-Droid APKs into dir (the SD zip's apks folder);
+                                    proprietary (source local) apps are never copied
   tools/corpus.py scan --apk x.apk  scan any APK (prints the summary, writes nothing)
 
 scan resolves every class, method and field the app's dex files reference (walking the app's own
@@ -27,6 +29,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -165,6 +168,27 @@ def cmd_fetch(apps):
             die("%s: sha256 %s does not match the pinned %s" % (app["id"], digest, want))
         if not want:
             print("%s: sha256 %s (not pinned yet)" % (app["id"], digest))
+
+
+def cmd_dist(apps, dest):
+    """Copies each fetched F-Droid APK whose sha256 matches its pin into dest. Apps that are not fetched
+    are skipped with a note, so the SD zip still builds offline. Local (proprietary) apps are never
+    copied: their APKs belong to whoever supplied them and must not be redistributed."""
+    os.makedirs(dest, exist_ok=True)
+    copied = 0
+    for app in apps:
+        if is_local(app):
+            continue
+        path = apk_path(app)
+        if not os.path.exists(path):
+            print("dist: skip %s, not fetched (tools/corpus.py fetch %s)" % (app["id"], app["id"]))
+            continue
+        want = app.get("sha256")
+        if not want or sha256(path) != want:
+            die("%s: %s does not match its pinned sha256" % (app["id"], path))
+        shutil.copyfile(path, os.path.join(dest, os.path.basename(path)))
+        copied += 1
+    print("dist: %d F-Droid apps in %s" % (copied, dest))
 
 
 # Proprietary apps cannot be downloaded or committed: their owner supplies the APK (adb pull from a
@@ -1206,6 +1230,11 @@ def main(argv):
         if not ids:
             die("usage: tools/corpus.py import id file...")
         cmd_import(select(load_corpus(), ids[:1])[0], ids[1:])
+        return
+    if cmd == "dist":
+        if len(ids) != 1:
+            die("usage: tools/corpus.py dist dir")
+        cmd_dist(load_corpus(), ids[0])
         return
     apps = select(load_corpus(), ids)
     if cmd == "fetch":

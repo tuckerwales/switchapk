@@ -10,6 +10,8 @@ typedef struct {
     uint32_t uncomp_size;
     uint16_t method; /* 0 = stored, 8 = deflate */
     uint32_t crc;
+    uint16_t flags;            /* general purpose bits: bit 0 = encrypted, bit 3 = sizes in a data descriptor */
+    uint16_t mod_time, mod_date; /* DOS format */
 } ZipEntry;
 
 typedef struct ZipArchive ZipArchive;
@@ -30,5 +32,16 @@ uint8_t *zip_extract_name(ZipArchive *z, const char *name, size_t *out_len);
 /* Returns absolute offset of the entry data within the archive file if stored
  * uncompressed (used for mmap-like direct access), or -1. */
 int64_t zip_stored_data_offset(ZipArchive *z, const ZipEntry *e);
+
+/* Inflates (or copies) an entry into f in chunks, so large entries need no buffer of their size. */
+bool zip_extract_to_file(ZipArchive *z, const ZipEntry *e, FILE *f);
+
+/* Writes a new archive from entries of existing ones, copying their compressed data as is (no recompression).
+ * Stored entries are 4-byte aligned like zipalign. Archives over 4 GiB are refused. */
+typedef struct ZipWriter ZipWriter;
+ZipWriter *zipw_create(const char *path);
+bool zipw_copy_entry(ZipWriter *w, ZipArchive *src, const ZipEntry *e);
+/* Writes the central directory and closes the file; returns false if any step failed. Frees w. */
+bool zipw_finish(ZipWriter *w);
 
 #endif

@@ -68,7 +68,10 @@ static bool zip_parse(ZipArchive *z) {
             break;
         }
         ZipEntry *e = &z->entries[z->count];
+        e->flags = sa_rd16(cd + p + 8);
         e->method = sa_rd16(cd + p + 10);
+        e->mod_time = sa_rd16(cd + p + 12);
+        e->mod_date = sa_rd16(cd + p + 14);
         e->crc = sa_rd32(cd + p + 16);
         e->comp_size = sa_rd32(cd + p + 20);
         e->uncomp_size = sa_rd32(cd + p + 24);
@@ -198,4 +201,190 @@ uint8_t *zip_extract(ZipArchive *z, const ZipEntry *e, size_t *out_len) {
 uint8_t *zip_extract_name(ZipArchive *z, const char *name, size_t *out_len) {
     const ZipEntry *e = zip_find(z, name);
     return e ? zip_extract(z, e, out_len) : NULL;
+}
+
+bool zip_extract_to_file(ZipArchive *z, const ZipEntry *e, FILE *f) {
+    if (e->method != 0 && e->method != 8) {
+        LOGE("unsupported compression method %u for %s", e->method, e->name);
+        return false;
+    }
+    enum { CHUNK = 1 << 16 };
+    uint8_t *in = sa_malloc(CHUNK), *out = sa_malloc(CHUNK);
+    z_stream s;
+    memset(&s, 0, sizeof s);
+    bool ok = e->method == 0 || inflateInit2(&s, -MAX_WBITS) == Z_OK;
+    bool inflating = ok && e->method == 8;
+    pthread_mutex_lock(&z->lock);
+    int64_t off = ok ? data_offset_locked(z, e) : -1;
+    pthread_mutex_unlock(&z->lock);
+    ok = off >= 0;
+    uint64_t done = 0;
+    int r = Z_OK;
+    while (ok && done < e->comp_size) {
+        size_t n = e->comp_size - done < CHUNK ? (size_t)(e->comp_size - done) : CHUNK;
+        pthread_mutex_lock(&z->lock);
+        ok = zread(z, (uint64_t)off + done, in, n);
+        pthread_mutex_unlock(&z->lock);
+        if (!ok) break;
+        done += n;
+        if (!inflating) {
+            ok = fwrite(in, 1, n, f) == n;
+            continue;
+        }
+        s.next_in = in;
+        s.avail_in = (uInt)n;
+        do {
+            s.next_out = out;
+            s.avail_out = CHUNK;
+            r = inflate(&s, Z_NO_FLUSH);
+            if (r != Z_OK && r != Z_STREAM_END && r != Z_BUF_ERROR) {
+                ok = false;
+                break;
+            }
+            size_t got = CHUNK - s.avail_out;
+            if (got && fwrite(out, 1, got, f) != got) ok = false;
+        } while (ok && s.avail_out == 0);
+    }
+    if (inflating) {
+        if (ok && r != Z_STREAM_END) ok = false;
+        inflateEnd(&s);
+    }
+    if (!ok) LOGE("cannot extract %s", e->name);
+    free(in);
+    free(out);
+    return ok;
+}
+
+typedef struct {
+    char *name;
+    uint16_t flags, method, mod_time, mod_date;
+    uint32_t crc, comp_size, uncomp_size, offset;
+} ZipWEntry;
+
+struct ZipWriter {
+    FILE *f;
+    uint64_t pos;
+    ZipWEntry *entries;
+    size_t count;
+    bool failed;
+};
+
+static void put16(uint8_t *p, uint16_t v) {
+    p[0] = (uint8_t)v;
+    p[1] = (uint8_t)(v >> 8);
+}
+
+static void put32(uint8_t *p, uint32_t v) {
+    put16(p, (uint16_t)v);
+    put16(p + 2, (uint16_t)(v >> 16));
+}
+
+static void zw_write(ZipWriter *w, const void *p, size_t n) {
+    if (w->failed) return;
+    if (n && fwrite(p, 1, n, w->f) != n) w->failed = true;
+    w->pos += n;
+}
+
+ZipWriter *zipw_create(const char *path) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return NULL;
+    ZipWriter *w = sa_calloc(1, sizeof *w);
+    w->f = f;
+    return w;
+}
+
+bool zipw_copy_entry(ZipWriter *w, ZipArchive *src, const ZipEntry *e) {
+    if (w->failed) return false;
+    pthread_mutex_lock(&src->lock);
+    int64_t off = data_offset_locked(src, e);
+    pthread_mutex_unlock(&src->lock);
+    size_t nlen = strlen(e->name);
+    if (off < 0 || nlen > 0xffff || w->pos + 30 + nlen + 4 + e->comp_size > 0xffffffffull) {
+        w->failed = true;
+        return false;
+    }
+    /* Pad stored data to a 4-byte boundary through the extra field, as zipalign does. */
+    size_t pad = e->method == 0 ? (size_t)((4 - (w->pos + 30 + nlen) % 4) % 4) : 0;
+    ZipWEntry *we;
+    w->entries = sa_realloc(w->entries, (w->count + 1) * sizeof *w->entries);
+    we = &w->entries[w->count++];
+    we->name = sa_strdup(e->name);
+    /* Sizes go in the header, so no data descriptor follows (bit 3 cleared). */
+    we->flags = e->flags & ~(uint16_t)8;
+    we->method = e->method;
+    we->mod_time = e->mod_time;
+    we->mod_date = e->mod_date;
+    we->crc = e->crc;
+    we->comp_size = e->comp_size;
+    we->uncomp_size = e->uncomp_size;
+    we->offset = (uint32_t)w->pos;
+    uint8_t lh[30];
+    put32(lh, 0x04034b50);
+    put16(lh + 4, 20);
+    put16(lh + 6, we->flags);
+    put16(lh + 8, we->method);
+    put16(lh + 10, we->mod_time);
+    put16(lh + 12, we->mod_date);
+    put32(lh + 14, we->crc);
+    put32(lh + 18, we->comp_size);
+    put32(lh + 22, we->uncomp_size);
+    put16(lh + 26, (uint16_t)nlen);
+    put16(lh + 28, (uint16_t)pad);
+    zw_write(w, lh, 30);
+    zw_write(w, e->name, nlen);
+    static const uint8_t zeros[4];
+    zw_write(w, zeros, pad);
+    enum { CHUNK = 1 << 16 };
+    uint8_t *buf = sa_malloc(CHUNK);
+    for (uint64_t done = 0; !w->failed && done < e->comp_size;) {
+        size_t n = e->comp_size - done < CHUNK ? (size_t)(e->comp_size - done) : CHUNK;
+        pthread_mutex_lock(&src->lock);
+        bool ok = zread(src, (uint64_t)off + done, buf, n);
+        pthread_mutex_unlock(&src->lock);
+        if (!ok) w->failed = true;
+        else zw_write(w, buf, n);
+        done += n;
+    }
+    free(buf);
+    return !w->failed;
+}
+
+bool zipw_finish(ZipWriter *w) {
+    uint64_t cd_start = w->pos;
+    for (size_t i = 0; i < w->count; i++) {
+        const ZipWEntry *e = &w->entries[i];
+        size_t nlen = strlen(e->name);
+        uint8_t ch[46];
+        memset(ch, 0, sizeof ch);
+        put32(ch, 0x02014b50);
+        put16(ch + 4, 20);
+        put16(ch + 6, 20);
+        put16(ch + 8, e->flags);
+        put16(ch + 10, e->method);
+        put16(ch + 12, e->mod_time);
+        put16(ch + 14, e->mod_date);
+        put32(ch + 16, e->crc);
+        put32(ch + 20, e->comp_size);
+        put32(ch + 24, e->uncomp_size);
+        put16(ch + 28, (uint16_t)nlen);
+        put32(ch + 42, e->offset);
+        zw_write(w, ch, 46);
+        zw_write(w, e->name, nlen);
+    }
+    uint64_t cd_size = w->pos - cd_start;
+    uint8_t eocd[22];
+    memset(eocd, 0, sizeof eocd);
+    put32(eocd, 0x06054b50);
+    put16(eocd + 8, (uint16_t)w->count);
+    put16(eocd + 10, (uint16_t)w->count);
+    put32(eocd + 12, (uint32_t)cd_size);
+    put32(eocd + 16, (uint32_t)cd_start);
+    if (w->count > 0xffff || w->pos > 0xffffffffull) w->failed = true;
+    zw_write(w, eocd, 22);
+    if (fclose(w->f) != 0) w->failed = true;
+    bool ok = !w->failed;
+    for (size_t i = 0; i < w->count; i++) free(w->entries[i].name);
+    free(w->entries);
+    free(w);
+    return ok;
 }

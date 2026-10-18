@@ -1270,4 +1270,33 @@ what is left in flight.
   service has it. tests/apps/outline compares RenderNode matrices with
   View's and checks a scaled, outline-clipped node drawn from onDraw;
   Simon Tatham's Puzzles hits no stubs.
-
+- 2026-10-18, member classes (WS16): Mindustry's map previews failed
+  (EOFException, `Pixmap.setRaw` index -1024) because
+  Class.getDeclaredClasses always returned an empty array. Mindustry's
+  Block.initBuilding finds each block's Building subclass through it, so
+  every block got a plain Building, whose read() skips block-specific
+  save data and misaligned the rest of the map. Found by parsing the
+  default maps in Python (all decode cleanly) and comparing with a
+  `SWITCHAPK_TRACE_CALLS` trace (the duo turret read as a plain
+  Building). getDeclaredClasses now reads the MemberClasses annotation,
+  getClasses collects public members up the superclass chain, and
+  isLocalClass/isMemberClass tell local classes apart (local classes
+  were reported as members). New tests/dex/NestedClassTest. Mindustry
+  reaches its main menu with every preview; this also fixes gameplay
+  for every block with its own building (turrets, conveyors, cores).
+- 2026-10-18, F-Droid apps in the SD zip: `make -f Makefile.switch dist`
+  now adds the open-source corpus apps (new `tools/corpus.py dist`, which
+  copies each fetched APK after checking its pinned sha256 and never
+  copies a proprietary one), so the CI artifact is ready to test on a
+  Switch. CI fetches them once (cached by the corpus.json hash) and checks
+  the zip has all 13 and no local APK. `FDROID=0` leaves them out.
+- 2026-10-18, split bundles on the Switch: the launcher lists and runs
+  `.apkm`, `.apks` and `.xapk` files. src/app/bundle.c merges a bundle once
+  into `apks/.switchapk-bundles/<name>.apk` (base APK plus the splits'
+  lib/ and assets/, compressed data copied as is by a new zip writer,
+  stored entries 4-byte aligned), keyed by the bundle's size and mtime.
+  Encrypted bundles fail with a clear reason. Tested with Frozen Bubble
+  split into base, ABI, assets and density splits as an APKM (merged in
+  10 ms, same entries and CRCs as the original APK, plays) and as an XAPK
+  with a dex-carrying feature split; tests/launcher/check_launcher.sh
+  lists and launches an .apkm. NRO builds; dex tests and samples pass.

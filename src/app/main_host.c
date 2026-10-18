@@ -7,6 +7,7 @@
 #include "../platform/platform.h"
 #include "apk_info.h"
 #include "launcher.h"
+#include "bundle.h"
 #include "../gfx/gfx.h"
 #include "../nativeloader/nativeloader.h"
 
@@ -24,7 +25,7 @@ typedef struct {
 
 static void usage(void) {
     fprintf(stderr,
-            "usage: switchapk-host [options] <program.dex|app.apk> [MainClass] [args...]\n"
+            "usage: switchapk-host [options] <program.dex|app.apk|app.apkm> [MainClass] [args...]\n"
             "  --framework <file>   framework dex (default build/java/framework.dex)\n"
             "  --data <dir>         data directory (default ./build/data)\n"
             "  --script <file>      headless input script (APK runs only)\n"
@@ -343,7 +344,7 @@ static void *vm_main(void *arg) {
     }
     vm_add_boot_dex(fw);
     size_t plen = strlen(program);
-    bool is_apk = plen > 4 && !strcmp(program + plen - 4, ".apk");
+    bool is_apk = plen > 4 && bundle_is_runnable(program);
     if (is_apk) {
         extern int app_run_apk(const char *path, const char *data_dir, void *stack_hi);
         if (script) platform_set_headless_script(script);

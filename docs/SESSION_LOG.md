@@ -1311,3 +1311,14 @@ what is left in flight.
   NavigableMap, so its subsets and descending set are views too. New
   tests/dex/TreeMapTest (randomized operations against a reference, every
   view kind, 300k operations); all dex tests pass.
+- 2026-10-18, concurrent sorted collections (WS16): ConcurrentSkipListMap
+  and Set were plain TreeMap/TreeSet subclasses (not thread-safe, wrong
+  supertypes, accepted nulls, iterators threw ConcurrentModificationException)
+  and java.util.concurrent.ConcurrentNavigableMap did not exist (Unciv,
+  Simple Calculator, Simon Tatham's Puzzles and OSRS reference them). Now:
+  the interface, and both classes with android.jar's exact signatures
+  (api_check 0 missing) over one lock and a TreeMap: atomic ConcurrentMap
+  and compute operations, weakly consistent snapshot iterators, null
+  refusal, live sub-map and descending views sharing the lock, and the JDK
+  serial forms. New tests/dex/ConcurrentSkipListTest (including 4 writer
+  and 2 reader threads); all dex tests pass.

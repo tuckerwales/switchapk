@@ -4,6 +4,7 @@
 #ifndef SWITCHAPK_ANDROID_H
 #define SWITCHAPK_ANDROID_H
 
+#include "../platform/platform.h"
 #include "../native/natives.h"
 #include "../core/res.h"
 #include "../core/zip.h"
@@ -45,5 +46,7 @@ void native_activity_register(void);
 
 /* Platform event plumbing between android_os.c and the app runner. */
 void android_request_quit(void);
+/* The display the app sees: the platform's, or a letterboxed portrait one for portrait-locked apps. */
+void android_get_display(PlatformDisplay *d);
 
 #endif

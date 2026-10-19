@@ -186,12 +186,33 @@ NATIVE(BatteryManager_nGetState) {
     p[4] = b.temperature;
 }
 
+/* A portrait-locked app sees a portrait display: the screen's height, 9/16 of it as width, and the density
+ * lowered so the window is at least 320 dp wide (405x720 at 202 dpi handheld, 607x1080 at 303 dpi docked).
+ * The window is letterboxed by platform_present and touch is already relative to it. */
+static volatile bool g_portrait;
+
+void android_get_display(PlatformDisplay *d) {
+    platform_get_display(d);
+    if (g_portrait && d->width > d->height) {
+        int w = d->height * 9 / 16;
+        int dpi = w * 160 / 320;
+        d->width = w;
+        if (d->dpi > dpi) d->dpi = dpi;
+    }
+}
+
+/* static native void nSetPortrait(boolean portrait) */
+NATIVE(Display_nSetPortrait) {
+    UNUSED_ARGS();
+    g_portrait = A_BOOL(0);
+}
+
 /* static native void nGetInfo(int[] out) */
 NATIVE(Display_nGetInfo) {
     ArrayObject *out = A_ARR(0);
     if (!out || out->length < 5) return;
     PlatformDisplay d;
-    platform_get_display(&d);
+    android_get_display(&d);
     int32_t *p = ARRAY_DATA(out, int32_t);
     p[0] = d.width;
     p[1] = d.height;
@@ -234,6 +255,7 @@ static const NativeMethodReg g_regs[] = {
     {"Landroid/hardware/SystemSensorManager;", "nSetRate", "(II)V", SystemSensorManager_nSetRate},
     {"Landroid/os/BatteryManager;", "nGetState", "([I)V", BatteryManager_nGetState},
     {"Landroid/view/Display;", "nGetInfo", "([I)V", Display_nGetInfo},
+    {"Landroid/view/Display;", "nSetPortrait", "(Z)V", Display_nSetPortrait},
 };
 
 void android_os_register(void) { vm_register_natives(g_regs, SA_ARRAY_LEN(g_regs)); }

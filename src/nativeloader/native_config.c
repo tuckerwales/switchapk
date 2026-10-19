@@ -10,6 +10,7 @@
 #include "ndk_android.h"
 #include "../core/common.h"
 #include "../platform/platform.h"
+#include "../android/android.h"
 
 struct AConfiguration {
     int32_t mcc, mnc;
@@ -47,7 +48,7 @@ void AConfiguration_fromAssetManager(AConfiguration *out, void *am) {
     SA_UNUSED(am);
     PlatformDisplay d;
     memset(&d, 0, sizeof d);
-    platform_get_display(&d);
+    android_get_display(&d);
     int dpi = d.dpi > 0 ? d.dpi : 240;
     int wdp = d.width * 160 / dpi, hdp = d.height * 160 / dpi;
     memset(out, 0, sizeof *out);

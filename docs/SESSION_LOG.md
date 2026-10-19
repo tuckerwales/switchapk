@@ -1396,3 +1396,13 @@ what is left in flight.
   dialog); and a new window gains focus only after its first layout and
   draw, so onWindowFocusChanged(true) sees real sizes (Andor's Trail's
   title clouds). All 14 corpus apps still draw; samples pass.
+- 2026-10-19, portrait windows: apps whose launcher activity is
+  portrait-locked now start in a letterboxed portrait window (405x720 in
+  handheld, 607x1080 docked, centered), and setRequestedOrientation with
+  an explicit portrait or landscape value switches the window at runtime.
+  The switch waits for an idle main looper (switching mid-frame blackened
+  GLSurfaceView and raced MediaPlayer.prepareAsync) and the requested
+  value survives the relaunch (otherwise the new instance flipped back
+  and relaunched forever). Vector Pinball draws correctly in portrait;
+  Pixel Dungeon starts portrait and its landscape setting switches to a
+  correct landscape title screen, including after docking.

@@ -602,6 +602,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-19 (WS4): portrait windows. New native
+  `android.view.Display.nSetPortrait(boolean)` behind the public static
+  `Display.setPortraitWindow`, and C `android_get_display(PlatformDisplay*)`
+  (src/android/android.h) returning the letterboxed display; nGetInfo and
+  native_config.c use it. ActivityThread picks the mode from the launcher
+  activity and switches it on setRequestedOrientation.
 - 2026-10-18 (launcher): split bundles. `ZipEntry` gains `flags`,
   `mod_time` and `mod_date`; new `zip_extract_to_file` and a raw-copy
   writer (`zipw_create`, `zipw_copy_entry`, `zipw_finish`) in

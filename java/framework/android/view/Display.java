@@ -71,6 +71,11 @@ public class Display {
         out.ydpi = mDpi;
     }
 
+    /** framework-internal. A portrait-locked app gets a letterboxed portrait display (see nSetPortrait). */
+    public static void setPortraitWindow(boolean portrait) { nSetPortrait(portrait); }
+
+    private static native void nSetPortrait(boolean portrait);
+
     public boolean isValid() { return true; }
 
     public int getDisplayId() { return DEFAULT_DISPLAY; }

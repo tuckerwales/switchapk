@@ -392,7 +392,22 @@ Data root on Switch will be `sdmc:/switch/switchapk/data`; on host it is
   whose reader `PullXMLReader` drives the framework pull parser:
   namespaces and namespace-prefixes features, the lexical-handler property
   (comments, CDATA), no DTD processing. Lives in java/framework because the
-  pull parser does. No DOM (`DocumentBuilder`) yet.
+  pull parser does.
+- DOM: `org.w3c.dom` interfaces live in java/libcore (next to SAX); the
+  implementation is `org.apache.harmony.xml.dom` (Android's package,
+  written fresh: like Android, getChildNodes and getElementsByTagName
+  return snapshots and attributes keep insertion order).
+  `DocumentBuilderFactory` makes `org.apache.harmony.xml.parsers.
+  DocumentBuilderFactoryImpl`, whose builder reads `SimpleXmlPullParser`
+  tokens. The pull parser now normalizes line ends, skips a BOM, sniffs
+  UTF-16 and the declared encoding, reports the XML declaration through
+  properties, and expands general entities from the internal DTD subset
+  (replacement text with markup is re-parsed; external entities are never
+  fetched). `javax.xml.transform` is identity only
+  (`org.apache.harmony.xml.transform`, a DOM serializer with namespace
+  fixup; indent-amount defaults to 0 as in Android's Xalan) and
+  `javax.xml.xpath` is an XPath 1.0 evaluator over the DOM
+  (`org.apache.harmony.xml.xpath`).
 - `java.util.logging`: Logger hierarchy by dotted name, Level, Handler,
   StreamHandler, ConsoleHandler, SimpleFormatter. As on Android the root
   logger logs at INFO through a handler that writes to `android.util.Log`

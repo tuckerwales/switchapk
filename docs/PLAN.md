@@ -520,8 +520,16 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    tables are approximations outside Latin, Greek, Cyrillic and CJK), and
    the checked/navigable `Collections` wrappers. Still missing as whole
    areas: java.time beyond Duration, Instant and the temporal core (no
-   LocalDate/LocalDateTime, zones, Clock or DateTimeFormatter yet), ResourceBundle, org.w3c.dom and DocumentBuilder,
+   LocalDate/LocalDateTime, zones, Clock or DateTimeFormatter yet), ResourceBundle,
    MulticastChannel and pipes, a default serialVersionUID hash.
+   XML now has DOM as well as SAX and pull parsing (tests/dex/DomTest.java):
+   org.w3c.dom (and ls interfaces), DocumentBuilderFactory/DocumentBuilder,
+   the identity Transformer (stream, DOM and SAX sources and results,
+   TransformerHandler, indent and encoding output properties) and an XPath
+   1.0 evaluator. Gaps: no XSLT stylesheets, no XML Schema validation or
+   javax.xml.datatype, no EntityReference nodes (setExpandEntityReferences
+   is ignored, entities always expand), the XPath namespace axis is empty,
+   and no LSParser/LSSerializer implementation.
 
 9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`). All 13
    open apps draw their first screen (2026-10-11, after the merge).

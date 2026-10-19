@@ -1406,3 +1406,13 @@ what is left in flight.
   and relaunched forever). Vector Pinball draws correctly in portrait;
   Pixel Dungeon starts portrait and its landscape setting switches to a
   correct landscape title screen, including after docking.
+- 2026-10-19, XML DOM: added org.w3c.dom (with ls interfaces),
+  DocumentBuilderFactory/DocumentBuilder over the framework pull parser,
+  the identity Transformer (stream, DOM and SAX sources and results,
+  TransformerHandler, indent, encoding and declaration properties),
+  javax.xml.xpath with an XPath 1.0 evaluator, QName, NamespaceContext and
+  XMLConstants. The pull parser gained internal-subset entities, CR LF
+  normalization, BOM and UTF-16 sniffing and XML declaration properties.
+  tests/dex/DomTest.java passes against OpenJDK (output normalized where
+  Android's Xalan and the JDK differ: standalone="no" and the line break
+  after the declaration). No XSLT, schema validation or LS implementation.

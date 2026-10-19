@@ -398,6 +398,17 @@ public final class ViewRootImpl implements ViewParent {
 
         if (mFirst) {
             mFirst = false;
+            if (mPendingFocusGain) {
+                // after this traversal's pre-draw and draw
+                mView.post(new Runnable() {
+                    public void run() {
+                        if (mPendingFocusGain) {
+                            mPendingFocusGain = false;
+                            windowFocusChanged(true);
+                        }
+                    }
+                });
+            }
             WindowManagerGlobal.getInstance().updateFocusedWindow();
             if (!mAttachInfo.mInTouchMode && !host.hasFocus()) host.restoreDefaultFocus();
         }
@@ -420,11 +431,13 @@ public final class ViewRootImpl implements ViewParent {
         int gravity = lp.gravity;
         int x = lp.x;
         int y = lp.y;
-        if (gravity == 0 || (w >= screenW && h >= screenH)) {
-            mWinX = w >= screenW ? 0 : x;
-            mWinY = h >= screenH ? 0 : y;
+        if (w >= screenW && h >= screenH) {
+            mWinX = 0;
+            mWinY = 0;
             return;
         }
+        // Gravity 0 centers both axes (Gravity.apply), as the window manager does: dialog-themed activities keep
+        // gravity 0 and are centered on Android.
         Rect container = new Rect(0, 0, screenW, screenH);
         Rect out = new Rect();
         Gravity.apply(gravity, w, h, container, (int) (lp.horizontalMargin * screenW) + x,
@@ -491,7 +504,17 @@ public final class ViewRootImpl implements ViewParent {
 
     // ---------------------------------------------------------------- window focus and touch mode
 
+    /** Focus granted before the first traversal, held back until the window has been laid out and drawn. */
+    private boolean mPendingFocusGain;
+
     void windowFocusChanged(boolean hasFocus) {
+        if (hasFocus && mFirst) {
+            // As Android, a new window gets focus once laid out and drawn: apps size things from
+            // onWindowFocusChanged(true) with getWidth() (Andor's Trail's title clouds).
+            mPendingFocusGain = true;
+            return;
+        }
+        if (!hasFocus) mPendingFocusGain = false;
         if (mView == null || mAttachInfo.mHasWindowFocus == hasFocus) return;
         mAttachInfo.mHasWindowFocus = hasFocus;
         if (hasFocus) mAttachInfo.mInTouchMode = sInTouchMode;

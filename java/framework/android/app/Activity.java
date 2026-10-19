@@ -105,7 +105,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     private int mTitleColor = 0;
     private boolean mTitleReady;
     private int mDefaultKeyMode = DEFAULT_KEYS_DISABLE;
-    private int mRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+    int mRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED; // ActivityThread carries it across relaunch
     private MenuInflater mMenuInflater;
     private SearchEvent mSearchEvent;
     private SearchManager mSearchManager;
@@ -643,6 +643,7 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
     }
 
     final void performResume() {
+        ActivityThread.requestOrientation(mRequestedOrientation);
         dispatchActivityPreResumed();
         performRestart();
         mFragments.execPendingActions();
@@ -1061,7 +1062,10 @@ public class Activity extends ContextThemeWrapper implements LayoutInflater.Fact
 
     public final int getVolumeControlStream() { return getWindow().getVolumeControlStream(); }
 
-    public void setRequestedOrientation(int requestedOrientation) { mRequestedOrientation = requestedOrientation; }
+    public void setRequestedOrientation(int requestedOrientation) {
+        mRequestedOrientation = requestedOrientation;
+        ActivityThread.requestOrientation(requestedOrientation);
+    }
 
     public int getRequestedOrientation() { return mRequestedOrientation; }
 

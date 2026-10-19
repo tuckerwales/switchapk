@@ -1300,3 +1300,109 @@ what is left in flight.
   10 ms, same entries and CRCs as the original APK, plays) and as an XAPK
   with a dex-carrying feature split; tests/launcher/check_launcher.sh
   lists and launches an .apkm. NRO builds; dex tests and samples pass.
+- 2026-10-18, TreeMap as a red-black tree (WS16): TreeMap was a sorted
+  array (O(n) inserts, quadratic for large maps) whose sub-maps,
+  descending maps and key sets were snapshot copies, so writes through
+  them were lost. It is now a red-black tree written for switchapk, with
+  live, range-checked sub-map and descending views (IllegalArgumentException
+  for keys out of range), navigable key set views, fail-fast iterators and
+  immutable snapshot entries from the navigation methods, as the JDK
+  specifies; the serial form is unchanged. TreeSet is backed by any
+  NavigableMap, so its subsets and descending set are views too. New
+  tests/dex/TreeMapTest (randomized operations against a reference, every
+  view kind, 300k operations); all dex tests pass.
+- 2026-10-18, concurrent sorted collections (WS16): ConcurrentSkipListMap
+  and Set were plain TreeMap/TreeSet subclasses (not thread-safe, wrong
+  supertypes, accepted nulls, iterators threw ConcurrentModificationException)
+  and java.util.concurrent.ConcurrentNavigableMap did not exist (Unciv,
+  Simple Calculator, Simon Tatham's Puzzles and OSRS reference them). Now:
+  the interface, and both classes with android.jar's exact signatures
+  (api_check 0 missing) over one lock and a TreeMap: atomic ConcurrentMap
+  and compute operations, weakly consistent snapshot iterators, null
+  refusal, live sub-map and descending views sharing the lock, and the JDK
+  serial forms. New tests/dex/ConcurrentSkipListTest (including 4 writer
+  and 2 reader threads); all dex tests pass.
+- 2026-10-18, fork/join and executor gaps (WS16): ForkJoinTask,
+  RecursiveTask, RecursiveAction, CountedCompleter, ForkJoinWorkerThread,
+  ThreadLocalRandom, CompletionService and ExecutorCompletionService were
+  missing (Mindustry, Unciv, Vector Pinball, Andor's Trail, Simple
+  Calculator, Puzzles and OSRS reference them), ForkJoinPool was a fixed
+  ThreadPoolExecutor (wrong supertype; nested joins would deadlock), and
+  ExecutorService lacked the timed invokeAll/invokeAny (invokeAny also ran
+  tasks one after another). Now: a fork/join pool with a shared deque
+  (forks first, submissions last), on-demand daemon workers, joins that run
+  the joined task or other queued work instead of blocking, managedBlock
+  compensation, JDK exception reporting (join rethrows a copy made in the
+  joining thread, get wraps), CountedCompleter completion chains, and the
+  JDK's timed invokeAll/invokeAny. ThreadLocalRandom is per thread with
+  SplittableRandom's generator. All with android.jar's signatures (api_check
+  0 missing). New tests/dex/ForkJoinTest (stable over repeated runs); all
+  dex tests pass; the six corpus apps that reference these still draw.
+- 2026-10-18, java.time core (WS16): java.time was absent (Unciv, Simple
+  Calculator, Andor's Trail and OSRS reference it, mostly Duration through
+  AccessibilityNodeInfo, and Instant). Added Duration and Instant with the
+  JDK's arithmetic, ISO-8601 text (ISO_INSTANT formatting for any year,
+  parsing with offsets) and error messages; DateTimeException; the
+  temporal core (Temporal, TemporalAccessor, TemporalAdjuster,
+  TemporalAmount, TemporalUnit, TemporalField, TemporalQuery, ChronoUnit,
+  ChronoField, ValueRange, UnsupportedTemporalTypeException);
+  DateTimeParseException and ResolverStyle; Date.from/toInstant and
+  Calendar.toInstant. api_check: 0 missing except Instant.atOffset,
+  atZone and now(Clock), which need ZoneId, ZoneOffset and Clock (not
+  yet). New tests/dex/TimeTest; all dex tests pass.
+- 2026-10-18, missing java.* classes, batch 2 (WS16): Scanner (on-demand
+  buffering, locale-aware numbers, findInLine/findWithinHorizon/skip,
+  tokens/findAll), ResourceBundle with Control, ListResourceBundle and
+  PropertyResourceBundle (candidate locales, default-locale fallback,
+  class and .properties bundles through the class loader), java.sql
+  Date/Time/Timestamp/SQLException, StampedLock, ClassValue,
+  LongAccumulator, DoubleAdder, DoubleAccumulator. CharsetDecoder and
+  CharsetEncoder were stubs (no error actions, no decodeLoop/encodeLoop,
+  multi-byte characters split across buffers became U+FFFD); they now
+  follow the JDK's coder state machine with streaming UTF-8 (JDK
+  malformed lengths), ISO-8859-1, US-ASCII and UTF-16 coders, and
+  CoderResult, MalformedInputException, UnmappableCharacterException and
+  CoderMalfunctionError are complete. DecimalFormatSymbols now has CLDR
+  separators per locale (it always used English ones) and its full API.
+  All with android.jar's signatures. New tests/dex/MiscApiTest; all dex
+  tests and samples pass.
+- 2026-10-18, past the first screen (corpus): four agents drove every
+  corpus app into real use (gameplay, menus, dialogs). Fixed from their
+  findings, each verified with their reproduction scripts:
+  SoundPool.Builder defaults maxStreams to 1 instead of throwing
+  (Solitaire crashed starting any game); TextView's constructor no longer
+  calls the overridable setKeyListener/setInputType (AppCompatEditText
+  with appcompat 1.4+ crashed, e.g. Puzzles' Custom dialog);
+  android:tint alone defaults ImageView's tint mode to SRC_ATOP (Puzzles'
+  chooser icons were erased by a transparent tint); GradientDrawable
+  draws a color-filtered fill at fill alpha 0 as AOSP does (Simple Mobile
+  Tools dialogs had no background); RippleDrawable.mutate refreshes its
+  mask (white pills behind Material text buttons); AlertController paints
+  AOSP's section backgrounds (Holo dialogs had no panel: Frozen Bubble,
+  Blockinger); Html collapses whitespace as AOSP (Puzzles' help and
+  feedback text); and an uncaught exception on any thread now logs FATAL
+  EXCEPTION and ends the app, as Android's default handler, instead of
+  leaving it hung (Replica Island's GL thread). Mindustry and Unciv play;
+  DroidFish, Vector Pinball, Frozen Bubble, Blockinger, Calculator,
+  Shattered PD and Pixel Dungeon reach gameplay.
+- 2026-10-19, more fixes from the corpus agents: a premultiplied Bitmap
+  (the default) reads fully transparent pixels back as 0 from
+  getPixel/getPixels, as Android does (Pixel Dungeon finds glyph edges
+  that way; all its text was missing); windows with gravity 0 are
+  centered by Gravity.apply as on Android (Andor's Trail's dialog-themed
+  activities sat in the top-left corner); an activity's own window is
+  placed below that activity's other windows, so a dialog shown from
+  onCreate/onResume is not hidden behind it (Andor's Trail's welcome
+  dialog); and a new window gains focus only after its first layout and
+  draw, so onWindowFocusChanged(true) sees real sizes (Andor's Trail's
+  title clouds). All 14 corpus apps still draw; samples pass.
+- 2026-10-19, portrait windows: apps whose launcher activity is
+  portrait-locked now start in a letterboxed portrait window (405x720 in
+  handheld, 607x1080 docked, centered), and setRequestedOrientation with
+  an explicit portrait or landscape value switches the window at runtime.
+  The switch waits for an idle main looper (switching mid-frame blackened
+  GLSurfaceView and raced MediaPlayer.prepareAsync) and the requested
+  value survives the relaunch (otherwise the new instance flipped back
+  and relaunched forever). Vector Pinball draws correctly in portrait;
+  Pixel Dungeon starts portrait and its landscape setting switches to a
+  correct landscape title screen, including after docking.

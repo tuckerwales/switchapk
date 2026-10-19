@@ -372,9 +372,30 @@ public class Html {
             return mOut;
         }
 
+        /** As AOSP's characters(): a space or newline becomes one space, dropped after another space or newline
+         * (including the end of the output so far) and at the very start. Entities are decoded first, so
+         * &nbsp; (U+00A0) survives. */
         private void appendText(String raw) {
             if (raw.length() == 0) return;
-            mOut.append(decode(raw));
+            String text = decode(raw);
+            StringBuilder sb = new StringBuilder(text.length());
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                if (c == ' ' || c == '\n') {
+                    char pred;
+                    int len = sb.length();
+                    if (len == 0) {
+                        len = mOut.length();
+                        pred = len == 0 ? '\n' : mOut.charAt(len - 1);
+                    } else {
+                        pred = sb.charAt(len - 1);
+                    }
+                    if (pred != ' ' && pred != '\n') sb.append(' ');
+                } else {
+                    sb.append(c);
+                }
+            }
+            mOut.append(sb);
         }
 
         private void handleRaw(String raw) {

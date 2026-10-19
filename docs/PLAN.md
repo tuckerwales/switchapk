@@ -519,7 +519,8 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    and `toGenericString`, Character code point helpers (the Character
    tables are approximations outside Latin, Greek, Cyrillic and CJK), and
    the checked/navigable `Collections` wrappers. Still missing as whole
-   areas: java.time, ResourceBundle, org.w3c.dom and DocumentBuilder,
+   areas: java.time beyond Duration, Instant and the temporal core (no
+   LocalDate/LocalDateTime, zones, Clock or DateTimeFormatter yet), ResourceBundle, org.w3c.dom and DocumentBuilder,
    MulticastChannel and pipes, a default serialVersionUID hash.
 
 9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`). All 13
@@ -601,6 +602,12 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-19 (WS4): portrait windows. New native
+  `android.view.Display.nSetPortrait(boolean)` behind the public static
+  `Display.setPortraitWindow`, and C `android_get_display(PlatformDisplay*)`
+  (src/android/android.h) returning the letterboxed display; nGetInfo and
+  native_config.c use it. ActivityThread picks the mode from the launcher
+  activity and switches it on setRequestedOrientation.
 - 2026-10-18 (launcher): split bundles. `ZipEntry` gains `flags`,
   `mod_time` and `mod_date`; new `zip_extract_to_file` and a raw-copy
   writer (`zipw_create`, `zipw_copy_entry`, `zipw_finish`) in

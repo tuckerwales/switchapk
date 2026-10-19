@@ -75,6 +75,10 @@ public abstract class Calendar implements java.io.Serializable, Cloneable, Compa
         setTimeInMillis(date.getTime());
     }
 
+    public final java.time.Instant toInstant() {
+        return java.time.Instant.ofEpochMilli(getTimeInMillis());
+    }
+
     public long getTimeInMillis() {
         if (!isTimeSet) {
             computeTime();

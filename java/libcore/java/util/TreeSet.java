@@ -2,7 +2,7 @@ package java.util;
 
 public class TreeSet<E> extends AbstractSet<E> implements NavigableSet<E>, Cloneable, java.io.Serializable {
     private static final long serialVersionUID = -2479143000061671589L;
-    private transient TreeMap<E, Object> m;
+    private transient NavigableMap<E, Object> m;
 
     /** Java's serial form: the comparator, the size, then the elements in order. */
     private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
@@ -44,7 +44,8 @@ public class TreeSet<E> extends AbstractSet<E> implements NavigableSet<E>, Clone
         addAll(s);
     }
 
-    private TreeSet(TreeMap<E, Object> map) {
+    /** A view over a sub-map or descending map of another set's map (subSet, descendingSet, ...). */
+    TreeSet(NavigableMap<E, Object> map) {
         m = map;
     }
 
@@ -57,7 +58,7 @@ public class TreeSet<E> extends AbstractSet<E> implements NavigableSet<E>, Clone
     }
 
     public NavigableSet<E> descendingSet() {
-        return new TreeSet<E>((TreeMap<E, Object>) m.descendingMap());
+        return new TreeSet<E>(m.descendingMap());
     }
 
     public int size() {
@@ -85,15 +86,15 @@ public class TreeSet<E> extends AbstractSet<E> implements NavigableSet<E>, Clone
     }
 
     public NavigableSet<E> subSet(E fromElement, boolean fromInclusive, E toElement, boolean toInclusive) {
-        return new TreeSet<E>((TreeMap<E, Object>) m.subMap(fromElement, fromInclusive, toElement, toInclusive));
+        return new TreeSet<E>(m.subMap(fromElement, fromInclusive, toElement, toInclusive));
     }
 
     public NavigableSet<E> headSet(E toElement, boolean inclusive) {
-        return new TreeSet<E>((TreeMap<E, Object>) m.headMap(toElement, inclusive));
+        return new TreeSet<E>(m.headMap(toElement, inclusive));
     }
 
     public NavigableSet<E> tailSet(E fromElement, boolean inclusive) {
-        return new TreeSet<E>((TreeMap<E, Object>) m.tailMap(fromElement, inclusive));
+        return new TreeSet<E>(m.tailMap(fromElement, inclusive));
     }
 
     public SortedSet<E> subSet(E fromElement, E toElement) {
@@ -148,6 +149,13 @@ public class TreeSet<E> extends AbstractSet<E> implements NavigableSet<E>, Clone
 
     @SuppressWarnings("unchecked")
     public Object clone() {
-        return new TreeSet<E>((TreeMap<E, Object>) m.clone());
+        TreeSet<E> c;
+        try {
+            c = (TreeSet<E>) super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new InternalError(e);
+        }
+        c.m = new TreeMap<E, Object>(m);
+        return c;
     }
 }

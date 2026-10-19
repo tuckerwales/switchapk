@@ -83,6 +83,10 @@ public abstract class Charset implements Comparable<Charset> {
         return canonicalName;
     }
 
+    public String displayName(java.util.Locale locale) {
+        return canonicalName;
+    }
+
     public final boolean isRegistered() {
         return true;
     }
@@ -96,13 +100,11 @@ public abstract class Charset implements Comparable<Charset> {
     }
 
     public CharsetDecoder newDecoder() {
-        return new CharsetDecoder(this, 1.0f, 1.0f) {
-        };
+        return StandardCoders.newDecoder(this);
     }
 
     public CharsetEncoder newEncoder() {
-        return new CharsetEncoder(this, 1.1f, 4.0f) {
-        };
+        return StandardCoders.newEncoder(this);
     }
 
     public final CharBuffer decode(ByteBuffer bb) {

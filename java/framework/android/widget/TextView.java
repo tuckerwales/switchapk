@@ -344,15 +344,15 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         if (!sawTextSize) setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         if (singleLine) setSingleLine(true);
         if (allCaps) setAllCaps(true);
-        if (password) setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        if (phone) setInputType(InputType.TYPE_CLASS_PHONE);
+        if (password) setInputTypeInternal(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        if (phone) setInputTypeInternal(InputType.TYPE_CLASS_PHONE);
         if (numeric != 0) {
             int ntype = InputType.TYPE_CLASS_NUMBER;
             if ((numeric & 0x2) != 0) ntype |= InputType.TYPE_NUMBER_FLAG_SIGNED;
             if ((numeric & 0x4) != 0) ntype |= InputType.TYPE_NUMBER_FLAG_DECIMAL;
-            setInputType(ntype);
+            setInputTypeInternal(ntype);
         }
-        if (inputType >= 0) setInputType(inputType);
+        if (inputType >= 0) setInputTypeInternal(inputType);
         ArrayList<InputFilter> filters = new ArrayList<InputFilter>();
         if (digits != null) filters.add(new DigitsFilter(digits));
         if (maxLength >= 0) filters.add(new InputFilter.LengthFilter(maxLength));
@@ -364,7 +364,7 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
             if (movement != null) setMovementMethod(movement);
         }
         if (mKeyListener == null && (mBufferType == BufferType.EDITABLE || mInputType != InputType.TYPE_NULL)) {
-            setKeyListener(defaultKeyListener());
+            setKeyListenerInternal(defaultKeyListener());
         }
         applyEditorFocus();
         updateTextColors();
@@ -1064,6 +1064,12 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     public final KeyListener getKeyListener() { return mKeyListener; }
 
     public void setKeyListener(KeyListener input) {
+        setKeyListenerInternal(input);
+    }
+
+    /** The constructor's path: subclasses (AppCompatEditText) override setKeyListener with state that does not
+     * exist yet while TextView's constructor runs, so, as in AOSP, it never calls the public methods. */
+    private void setKeyListenerInternal(KeyListener input) {
         mKeyListener = input;
         if (input != null) {
             if (mInputType == InputType.TYPE_NULL) mInputType = input.getInputType();
@@ -1099,6 +1105,10 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     }
 
     public void setInputType(int type) {
+        setInputTypeInternal(type);
+    }
+
+    private void setInputTypeInternal(int type) {
         boolean password = isPasswordInputType(type);
         mInputType = type;
         if (password) setTransformationMethod(PasswordTransformationMethod.getInstance());

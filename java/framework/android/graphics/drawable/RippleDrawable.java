@@ -54,6 +54,14 @@ public class RippleDrawable extends LayerDrawable {
 
     private void updateMask() { mMask = findDrawableByLayerId(MASK_LAYER_ID); }
 
+    /** LayerDrawable.mutate() replaces the layers with copies; the cached mask must follow (as AOSP's). */
+    @Override
+    public Drawable mutate() {
+        super.mutate();
+        updateMask();
+        return this;
+    }
+
     public void setColor(ColorStateList color) {
         mColor = color;
         invalidateSelf();

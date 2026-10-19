@@ -68,6 +68,7 @@ public final class ActivityThread {
             public void run() { dispatchPlatform(); }
         });
         String apk = args != null && args.length > 0 && args[0] != null ? args[0] : "";
+        installCrashHandler();
         try {
             boot(apk);
         } catch (Exception e) {
@@ -75,6 +76,29 @@ public final class ActivityThread {
             System.exit(1);
         }
         Looper.loop();
+    }
+
+    /**
+     * As AOSP's RuntimeInit.KillApplicationHandler: an exception that escapes any thread logs "FATAL EXCEPTION" and
+     * ends the process, instead of leaving the app running without that thread (a hang). Crash reporters that the app
+     * installs usually call the previous default handler, so they still end here.
+     */
+    private static void installCrashHandler() {
+        if (Thread.getDefaultUncaughtExceptionHandler() != null) return;
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            private volatile boolean mCrashing;
+
+            public void uncaughtException(Thread t, Throwable e) {
+                try {
+                    if (mCrashing) return;
+                    mCrashing = true;
+                    Log.e("AndroidRuntime", "FATAL EXCEPTION: " + t.getName() + "\nProcess: "
+                            + (sPackageName != null ? sPackageName : "?") + ", PID: " + android.os.Process.myPid(), e);
+                } finally {
+                    System.exit(10);
+                }
+            }
+        });
     }
 
     /** framework-internal. Pause, stop and destroy, then leave the process. */
@@ -592,6 +616,11 @@ public final class ActivityThread {
         rec.state = null;
         if (!createRecord(rec, state, nci)) return;
         Activity a = rec.activity;
+        // The requested orientation belongs to the activity record (system side on Android), not the instance:
+        // an app that set it once in onCreate does not set it again when recreated.
+        if (a.getRequestedOrientation() == rec.parsed.info.screenOrientation) {
+            a.mRequestedOrientation = old.getRequestedOrientation();
+        }
         a.performStart();
         rec.started = true;
         if (state != null) a.performRestoreInstanceState(state);
@@ -693,6 +722,10 @@ public final class ActivityThread {
         // As DexPathList: the library directory first, then the uncompressed libraries in the APK.
         ((dalvik.system.BaseDexClassLoader) ClassLoader.getSystemClassLoader()).addNativePath(java.util.Arrays.asList(
                 sAppInfo.nativeLibraryDir, sApkPath + "!/lib/" + android.os.Build.CPU_ABI));
+        // A portrait-locked app runs in a letterboxed portrait window, before anything reads the display.
+        ParsedActivity first = findLauncher();
+        sPortraitWindow = first != null && isPortrait(first.info.screenOrientation);
+        android.view.Display.setPortraitWindow(sPortraitWindow);
         sResources = buildResources();
         Resources.setSystem(sResources);
         resolveMetaDataRefs();
@@ -1085,6 +1118,57 @@ public final class ActivityThread {
             provider.attachInfo(sContext, info);
             if (info.authority != null) ContentResolver.installProvider(info.authority, provider);
         }
+    }
+
+    private static boolean sPortraitWindow;  // main thread only
+    private static boolean sOrientationPending;
+
+    /**
+     * framework-internal. The top activity's requested orientation picks the window: explicit portrait values give
+     * the letterboxed portrait display, explicit landscape values the native one, anything else keeps the current
+     * one. A change goes through the display-change path (configuration change or relaunch), posted so a call from
+     * onCreate does not re-enter the launch.
+     */
+    static void requestOrientation(int orientation) {
+        final boolean portrait;
+        if (isPortrait(orientation)) {
+            portrait = true;
+        } else if (isLandscape(orientation)) {
+            portrait = false;
+        } else {
+            return;
+        }
+        if (portrait == sPortraitWindow || sResources == null) return;
+        sPortraitWindow = portrait;
+        if (sOrientationPending) return;
+        sOrientationPending = true;
+        // When the main queue next goes idle: on Android the rotation comes back from the window manager well
+        // after the activity's own startup work (Pixel Dungeon pauses a MediaPlayer that must have finished
+        // its prepareAsync by then).
+        Looper.myQueue().addIdleHandler(new android.os.MessageQueue.IdleHandler() {
+            public boolean queueIdle() {
+                sOrientationPending = false;
+                // The display changes together with the configuration, as a rotation does: resizing live
+                // windows (a GLSurfaceView waits on its render thread) before the relaunch is not what apps see.
+                android.view.Display.setPortraitWindow(sPortraitWindow);
+                handleDisplayChanged();
+                return false;
+            }
+        });
+    }
+
+    private static boolean isLandscape(int orientation) {
+        return orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE;
+    }
+
+    private static boolean isPortrait(int orientation) {
+        return orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                || orientation == ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT;
     }
 
     private static ParsedActivity findLauncher() {

@@ -851,9 +851,18 @@ round. `tests/dex/SerialTest.java` compares the bytes with the host JVM.
 - Display metrics: `android.view.Display.nGetInfo(int[] out)` returns
   width, height, dpi, refresh rate x 1000, has-touch. 1280x720 at 240 dpi
   in handheld mode, 1920x1080 at 360 dpi docked (same 853x480 dp).
-  Portrait-locked activities get a letterboxed portrait window (height =
+  Portrait-locked apps get a letterboxed portrait window (height =
   screen height, width = 9/16 of it) with density lowered so the window is
-  at least 320 dp wide (todo, WS4).
+  at least 320 dp wide. The launcher activity's manifest orientation picks
+  the starting mode (`Display.setPortraitWindow`, native `nSetPortrait`);
+  `android_get_display()` (src/android/android_os.c) applies it for
+  nGetInfo and the native-library config. A later
+  `Activity.setRequestedOrientation` with an explicit portrait or
+  landscape value (also re-applied on resume) switches the mode from an
+  IdleHandler on the main looper, so the current frame and pending
+  callbacks finish first, then runs the normal display-change path
+  (configuration change, relaunch unless handled). The requested value is
+  carried across that relaunch so the new instance does not flip back.
 - Soft keyboard: `InputMethodManager` calls
   `nRequestText(int id, String initial, String hint, int inputType, int maxLen)`;
   the platform shows swkbd (Switch) or answers from the test script

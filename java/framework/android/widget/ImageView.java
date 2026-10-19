@@ -91,9 +91,15 @@ public class ImageView extends View {
         mMaxHeight = a.getDimensionPixelSize(4, Integer.MAX_VALUE);
         mBaselineAlignBottom = a.getBoolean(6, false);
         mCropToPadding = a.getBoolean(7, false);
-        int tintMode = a.getInt(8, -1);
-        if (tintMode != -1) setImageTintMode(Drawable.parseTintMode(tintMode, mDrawableTintMode));
+        // As AOSP: android:tint alone means SRC_ATOP (the pre-L color filter behaviour), so a transparent tint is a
+        // no-op; an explicit tintMode overrides it.
         ColorStateList tint = a.getColorStateList(5);
+        int tintMode = a.getInt(8, -1);
+        if (tintMode != -1) {
+            setImageTintMode(Drawable.parseTintMode(tintMode, mDrawableTintMode));
+        } else if (tint != null) {
+            setImageTintMode(PorterDuff.Mode.SRC_ATOP);
+        }
         if (tint != null) setImageTintList(tint);
         Drawable src = a.getDrawable(0);
         if (src != null) setImageDrawable(src);

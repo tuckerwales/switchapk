@@ -262,7 +262,13 @@ public final class Bitmap implements Parcelable {
     public int getPixel(int x, int y) {
         checkRecycled("Can't call getPixel() on a recycled bitmap");
         if (x < 0 || x >= mWidth || y < 0 || y >= mHeight) throw new IllegalArgumentException("x/y out of bounds");
-        return mPixels[y * mWidth + x];
+        return readable(mPixels[y * mWidth + x]);
+    }
+
+    /** Pixels are kept unpremultiplied; Android keeps them premultiplied, so a fully transparent pixel of a
+     * premultiplied bitmap reads back as 0 whatever its color (Pixel Dungeon finds glyph edges this way). */
+    private int readable(int c) {
+        return mPremultiplied && (c >>> 24) == 0 ? 0 : c;
     }
 
     public Color getColor(int x, int y) { return Color.valueOf(getPixel(x, y)); }
@@ -271,7 +277,15 @@ public final class Bitmap implements Parcelable {
         checkRecycled("Can't call getPixels() on a recycled bitmap");
         if (width == 0 || height == 0) return;
         if (x < 0 || y < 0 || x + width > mWidth || y + height > mHeight) throw new IllegalArgumentException("x/y/width/height out of bounds");
-        for (int row = 0; row < height; row++) System.arraycopy(mPixels, (y + row) * mWidth + x, pixels, offset + row * stride, width);
+        for (int row = 0; row < height; row++) {
+            int dst = offset + row * stride;
+            System.arraycopy(mPixels, (y + row) * mWidth + x, pixels, dst, width);
+            if (mPremultiplied) {
+                for (int i = dst; i < dst + width; i++) {
+                    if ((pixels[i] >>> 24) == 0) pixels[i] = 0;
+                }
+            }
+        }
     }
 
     public void setPixel(int x, int y, int color) {

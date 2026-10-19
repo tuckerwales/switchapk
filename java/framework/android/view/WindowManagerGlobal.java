@@ -54,6 +54,19 @@ public final class WindowManagerGlobal {
         int layer = layerOf(wparams.type);
         int index = mRoots.size();
         while (index > 0 && layerOf(mRoots.get(index - 1).getWindowAttributes().type) > layer) index--;
+        if (wparams.type == WindowManager.LayoutParams.TYPE_BASE_APPLICATION) {
+            // An activity's own window sits below the other windows of that activity (a dialog shown from
+            // onCreate or onResume is added before it), but above other activities' windows.
+            final Object owner = ownerActivity(view.getContext());
+            while (owner != null && index > 0) {
+                ViewRootImpl below = mRoots.get(index - 1);
+                if (below.getWindowAttributes().type == WindowManager.LayoutParams.TYPE_BASE_APPLICATION
+                        || below.getView() == null || ownerActivity(below.getView().getContext()) != owner) {
+                    break;
+                }
+                index--;
+            }
+        }
         mRoots.add(index, root);
         root.setView(view, wparams);
         updateFocusedWindow();
@@ -93,6 +106,16 @@ public final class WindowManagerGlobal {
 
     /** framework-internal. Number of windows (tests and debugging). */
     public int getWindowCount() { return mRoots.size(); }
+
+    /** The activity a window's context belongs to (dialogs wrap their activity's context), or null. */
+    private static Object ownerActivity(android.content.Context c) {
+        for (int i = 0; c != null && i < 16; i++) {
+            if (c instanceof android.app.Activity) return c;
+            if (!(c instanceof android.content.ContextWrapper)) return null;
+            c = ((android.content.ContextWrapper) c).getBaseContext();
+        }
+        return null;
+    }
 
     private static int layerOf(int type) {
         if (type >= WindowManager.LayoutParams.FIRST_APPLICATION_WINDOW

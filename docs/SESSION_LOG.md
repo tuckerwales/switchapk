@@ -1385,3 +1385,14 @@ what is left in flight.
   leaving it hung (Replica Island's GL thread). Mindustry and Unciv play;
   DroidFish, Vector Pinball, Frozen Bubble, Blockinger, Calculator,
   Shattered PD and Pixel Dungeon reach gameplay.
+- 2026-10-19, more fixes from the corpus agents: a premultiplied Bitmap
+  (the default) reads fully transparent pixels back as 0 from
+  getPixel/getPixels, as Android does (Pixel Dungeon finds glyph edges
+  that way; all its text was missing); windows with gravity 0 are
+  centered by Gravity.apply as on Android (Andor's Trail's dialog-themed
+  activities sat in the top-left corner); an activity's own window is
+  placed below that activity's other windows, so a dialog shown from
+  onCreate/onResume is not hidden behind it (Andor's Trail's welcome
+  dialog); and a new window gains focus only after its first layout and
+  draw, so onWindowFocusChanged(true) sees real sizes (Andor's Trail's
+  title clouds). All 14 corpus apps still draw; samples pass.

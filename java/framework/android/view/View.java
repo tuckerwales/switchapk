@@ -952,8 +952,16 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         android.R.attr.forceDarkAllowed, android.R.attr.accessibilityPaneTitle,
     };
 
+    /** AOSP: apps targeting below P get a focused view even in touch mode. */
+    static boolean sAlwaysAssignFocus;
+    private static boolean sCompatibilityDone;
+
     public View(Context context) {
         mContext = context;
+        if (!sCompatibilityDone && context != null && context.getApplicationInfo() != null) {
+            sAlwaysAssignFocus = context.getApplicationInfo().targetSdkVersion < 28;
+            sCompatibilityDone = true;
+        }
         mResources = context != null ? context.getResources() : null;
         mViewFlags = SOUND_EFFECTS_ENABLED | HAPTIC_FEEDBACK_ENABLED | FOCUSABLE_AUTO;
         mTouchSlop = context != null ? ViewConfiguration.get(context).getScaledTouchSlop() : 8;
@@ -4827,7 +4835,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback, Accessibility
         }
     }
 
-    public void clearFocus() { clearFocusInternal(null, true, !isInTouchMode()); }
+    public void clearFocus() { clearFocusInternal(null, true, sAlwaysAssignFocus || !isInTouchMode()); }
 
     void clearFocusInternal(View focused, boolean propagate, boolean refocus) {
         if ((mPrivateFlags & PFLAG_FOCUSED) != 0) {

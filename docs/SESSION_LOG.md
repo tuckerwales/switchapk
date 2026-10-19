@@ -1406,3 +1406,14 @@ what is left in flight.
   and relaunched forever). Vector Pinball draws correctly in portrait;
   Pixel Dungeon starts portrait and its landscape setting switches to a
   correct landscape title screen, including after docking.
+- 2026-10-19, TextView and focus: uniform auto-size is ported from AOSP
+  (XML autoSize* attributes, the three setters, a binary search over the
+  size steps after each layout; EditText never auto-sizes). AppCompat
+  hands auto-size to the framework on API 26+, so this covers
+  AppCompatTextView too. Marquee is ported: at rest a phone-style
+  ellipsis, and while the view is selected or focused the unwrapped line
+  scrolls at 30 dp/s with a ghost copy and edge fades (tests/apps/text
+  checks both). Apps targeting below API 28 now get an initial focused
+  view in touch mode and refocus after clearFocus, as AOSP's
+  sAlwaysAssignFocus. DroidFish (target 28) still quits on BACK with a
+  drawer open: no view has focus, which matches AOSP for that target.

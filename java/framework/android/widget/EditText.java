@@ -16,6 +16,10 @@ import android.view.KeyEvent;
 public class EditText extends TextView {
     private boolean mStyleShortcuts = true;
 
+    /** Hidden in AOSP: editable text is never auto-sized. */
+    @Override
+    protected boolean supportsAutoSizeText() { return false; }
+
     public EditText(Context context) { this(context, null); }
 
     public EditText(Context context, AttributeSet attrs) { this(context, attrs, android.R.attr.editTextStyle); }

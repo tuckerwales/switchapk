@@ -54,6 +54,8 @@ final class WidgetChecks {
         editor(ctx);
         markup(ctx);
         links(ctx);
+        autoSize(ctx);
+        marquee(ctx);
         meta();
     }
 
@@ -74,6 +76,46 @@ final class WidgetChecks {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < n; i++) sb.append("word ");
         return sb.toString();
+    }
+
+    /** Uniform auto-size picks the largest size that fits after layout; EditText never auto-sizes. */
+    private static void autoSize(Context ctx) {
+        TextView v = tv(ctx);
+        v.setText("Hello");
+        v.setAutoSizeTextTypeUniformWithConfiguration(10, 100, 2, TypedValue.COMPLEX_UNIT_PX);
+        v.setTextSize(TypedValue.COMPLEX_UNIT_PX, 33);
+        int[] sizes = v.getAutoSizeTextAvailableSizes();
+        v.measure(View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(60, View.MeasureSpec.EXACTLY));
+        v.layout(0, 0, 300, 60);
+        float big = v.getTextSize();
+        Layout l = v.getLayout();
+        SelfTest.check("tvAutoSizeGrow", sizes.length == 46 && big > 30 && big <= 60 && l != null
+                && l.getHeight() <= 60 && v.getAutoSizeMaxTextSize() == 100, big + " " + sizes.length);
+        v.setText(words(40));
+        v.measure(View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(60, View.MeasureSpec.EXACTLY));
+        v.layout(0, 0, 300, 60);
+        SelfTest.check("tvAutoSizeShrink", v.getTextSize() < big && v.getTextSize() >= 10, v.getTextSize());
+        EditText e = new EditText(ctx);
+        e.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_UNIFORM);
+        SelfTest.check("editNoAutoSize", e.getAutoSizeTextType() == TextView.AUTO_SIZE_TEXT_TYPE_NONE,
+                e.getAutoSizeTextType());
+    }
+
+    /** A marquee line is laid out unwrapped and unellipsized so it can scroll. */
+    private static void marquee(Context ctx) {
+        TextView v = tv(ctx);
+        v.setSingleLine(true);
+        v.setEllipsize(TextUtils.TruncateAt.MARQUEE);
+        v.setText(words(30));
+        v.measure(View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        v.layout(0, 0, 200, v.getMeasuredHeight());
+        v.setSelected(true);
+        Layout l = v.getLayout();
+        SelfTest.check("tvMarqueeLine", l != null && l.getLineCount() == 1 && l.getLineWidth(0) > 400
+                && l.getEllipsisCount(0) == 0 && v.getMarqueeRepeatLimit() == 3, l != null ? l.getLineWidth(0) : -1);
     }
 
     private static void wrap(Context ctx) {

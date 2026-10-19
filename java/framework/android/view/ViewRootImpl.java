@@ -69,6 +69,9 @@ public final class ViewRootImpl implements ViewParent {
         mChoreographer = Choreographer.getInstance();
         mAttachInfo = new View.AttachInfo(this, mHandler, new Binder(), context);
         mAttachInfo.mInTouchMode = sInTouchMode;
+        if (context != null && context.getApplicationInfo() != null) {
+            View.sAlwaysAssignFocus = context.getApplicationInfo().targetSdkVersion < 28;
+        }
     }
 
     static boolean isInTouchModeStatic() { return sInTouchMode; }
@@ -187,7 +190,7 @@ public final class ViewRootImpl implements ViewParent {
     public void focusableViewAvailable(View v) {
         if (mView != null) {
             if (!mView.hasFocus()) {
-                if (!mAttachInfo.mInTouchMode) v.requestFocus();
+                if (View.sAlwaysAssignFocus || !mAttachInfo.mInTouchMode) v.requestFocus();
             } else {
                 View focused = mView.findFocus();
                 if (focused instanceof ViewGroup) {
@@ -410,7 +413,17 @@ public final class ViewRootImpl implements ViewParent {
                 });
             }
             WindowManagerGlobal.getInstance().updateFocusedWindow();
-            if (!mAttachInfo.mInTouchMode && !host.hasFocus()) host.restoreDefaultFocus();
+            if (View.sAlwaysAssignFocus || !mAttachInfo.mInTouchMode) {
+                if (!host.hasFocus()) host.restoreDefaultFocus();
+            } else {
+                // AOSP: a focused FOCUS_AFTER_DESCENDANTS group hands focus to a child that has a
+                // size only now, after the first layout
+                View focused = host.findFocus();
+                if (focused instanceof ViewGroup
+                        && ((ViewGroup) focused).getDescendantFocusability() == ViewGroup.FOCUS_AFTER_DESCENDANTS) {
+                    focused.restoreDefaultFocus();
+                }
+            }
         }
 
         if (mAttachInfo.mViewScrollChanged) {

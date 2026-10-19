@@ -53,6 +53,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.CompletionInfo;
@@ -68,8 +70,7 @@ import java.util.Locale;
 /**
  * Displays and, when editable, edits text (port of AOSP TextView for software
  * rendering). Wrapping, spans, ellipsize, gravity and compound drawables go
- * through {@link Layout}. Marquee scrolling and uniform auto-size are recorded
- * but not animated or fitted yet.
+ * through {@link Layout}. Marquee scrolling and uniform auto-size follow AOSP.
  *
  * {@code mCursorDrawableRes} keeps its AOSP name: AppCompat reads it by reflection.
  */
@@ -110,6 +111,12 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         android.R.attr.lastBaselineToBottomHeight, android.R.attr.fallbackLineSpacing,
         android.R.attr.textCursorDrawable, android.R.attr.bufferType, android.R.attr.text, android.R.attr.hint,
         android.R.attr.selectAllOnFocus, android.R.attr.maxHeight,
+    };
+
+    private static final int[] EXTRA_ATTRS = {
+        android.R.attr.autoSizeTextType, android.R.attr.autoSizeStepGranularity,
+        android.R.attr.autoSizeMinTextSize, android.R.attr.autoSizeMaxTextSize, android.R.attr.autoSizePresetSizes,
+        android.R.attr.marqueeRepeatLimit, android.R.attr.ellipsize,
     };
 
     private static final int[] APPEARANCE = {
@@ -192,11 +199,24 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     private float mShadowDx;
     private float mShadowDy;
     private int mShadowColor;
+    // uniform auto-size (AOSP): sizes tried by binary search after each layout
+    private static final float UNSET_AUTO_SIZE = -1f;
     private int mAutoSizeType = AUTO_SIZE_TEXT_TYPE_NONE;
-    private int mAutoSizeMin;
-    private int mAutoSizeMax;
-    private int mAutoSizeGranularity;
+    private float mAutoSizeMinTextSizeInPx = UNSET_AUTO_SIZE;
+    private float mAutoSizeMaxTextSizeInPx = UNSET_AUTO_SIZE;
+    private float mAutoSizeStepGranularityInPx = UNSET_AUTO_SIZE;
+    private int[] mAutoSizeTextSizesInPx = new int[0];
+    private boolean mHasPresetAutoSizeValues;
+    private boolean mNeedsAutoSizeText;
+    private TextPaint mTempTextPaint;
     private int mMarqueeRepeatLimit = 3;
+    // AOSP marquee: phones show an ellipsis at rest and switch to a fading, scrolling line
+    private static final int MARQUEE_FADE_NORMAL = 0;
+    private static final int MARQUEE_FADE_SWITCH_SHOW_ELLIPSIS = 1;
+    private static final int MARQUEE_FADE_SWITCH_SHOW_FADE = 2;
+    private int mMarqueeFadeMode = MARQUEE_FADE_NORMAL;
+    private Marquee mMarquee;
+    private boolean mRestartMarquee;
     private boolean mUseBoundsForWidth;
     private boolean mShiftDrawingOffsetForStartOverhang;
     private Paint.FontMetrics mMinimumFontMetrics;
@@ -368,6 +388,48 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         }
         applyEditorFocus();
         updateTextColors();
+        if (attrs != null || defStyleAttr != 0 || defStyleRes != 0) readExtraAttrs(context, attrs, defStyleAttr, defStyleRes);
+    }
+
+    private void readExtraAttrs(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+        TypedArray a = context.obtainStyledAttributes(attrs, EXTRA_ATTRS, defStyleAttr, defStyleRes);
+        float granularity = a.getDimension(1, UNSET_AUTO_SIZE);
+        float min = a.getDimension(2, UNSET_AUTO_SIZE);
+        float max = a.getDimension(3, UNSET_AUTO_SIZE);
+        int type = a.getInt(0, AUTO_SIZE_TEXT_TYPE_NONE);
+        int presets = a.getResourceId(4, 0);
+        if (a.hasValue(5)) mMarqueeRepeatLimit = a.getInt(5, mMarqueeRepeatLimit);
+        if (a.getInt(6, 0) == 4) {
+            boolean fade = ViewConfiguration.get(context).isFadingMarqueeEnabled();
+            setHorizontalFadingEdgeEnabled(fade);
+            mMarqueeFadeMode = fade ? MARQUEE_FADE_NORMAL : MARQUEE_FADE_SWITCH_SHOW_ELLIPSIS;
+            if (mContentWidth >= 0) relayout();
+        }
+        a.recycle();
+        if (presets != 0) {
+            TypedArray sizes = getResources().obtainTypedArray(presets);
+            int[] parsed = new int[sizes.length()];
+            for (int i = 0; i < parsed.length; i++) parsed[i] = sizes.getDimensionPixelSize(i, -1);
+            sizes.recycle();
+            if (parsed.length > 0) {
+                mAutoSizeTextSizesInPx = cleanupAutoSizePresetSizes(parsed);
+                setupAutoSizeUniformPresetSizesConfiguration();
+            }
+        }
+        if (type != AUTO_SIZE_TEXT_TYPE_NONE) mAutoSizeType = type;
+        if (!supportsAutoSizeText()) {
+            mAutoSizeType = AUTO_SIZE_TEXT_TYPE_NONE;
+            return;
+        }
+        if (mAutoSizeType != AUTO_SIZE_TEXT_TYPE_UNIFORM) return;
+        if (!mHasPresetAutoSizeValues) {
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            if (min == UNSET_AUTO_SIZE) min = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12, dm);
+            if (max == UNSET_AUTO_SIZE) max = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 112, dm);
+            if (granularity == UNSET_AUTO_SIZE) granularity = 1;
+            validateAndSetAutoSizeTextTypeUniformConfiguration(min, max, granularity);
+        }
+        setupAutoSizeText();
     }
 
     private KeyListener defaultKeyListener() {
@@ -606,6 +668,7 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     public void setTextSize(float size) { setTextSize(TypedValue.COMPLEX_UNIT_SP, size); }
 
     public void setTextSize(int unit, float size) {
+        if (isAutoSizeEnabled()) return;
         mTextSizeUnit = unit;
         setRawTextSize(TypedValue.applyDimension(unit, size, getResources().getDisplayMetrics()));
     }
@@ -887,29 +950,210 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
 
     public void setLocalePreferredLineHeightForMinimumUsed(boolean used) {}
 
-    public void setAutoSizeTextTypeWithDefaults(int autoSizeTextType) { mAutoSizeType = autoSizeTextType; }
+    public void setAutoSizeTextTypeWithDefaults(int autoSizeTextType) {
+        if (!supportsAutoSizeText()) return;
+        if (autoSizeTextType == AUTO_SIZE_TEXT_TYPE_NONE) {
+            clearAutoSizeConfiguration();
+        } else if (autoSizeTextType == AUTO_SIZE_TEXT_TYPE_UNIFORM) {
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            validateAndSetAutoSizeTextTypeUniformConfiguration(
+                    TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12, dm),
+                    TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 112, dm), 1);
+            if (setupAutoSizeText()) {
+                autoSizeText();
+                invalidate();
+            }
+        } else {
+            throw new IllegalArgumentException("Unknown auto-size text type: " + autoSizeTextType);
+        }
+    }
 
-    public void setAutoSizeTextTypeUniformWithConfiguration(int min, int max, int granularity, int unit) {
-        mAutoSizeType = AUTO_SIZE_TEXT_TYPE_UNIFORM;
-        mAutoSizeMin = Math.round(TypedValue.applyDimension(unit, min, getResources().getDisplayMetrics()));
-        mAutoSizeMax = Math.round(TypedValue.applyDimension(unit, max, getResources().getDisplayMetrics()));
-        mAutoSizeGranularity = Math.round(TypedValue.applyDimension(unit, granularity,
-                getResources().getDisplayMetrics()));
+    public void setAutoSizeTextTypeUniformWithConfiguration(int autoSizeMinTextSize, int autoSizeMaxTextSize,
+            int autoSizeStepGranularity, int unit) {
+        if (!supportsAutoSizeText()) return;
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        validateAndSetAutoSizeTextTypeUniformConfiguration(TypedValue.applyDimension(unit, autoSizeMinTextSize, dm),
+                TypedValue.applyDimension(unit, autoSizeMaxTextSize, dm),
+                TypedValue.applyDimension(unit, autoSizeStepGranularity, dm));
+        if (setupAutoSizeText()) {
+            autoSizeText();
+            invalidate();
+        }
     }
 
     public void setAutoSizeTextTypeUniformWithPresetSizes(int[] presetSizes, int unit) {
-        mAutoSizeType = AUTO_SIZE_TEXT_TYPE_UNIFORM;
+        if (!supportsAutoSizeText()) return;
+        if (presetSizes.length > 0) {
+            int[] px = new int[presetSizes.length];
+            if (unit == TypedValue.COMPLEX_UNIT_PX) {
+                System.arraycopy(presetSizes, 0, px, 0, px.length);
+            } else {
+                android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+                for (int i = 0; i < px.length; i++) px[i] = Math.round(TypedValue.applyDimension(unit, presetSizes[i], dm));
+            }
+            mAutoSizeTextSizesInPx = cleanupAutoSizePresetSizes(px);
+            if (!setupAutoSizeUniformPresetSizesConfiguration()) {
+                throw new IllegalArgumentException("None of the preset sizes is valid: "
+                        + java.util.Arrays.toString(presetSizes));
+            }
+        } else {
+            mHasPresetAutoSizeValues = false;
+        }
+        if (setupAutoSizeText()) {
+            autoSizeText();
+            invalidate();
+        }
     }
 
     public int getAutoSizeTextType() { return mAutoSizeType; }
 
-    public int getAutoSizeStepGranularity() { return mAutoSizeGranularity; }
+    public int getAutoSizeStepGranularity() { return Math.round(mAutoSizeStepGranularityInPx); }
 
-    public int getAutoSizeMinTextSize() { return mAutoSizeMin; }
+    public int getAutoSizeMinTextSize() { return Math.round(mAutoSizeMinTextSizeInPx); }
 
-    public int getAutoSizeMaxTextSize() { return mAutoSizeMax; }
+    public int getAutoSizeMaxTextSize() { return Math.round(mAutoSizeMaxTextSizeInPx); }
 
-    public int[] getAutoSizeTextAvailableSizes() { return mAutoSizeType == AUTO_SIZE_TEXT_TYPE_NONE ? null : new int[0]; }
+    public int[] getAutoSizeTextAvailableSizes() { return mAutoSizeTextSizesInPx; }
+
+    private boolean setupAutoSizeUniformPresetSizesConfiguration() {
+        final int n = mAutoSizeTextSizesInPx.length;
+        mHasPresetAutoSizeValues = n > 0;
+        if (mHasPresetAutoSizeValues) {
+            mAutoSizeType = AUTO_SIZE_TEXT_TYPE_UNIFORM;
+            mAutoSizeMinTextSizeInPx = mAutoSizeTextSizesInPx[0];
+            mAutoSizeMaxTextSizeInPx = mAutoSizeTextSizesInPx[n - 1];
+            mAutoSizeStepGranularityInPx = UNSET_AUTO_SIZE;
+        }
+        return mHasPresetAutoSizeValues;
+    }
+
+    private void validateAndSetAutoSizeTextTypeUniformConfiguration(float min, float max, float granularity) {
+        if (min <= 0) {
+            throw new IllegalArgumentException("Minimum auto-size text size (" + min + "px) is less or equal to (0px)");
+        }
+        if (max <= min) {
+            throw new IllegalArgumentException("Maximum auto-size text size (" + max
+                    + "px) is less or equal to minimum auto-size text size (" + min + "px)");
+        }
+        if (granularity <= 0) {
+            throw new IllegalArgumentException("The auto-size step granularity (" + granularity
+                    + "px) is less or equal to (0px)");
+        }
+        mAutoSizeType = AUTO_SIZE_TEXT_TYPE_UNIFORM;
+        mAutoSizeMinTextSizeInPx = min;
+        mAutoSizeMaxTextSizeInPx = max;
+        mAutoSizeStepGranularityInPx = granularity;
+        mHasPresetAutoSizeValues = false;
+    }
+
+    private void clearAutoSizeConfiguration() {
+        mAutoSizeType = AUTO_SIZE_TEXT_TYPE_NONE;
+        mAutoSizeMinTextSizeInPx = UNSET_AUTO_SIZE;
+        mAutoSizeMaxTextSizeInPx = UNSET_AUTO_SIZE;
+        mAutoSizeStepGranularityInPx = UNSET_AUTO_SIZE;
+        mAutoSizeTextSizesInPx = new int[0];
+        mNeedsAutoSizeText = false;
+    }
+
+    /** Distinct sorted positive values. */
+    private static int[] cleanupAutoSizePresetSizes(int[] values) {
+        if (values.length == 0) return values;
+        java.util.Arrays.sort(values);
+        int[] out = new int[values.length];
+        int n = 0;
+        for (int v : values) {
+            if (v > 0 && (n == 0 || out[n - 1] != v)) out[n++] = v;
+        }
+        return n == values.length ? values : java.util.Arrays.copyOf(out, n);
+    }
+
+    private boolean setupAutoSizeText() {
+        if (mAutoSizeType == AUTO_SIZE_TEXT_TYPE_UNIFORM) {
+            if (!mHasPresetAutoSizeValues || mAutoSizeTextSizesInPx.length == 0) {
+                int n = ((int) Math.floor((mAutoSizeMaxTextSizeInPx - mAutoSizeMinTextSizeInPx)
+                        / mAutoSizeStepGranularityInPx)) + 1;
+                int[] sizes = new int[n];
+                for (int i = 0; i < n; i++) {
+                    sizes[i] = Math.round(mAutoSizeMinTextSizeInPx + (i * mAutoSizeStepGranularityInPx));
+                }
+                mAutoSizeTextSizesInPx = cleanupAutoSizePresetSizes(sizes);
+            }
+            mNeedsAutoSizeText = true;
+        } else {
+            mNeedsAutoSizeText = false;
+        }
+        return mNeedsAutoSizeText;
+    }
+
+    private boolean isAutoSizeEnabled() {
+        return supportsAutoSizeText() && mAutoSizeType != AUTO_SIZE_TEXT_TYPE_NONE;
+    }
+
+    /** Hidden in AOSP; EditText returns false. */
+    protected boolean supportsAutoSizeText() { return true; }
+
+    /** AOSP autoSizeText: the largest size whose layout fits the measured content box. */
+    private void autoSizeText() {
+        if (!isAutoSizeEnabled()) return;
+        if (mNeedsAutoSizeText) {
+            if (getMeasuredWidth() <= 0 || getMeasuredHeight() <= 0) return;
+            final int availableWidth = mHorizontallyScrolling ? (1024 * 1024)
+                    : getMeasuredWidth() - getTotalPaddingLeft() - getTotalPaddingRight();
+            final int availableHeight = getMeasuredHeight() - getExtendedPaddingBottom() - getExtendedPaddingTop();
+            if (availableWidth <= 0 || availableHeight <= 0) return;
+            final float size = findLargestTextSizeWhichFits(availableWidth, availableHeight);
+            if (size != getTextSize()) {
+                mTextPaint.setTextSize(size);
+                mLayout = null;
+                mHintLayout = null;
+                makeNewLayout(getMeasuredWidth() - getCompoundPaddingLeft() - getCompoundPaddingRight());
+            }
+        }
+        mNeedsAutoSizeText = true;
+    }
+
+    private int findLargestTextSizeWhichFits(int width, int height) {
+        final int count = mAutoSizeTextSizesInPx.length;
+        if (count == 0) throw new IllegalStateException("No available text sizes to choose from.");
+        int best = 0;
+        int low = 1;
+        int high = count - 1;
+        while (low <= high) {
+            int mid = (low + high) / 2;
+            if (suggestedSizeFitsInSpace(mAutoSizeTextSizesInPx[mid], width, height)) {
+                best = low;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+                best = high;
+            }
+        }
+        return mAutoSizeTextSizesInPx[best];
+    }
+
+    private boolean suggestedSizeFitsInSpace(int sizeInPx, int width, int height) {
+        CharSequence text = mTransformed != null ? mTransformed : getText();
+        if (mTempTextPaint == null) mTempTextPaint = new TextPaint();
+        else mTempTextPaint.reset();
+        mTempTextPaint.set(mTextPaint);
+        mTempTextPaint.setTextSize(sizeInPx);
+        StaticLayout layout = StaticLayout.Builder.obtain(text, 0, text.length(), mTempTextPaint, width)
+                .setAlignment(layoutAlignment()).setLineSpacing(mSpacingAdd, mSpacingMult)
+                .setIncludePad(mIncludePad).setUseLineSpacingFromFallbacks(mFallbackLineSpacing)
+                .setBreakStrategy(mBreakStrategy).setHyphenationFrequency(mHyphenationFrequency)
+                .setJustificationMode(mJustificationMode)
+                .setMaxLines(mMaxMode == LINES ? mMaximum : Integer.MAX_VALUE)
+                .setTextDirection(getTextDirectionHeuristic()).build();
+        final int maxLines = getMaxLines();
+        if (maxLines != -1 && layout.getLineCount() > maxLines) return false;
+        return layout.getHeight() <= height;
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        autoSizeText();
+    }
 
     // ---- limits ----
 
@@ -1798,11 +2042,24 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     }
 
     private void makeNewLayout(int contentWidth) {
+        buildLayouts(contentWidth);
+        if (mEllipsize == TextUtils.TruncateAt.MARQUEE) {
+            int h = getLayoutParams() != null ? getLayoutParams().height : ViewGroup.LayoutParams.WRAP_CONTENT;
+            if (h != ViewGroup.LayoutParams.WRAP_CONTENT && h != ViewGroup.LayoutParams.MATCH_PARENT) startMarquee();
+            else mRestartMarquee = true;
+        }
+    }
+
+    private void buildLayouts(int contentWidth) {
         if (contentWidth < 0) contentWidth = 0;
         mContentWidth = contentWidth;
         updateTransformed();
         int layoutWidth = contentWidth;
-        if (mHorizontallyScrolling) {
+        TextUtils.TruncateAt ellipsize = mEllipsize;
+        if (mEllipsize == TextUtils.TruncateAt.MARQUEE && mMarqueeFadeMode == MARQUEE_FADE_SWITCH_SHOW_ELLIPSIS) {
+            ellipsize = TextUtils.TruncateAt.END_SMALL;
+        }
+        if (mHorizontallyScrolling || (ellipsize == TextUtils.TruncateAt.MARQUEE && maxLines() == 1)) {
             int desired = (int) Math.ceil(Layout.getDesiredWidth(mTransformed, mTextPaint));
             if (desired > layoutWidth) layoutWidth = desired;
         }
@@ -1813,7 +2070,7 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
             mLayout = android.text.DynamicLayout.Builder.obtain(mText, mTextPaint, layoutWidth)
                     .setDisplayText(mTransformed).setAlignment(align).setTextDirection(dir)
                     .setLineSpacing(mSpacingAdd, mSpacingMult).setIncludePad(mIncludePad)
-                    .setUseLineSpacingFromFallbacks(mFallbackLineSpacing).setEllipsize(mEllipsize)
+                    .setUseLineSpacingFromFallbacks(mFallbackLineSpacing).setEllipsize(ellipsize)
                     .setEllipsizedWidth(contentWidth).setMaxLines(maxLines).setBreakStrategy(mBreakStrategy)
                     .setHyphenationFrequency(mHyphenationFrequency).setJustificationMode(mJustificationMode)
                     .build();
@@ -1822,7 +2079,7 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
                     layoutWidth);
             b.setAlignment(align).setTextDirection(dir).setLineSpacing(mSpacingAdd, mSpacingMult)
                     .setIncludePad(mIncludePad).setUseLineSpacingFromFallbacks(mFallbackLineSpacing)
-                    .setEllipsize(mEllipsize).setEllipsizedWidth(contentWidth).setMaxLines(maxLines)
+                    .setEllipsize(ellipsize).setEllipsizedWidth(contentWidth).setMaxLines(maxLines)
                     .setBreakStrategy(mBreakStrategy).setHyphenationFrequency(mHyphenationFrequency)
                     .setJustificationMode(mJustificationMode);
             if (mUseBoundsForWidth) b.setUseBoundsForWidth(true);
@@ -1833,7 +2090,7 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
         if (mHint != null && mHint.length() > 0) {
             mHintLayout = StaticLayout.Builder.obtain(mHint, 0, mHint.length(), mTextPaint, contentWidth)
                     .setAlignment(align).setTextDirection(dir).setLineSpacing(mSpacingAdd, mSpacingMult)
-                    .setIncludePad(mIncludePad).setEllipsize(mEllipsize).setEllipsizedWidth(contentWidth)
+                    .setIncludePad(mIncludePad).setEllipsize(ellipsize).setEllipsizedWidth(contentWidth)
                     .setMaxLines(maxLines).build();
         } else {
             mHintLayout = null;
@@ -2007,6 +2264,229 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
     public boolean moveCursorToVisibleOffset() { return false; }
 
     @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        startStopMarquee(hasWindowFocus);
+    }
+
+    @Override
+    public void setSelected(boolean selected) {
+        boolean wasSelected = isSelected();
+        super.setSelected(selected);
+        if (selected != wasSelected && mEllipsize == TextUtils.TruncateAt.MARQUEE) {
+            if (selected) startMarquee();
+            else stopMarquee();
+        }
+    }
+
+    @Override
+    protected boolean setFrame(int left, int top, int right, int bottom) {
+        boolean result = super.setFrame(left, top, right, bottom);
+        if (mRestartMarquee && mEllipsize == TextUtils.TruncateAt.MARQUEE) {
+            mRestartMarquee = false;
+            startMarquee();
+        }
+        return result;
+    }
+
+    /** The unellipsized line is wider than the content box. */
+    private boolean canMarquee() {
+        int width = getWidth() - getCompoundPaddingLeft() - getCompoundPaddingRight();
+        if (width <= 0 || mLayout == null) return false;
+        if (mLayout.getLineWidth(0) > width) return true;
+        return mMarqueeFadeMode != MARQUEE_FADE_NORMAL && mTransformed != null
+                && Layout.getDesiredWidth(mTransformed, mTextPaint) > width;
+    }
+
+    private void startMarquee() {
+        if (getKeyListener() != null) return;
+        if ((mMarquee == null || mMarquee.isStopped()) && (isFocused() || isSelected())
+                && mLayout != null && mLayout.getLineCount() == 1 && canMarquee()) {
+            if (mMarqueeFadeMode == MARQUEE_FADE_SWITCH_SHOW_ELLIPSIS) {
+                mMarqueeFadeMode = MARQUEE_FADE_SWITCH_SHOW_FADE;
+                setHorizontalFadingEdgeEnabled(true);
+                buildLayouts(mContentWidth);
+                invalidate();
+            }
+            if (mMarquee == null) mMarquee = new Marquee(this);
+            mMarquee.start(mMarqueeRepeatLimit);
+        }
+    }
+
+    private void stopMarquee() {
+        if (mMarquee != null && !mMarquee.isStopped()) mMarquee.stop();
+        if (mMarqueeFadeMode == MARQUEE_FADE_SWITCH_SHOW_FADE) {
+            mMarqueeFadeMode = MARQUEE_FADE_SWITCH_SHOW_ELLIPSIS;
+            setHorizontalFadingEdgeEnabled(false);
+            if (mContentWidth >= 0) buildLayouts(mContentWidth);
+            invalidate();
+        }
+    }
+
+    private void startStopMarquee(boolean start) {
+        if (mEllipsize == TextUtils.TruncateAt.MARQUEE) {
+            if (start) startMarquee();
+            else stopMarquee();
+        }
+    }
+
+    private boolean isMarqueeFadeEnabled() {
+        return mEllipsize == TextUtils.TruncateAt.MARQUEE && mMarqueeFadeMode != MARQUEE_FADE_SWITCH_SHOW_ELLIPSIS;
+    }
+
+    @Override
+    protected float getLeftFadingEdgeStrength() {
+        if (isMarqueeFadeEnabled() && mMarquee != null && !mMarquee.isStopped()) {
+            return mMarquee.shouldDrawLeftFade() ? horizontalFadingEdgeStrength(mMarquee.getScroll(), 0f) : 0f;
+        } else if (mLayout != null && mLayout.getLineCount() == 1) {
+            float lineLeft = mLayout.getLineLeft(0);
+            if (lineLeft > getScrollX()) return 0f;
+            return horizontalFadingEdgeStrength(getScrollX(), lineLeft);
+        }
+        return super.getLeftFadingEdgeStrength();
+    }
+
+    @Override
+    protected float getRightFadingEdgeStrength() {
+        if (isMarqueeFadeEnabled() && mMarquee != null && !mMarquee.isStopped()) {
+            return horizontalFadingEdgeStrength(mMarquee.getMaxFadeScroll(), mMarquee.getScroll());
+        } else if (mLayout != null && mLayout.getLineCount() == 1) {
+            float rightEdge = getScrollX() + (getWidth() - getCompoundPaddingLeft() - getCompoundPaddingRight());
+            float lineRight = mLayout.getLineRight(0);
+            if (lineRight < rightEdge) return 0f;
+            return horizontalFadingEdgeStrength(rightEdge, lineRight);
+        }
+        return super.getRightFadingEdgeStrength();
+    }
+
+    private float horizontalFadingEdgeStrength(float position1, float position2) {
+        int length = getHorizontalFadingEdgeLength();
+        if (length == 0) return 0f;
+        float diff = Math.abs(position1 - position2);
+        return diff > length ? 1f : diff / length;
+    }
+
+    /** AOSP TextView.Marquee: 30 dp/s, a ghost copy a third of the width behind, 1.2 s pause per pass. */
+    private static final class Marquee {
+        private static final int MARQUEE_DELAY = 1200;
+        private static final int MARQUEE_DP_PER_SECOND = 30;
+        private static final byte MARQUEE_STOPPED = 0x0;
+        private static final byte MARQUEE_STARTING = 0x1;
+        private static final byte MARQUEE_RUNNING = 0x2;
+
+        private final java.lang.ref.WeakReference<TextView> mView;
+        private final android.view.Choreographer mChoreographer;
+        private byte mStatus = MARQUEE_STOPPED;
+        private final float mPixelsPerMs;
+        private float mMaxScroll;
+        private float mMaxFadeScroll;
+        private float mGhostStart;
+        private float mGhostOffset;
+        private float mFadeStop;
+        private int mRepeatLimit;
+        private float mScroll;
+        private long mLastAnimationMs;
+
+        Marquee(TextView v) {
+            final float density = v.getContext().getResources().getDisplayMetrics().density;
+            mPixelsPerMs = MARQUEE_DP_PER_SECOND * density / 1000f;
+            mView = new java.lang.ref.WeakReference<TextView>(v);
+            mChoreographer = android.view.Choreographer.getInstance();
+        }
+
+        private final android.view.Choreographer.FrameCallback mTickCallback =
+                new android.view.Choreographer.FrameCallback() {
+            public void doFrame(long frameTimeNanos) { tick(); }
+        };
+
+        private final android.view.Choreographer.FrameCallback mStartCallback =
+                new android.view.Choreographer.FrameCallback() {
+            public void doFrame(long frameTimeNanos) {
+                mStatus = MARQUEE_RUNNING;
+                mLastAnimationMs = mChoreographer.getFrameTime();
+                tick();
+            }
+        };
+
+        private final android.view.Choreographer.FrameCallback mRestartCallback =
+                new android.view.Choreographer.FrameCallback() {
+            public void doFrame(long frameTimeNanos) {
+                if (mStatus == MARQUEE_RUNNING) {
+                    if (mRepeatLimit >= 0) mRepeatLimit--;
+                    start(mRepeatLimit);
+                }
+            }
+        };
+
+        void tick() {
+            if (mStatus != MARQUEE_RUNNING) return;
+            mChoreographer.removeFrameCallback(mTickCallback);
+            final TextView textView = mView.get();
+            if (textView != null && (textView.isFocused() || textView.isSelected())) {
+                long currentMs = mChoreographer.getFrameTime();
+                long deltaMs = currentMs - mLastAnimationMs;
+                mLastAnimationMs = currentMs;
+                mScroll += deltaMs * mPixelsPerMs;
+                if (mScroll > mMaxScroll) {
+                    mScroll = mMaxScroll;
+                    mChoreographer.postFrameCallbackDelayed(mRestartCallback, MARQUEE_DELAY);
+                } else {
+                    mChoreographer.postFrameCallback(mTickCallback);
+                }
+                textView.invalidate();
+            }
+        }
+
+        void stop() {
+            mStatus = MARQUEE_STOPPED;
+            mChoreographer.removeFrameCallback(mStartCallback);
+            mChoreographer.removeFrameCallback(mRestartCallback);
+            mChoreographer.removeFrameCallback(mTickCallback);
+            mScroll = 0f;
+            final TextView textView = mView.get();
+            if (textView != null) textView.invalidate();
+        }
+
+        void start(int repeatLimit) {
+            if (repeatLimit == 0) {
+                stop();
+                return;
+            }
+            mRepeatLimit = repeatLimit;
+            final TextView textView = mView.get();
+            if (textView != null && textView.mLayout != null) {
+                mStatus = MARQUEE_STARTING;
+                mScroll = 0f;
+                final int textWidth = textView.getWidth() - textView.getCompoundPaddingLeft()
+                        - textView.getCompoundPaddingRight();
+                final float lineWidth = textView.mLayout.getLineWidth(0);
+                final float gap = textWidth / 3.0f;
+                mGhostStart = lineWidth - textWidth + gap;
+                mMaxScroll = mGhostStart + textWidth;
+                mGhostOffset = lineWidth + gap;
+                mFadeStop = lineWidth + textWidth / 6.0f;
+                mMaxFadeScroll = mGhostStart + lineWidth + lineWidth;
+                textView.invalidate();
+                mChoreographer.postFrameCallback(mStartCallback);
+            }
+        }
+
+        float getGhostOffset() { return mGhostOffset; }
+
+        float getScroll() { return mScroll; }
+
+        float getMaxFadeScroll() { return mMaxFadeScroll; }
+
+        boolean shouldDrawLeftFade() { return mScroll <= mFadeStop; }
+
+        boolean shouldDrawGhost() { return mStatus == MARQUEE_RUNNING && mScroll > mGhostStart; }
+
+        boolean isRunning() { return mStatus == MARQUEE_RUNNING; }
+
+        boolean isStopped() { return mStatus == MARQUEE_STOPPED; }
+    }
+
+    @Override
     protected void onDraw(Canvas canvas) {
         drawCompoundDrawables(canvas);
         if (mLayout == null) return;
@@ -2031,7 +2511,21 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
             mHighlightPaint.setColor(mHighlightColor);
             highlight = mHighlightPath;
         }
+        if (!hint && isMarqueeFadeEnabled()) {
+            int hg = Gravity.getAbsoluteGravity(mGravity, getLayoutDirection()) & Gravity.HORIZONTAL_GRAVITY_MASK;
+            if (!mSingleLine && layout.getLineCount() == 1 && canMarquee() && hg != Gravity.LEFT) {
+                float dx = layout.getLineRight(0) - (getWidth() - padL - padR);
+                canvas.translate(layout.getParagraphDirection(0) * dx, 0f);
+            }
+            if (mMarquee != null && mMarquee.isRunning()) {
+                canvas.translate(layout.getParagraphDirection(0) * -mMarquee.getScroll(), 0f);
+            }
+        }
         layout.draw(canvas, highlight, mHighlightPaint, 0);
+        if (!hint && mMarquee != null && mMarquee.shouldDrawGhost()) {
+            canvas.translate(layout.getParagraphDirection(0) * mMarquee.getGhostOffset(), 0f);
+            layout.draw(canvas, highlight, mHighlightPaint, 0);
+        }
         if (!hint && shouldDrawCursor()) {
             Path cursor = new Path();
             layout.getCursorPath(getSelectionStart(), cursor, mText);
@@ -2198,6 +2692,7 @@ public class TextView extends View implements ViewTreeObserver.OnPreDrawListener
 
     @Override
     protected void onFocusChanged(boolean focused, int direction, Rect previouslyFocusedRect) {
+        startStopMarquee(focused);
         super.onFocusChanged(focused, direction, previouslyFocusedRect);
         if (mTransformation != null) {
             mTransformation.onFocusChanged(this, mText, focused, direction, previouslyFocusedRect);

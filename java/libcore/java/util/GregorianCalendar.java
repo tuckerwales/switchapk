@@ -188,4 +188,22 @@ public class GregorianCalendar extends Calendar {
     public int getMaximum(int field) {
         return MAX[field];
     }
+
+    public java.time.ZonedDateTime toZonedDateTime() {
+        return java.time.ZonedDateTime.ofInstant(java.time.Instant.ofEpochMilli(getTimeInMillis()),
+                getTimeZone().toZoneId());
+    }
+
+    public static GregorianCalendar from(java.time.ZonedDateTime zdt) {
+        GregorianCalendar cal = new GregorianCalendar(TimeZone.getTimeZone(zdt.getZone()));
+        cal.setFirstDayOfWeek(MONDAY);
+        cal.setMinimalDaysInFirstWeek(4);
+        try {
+            cal.setTimeInMillis(Math.addExact(Math.multiplyExact(zdt.toEpochSecond(), 1000),
+                    zdt.get(java.time.temporal.ChronoField.MILLI_OF_SECOND)));
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException(ex);
+        }
+        return cal;
+    }
 }

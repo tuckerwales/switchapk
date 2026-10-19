@@ -179,4 +179,30 @@ public class Timestamp extends java.util.Date {
     public int hashCode() {
         return super.hashCode();
     }
+
+    @SuppressWarnings("deprecation")
+    public static Timestamp valueOf(java.time.LocalDateTime dateTime) {
+        return new Timestamp(dateTime.getYear() - 1900, dateTime.getMonthValue() - 1, dateTime.getDayOfMonth(),
+                dateTime.getHour(), dateTime.getMinute(), dateTime.getSecond(), dateTime.getNano());
+    }
+
+    @SuppressWarnings("deprecation")
+    public java.time.LocalDateTime toLocalDateTime() {
+        return java.time.LocalDateTime.of(getYear() + 1900, getMonth() + 1, getDate(), getHours(), getMinutes(),
+                getSeconds(), getNanos());
+    }
+
+    public static Timestamp from(java.time.Instant instant) {
+        try {
+            Timestamp stamp = new Timestamp(instant.getEpochSecond() * 1000L);
+            stamp.nanos = instant.getNano();
+            return stamp;
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException(ex);
+        }
+    }
+
+    public java.time.Instant toInstant() {
+        return java.time.Instant.ofEpochSecond(Math.floorDiv(super.getTime(), 1000L), nanos);
+    }
 }

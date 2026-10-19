@@ -77,4 +77,18 @@ public class Time extends java.util.Date {
     public void setDate(int i) {
         throw new IllegalArgumentException();
     }
+
+    @SuppressWarnings("deprecation")
+    public static Time valueOf(java.time.LocalTime time) {
+        return new Time(time.getHour(), time.getMinute(), time.getSecond());
+    }
+
+    @SuppressWarnings("deprecation")
+    public java.time.LocalTime toLocalTime() {
+        return java.time.LocalTime.of(getHours(), getMinutes(), getSeconds());
+    }
+
+    public java.time.Instant toInstant() {
+        throw new java.lang.UnsupportedOperationException();
+    }
 }

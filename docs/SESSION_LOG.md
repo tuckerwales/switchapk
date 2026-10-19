@@ -1439,3 +1439,25 @@ what is left in flight.
   tests/dex/DomTest.java passes against OpenJDK (output normalized where
   Android's Xalan and the JDK differ: standalone="no" and the line break
   after the declaration). No XSLT, schema validation or LS implementation.
+- 2026-10-19, java.time: LocalDate, LocalTime, LocalDateTime, Period,
+  Year, YearMonth, MonthDay, DayOfWeek, Month, ZoneId/ZoneOffset (with a
+  package-private ZoneRegion), ZonedDateTime, OffsetDateTime, OffsetTime,
+  Clock and InstantSource, java.time.zone (ZoneRules, ZoneOffsetTransition,
+  ZoneOffsetTransitionRule, ZoneRulesException and an internal
+  ZoneRulesProvider), the ISO chrono interfaces (ChronoLocalDate,
+  ChronoLocalDateTime, ChronoZonedDateTime, ChronoPeriod, Chronology,
+  AbstractChronology, IsoChronology, Era, IsoEra), TemporalQueries,
+  TemporalAdjusters, IsoFields, JulianFields and TextStyle, all following
+  the JDK's algorithms and messages. The parse(CharSequence) methods use a
+  small ISO parser (IsoParser) that reproduces the ISO formatters' error
+  messages and indexes; methods taking a DateTimeFormatter call a
+  placeholder formatter until the full one lands. There is no tz
+  database: region ids come from the tzdb id list and get fixed rules from
+  TimeZone's raw offset (Etc/GMT+N from the id), unknown ids throw
+  ZoneRulesException like the JDK; ZoneRules itself carries the JDK's
+  transition logic so real data can be registered later. Interop:
+  TimeZone.toZoneId/getTimeZone(ZoneId), GregorianCalendar.from/
+  toZonedDateTime, java.sql Date/Time/Timestamp conversions,
+  Instant.atZone/atOffset/now(Clock), Duration.isPositive (and Duration's
+  unit list no longer reads null ChronoUnits during class init).
+  tests/dex/LocalDateTimeTest matches OpenJDK; TimeTest and VmTest pass.

@@ -495,6 +495,24 @@ round. `tests/dex/SerialTest.java` compares the bytes with the host JVM.
   `synchronized`; the interpreter needs no flag, since d8 compiles
   their bodies to monitor-enter/exit.
 
+### 5.4.2 java.time
+
+- The java.time classes follow the JDK's algorithms, field validation and
+  exception messages (tests/dex/LocalDateTimeTest, TimeTest). The ISO
+  `parse(CharSequence)` methods use the package-private `IsoParser`, which
+  mirrors the ISO_* formatters' element parsing and STRICT resolution, so
+  they work without DateTimeFormatter; the `parse/format(...,
+  DateTimeFormatter)` overloads go through the formatter.
+- Zones: `ZoneId.of` parses ids as the JDK. Region rules come from
+  `java.time.zone.ZoneRulesProvider` (framework-internal, JDK-shaped).
+  The default `TimeZoneRulesProvider` lists the tzdb ids and gives fixed
+  rules (java.util.TimeZone's raw offset, or the offset an Etc/GMT+N id
+  names); unknown ids throw ZoneRulesException. `ZoneRules` holds the
+  JDK's transition arrays and yearly rules, so a provider with real data
+  (`ZoneRulesProvider.registerProvider`) makes DST work everywhere.
+- Only the ISO calendar exists; chrono interface defaults that the JDK
+  builds from ChronoLocalDateImpl/ChronoZonedDateTimeImpl use the ISO types.
+
 ### 5.5 Crypto (WS17)
 
 - The JCA provider architecture as in the JDK. `Provider` extends

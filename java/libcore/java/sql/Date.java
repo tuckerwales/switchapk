@@ -91,4 +91,18 @@ public class Date extends java.util.Date {
     public void setSeconds(int i) {
         throw new IllegalArgumentException();
     }
+
+    @SuppressWarnings("deprecation")
+    public static Date valueOf(java.time.LocalDate date) {
+        return new Date(date.getYear() - 1900, date.getMonthValue() - 1, date.getDayOfMonth());
+    }
+
+    @SuppressWarnings("deprecation")
+    public java.time.LocalDate toLocalDate() {
+        return java.time.LocalDate.of(getYear() + 1900, getMonth() + 1, getDate());
+    }
+
+    public java.time.Instant toInstant() {
+        throw new java.lang.UnsupportedOperationException();
+    }
 }

@@ -68,6 +68,22 @@ public abstract class TimeZone implements java.io.Serializable, Cloneable {
         return new SimpleTimeZone(off, id);
     }
 
+    public static TimeZone getTimeZone(java.time.ZoneId zoneId) {
+        String tzid = zoneId.getId();
+        char c = tzid.charAt(0);
+        if (c == '+' || c == '-') {
+            tzid = "GMT" + tzid;
+        } else if (c == 'Z' && tzid.length() == 1) {
+            tzid = "UTC";
+        }
+        return getTimeZone(tzid);
+    }
+
+    /** As the JDK: the id, through ZoneId.SHORT_IDS for the old three-letter ids. */
+    public java.time.ZoneId toZoneId() {
+        return java.time.ZoneId.of(getID(), java.time.ZoneId.SHORT_IDS);
+    }
+
     public static String[] getAvailableIDs() {
         return new String[] {"UTC", "GMT"};
     }

@@ -518,10 +518,14 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
    the `Math` exact and floor/ceil variants, `Class.getDeclaredAnnotation`
    and `toGenericString`, Character code point helpers (the Character
    tables are approximations outside Latin, Greek, Cyrillic and CJK), and
-   the checked/navigable `Collections` wrappers. Still missing as whole
-   areas: java.time beyond Duration, Instant and the temporal core (no
-   LocalDate/LocalDateTime, zones, Clock or DateTimeFormatter yet), ResourceBundle, org.w3c.dom and DocumentBuilder,
-   MulticastChannel and pipes, a default serialVersionUID hash.
+   the checked/navigable `Collections` wrappers. java.time is there
+   except DateTimeFormatter (being written separately): LocalDate/Time/
+   DateTime, Period, Year/YearMonth/MonthDay, zones and offsets with
+   JDK-shaped ZoneRules (fixed offsets until a tz database is plugged in
+   through ZoneRulesProvider), Clock, adjusters, IsoFields, the ISO chrono
+   interfaces (tests/dex/LocalDateTimeTest). Still missing as whole areas:
+   org.w3c.dom and DocumentBuilder, MulticastChannel and pipes, a default
+   serialVersionUID hash.
 
 9. Real-app corpus (docs/COMPATIBILITY.md, `tools/corpus.py all`). All 13
    open apps draw their first screen (2026-10-11, after the merge).

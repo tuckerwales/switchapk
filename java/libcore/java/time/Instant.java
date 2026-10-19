@@ -15,6 +15,7 @@ import java.time.temporal.TemporalAccessor;
 import java.time.temporal.TemporalAdjuster;
 import java.time.temporal.TemporalAmount;
 import java.time.temporal.TemporalField;
+import java.time.temporal.TemporalQueries;
 import java.time.temporal.TemporalQuery;
 import java.time.temporal.TemporalUnit;
 import java.time.temporal.UnsupportedTemporalTypeException;
@@ -23,8 +24,7 @@ import java.util.Objects;
 
 /**
  * A point on the UTC time-line: seconds from 1970-01-01T00:00:00Z plus nanoseconds, with the JDK's arithmetic and
- * ISO-8601 text (DateTimeFormatter.ISO_INSTANT). The zone-related methods (atOffset, atZone, now(Clock)) are not
- * provided yet, as there are no ZoneId or Clock classes.
+ * ISO-8601 text (DateTimeFormatter.ISO_INSTANT).
  */
 public final class Instant implements Temporal, TemporalAdjuster, Comparable<Instant>, java.io.Serializable {
     private static final long serialVersionUID = -665713676816604388L;
@@ -63,6 +63,11 @@ public final class Instant implements Temporal, TemporalAdjuster, Comparable<Ins
 
     public static Instant now() {
         return ofEpochMilli(System.currentTimeMillis());
+    }
+
+    public static Instant now(Clock clock) {
+        Objects.requireNonNull(clock, "clock");
+        return clock.instant();
     }
 
     public static Instant ofEpochSecond(long epochSecond) {
@@ -444,8 +449,25 @@ public final class Instant implements Temporal, TemporalAdjuster, Comparable<Ins
         return nanosToSubtract == Long.MIN_VALUE ? plusNanos(Long.MAX_VALUE).plusNanos(1) : plusNanos(-nanosToSubtract);
     }
 
+    @SuppressWarnings("unchecked")
     public <R> R query(TemporalQuery<R> query) {
+        if (query == TemporalQueries.precision()) {
+            return (R) NANOS;
+        }
+        if (query == TemporalQueries.chronology() || query == TemporalQueries.zoneId()
+                || query == TemporalQueries.zone() || query == TemporalQueries.offset()
+                || query == TemporalQueries.localDate() || query == TemporalQueries.localTime()) {
+            return null;
+        }
         return query.queryFrom(this);
+    }
+
+    public OffsetDateTime atOffset(ZoneOffset offset) {
+        return OffsetDateTime.ofInstant(this, offset);
+    }
+
+    public ZonedDateTime atZone(ZoneId zone) {
+        return ZonedDateTime.ofInstant(this, zone);
     }
 
     public Temporal adjustInto(Temporal temporal) {

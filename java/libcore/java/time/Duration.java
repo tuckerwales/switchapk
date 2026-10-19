@@ -32,8 +32,11 @@ public final class Duration implements TemporalAmount, Comparable<Duration>, jav
     static final long NANOS_PER_SECOND = 1000_000_000L;
     static final long NANOS_PER_DAY = NANOS_PER_SECOND * SECONDS_PER_DAY;
     private static final BigInteger BI_NANOS_PER_SECOND = BigInteger.valueOf(NANOS_PER_SECOND);
-    private static final List<TemporalUnit> UNITS =
-            Collections.unmodifiableList(Arrays.<TemporalUnit>asList(SECONDS, NANOS));
+    /** Holder: ChronoUnit's constants are Durations, so the unit list must not be built in Duration's clinit. */
+    private static final class DurationUnits {
+        static final List<TemporalUnit> UNITS =
+                Collections.unmodifiableList(Arrays.<TemporalUnit>asList(SECONDS, NANOS));
+    }
 
     private static final Pattern PATTERN = Pattern.compile("([-+]?)P(?:([-+]?[0-9]+)D)?"
             + "(T(?:([-+]?[0-9]+)H)?(?:([-+]?[0-9]+)M)?(?:([-+]?[0-9]+)(?:[.,]([0-9]{0,9}))?S)?)?",
@@ -206,7 +209,11 @@ public final class Duration implements TemporalAmount, Comparable<Duration>, jav
     }
 
     public List<TemporalUnit> getUnits() {
-        return UNITS;
+        return DurationUnits.UNITS;
+    }
+
+    public boolean isPositive() {
+        return (seconds | nanos) > 0;
     }
 
     public boolean isZero() {

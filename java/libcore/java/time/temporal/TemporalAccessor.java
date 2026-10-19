@@ -32,6 +32,10 @@ public interface TemporalAccessor {
     long getLong(TemporalField field);
 
     default <R> R query(TemporalQuery<R> query) {
+        if (query == TemporalQueries.zoneId() || query == TemporalQueries.chronology()
+                || query == TemporalQueries.precision()) {
+            return null;
+        }
         return query.queryFrom(this);
     }
 }

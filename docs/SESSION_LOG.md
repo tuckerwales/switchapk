@@ -1417,3 +1417,15 @@ what is left in flight.
   view in touch mode and refocus after clearFocus, as AOSP's
   sAlwaysAssignFocus. DroidFish (target 28) still quits on BACK with a
   drawer open: no view has focus, which matches AOSP for that target.
+- 2026-10-19, java.util.concurrent: CompletableFuture and CompletionStage
+  have the full API 35 surface (async variants with executors, either/both
+  stages, exceptionallyCompose, orTimeout/completeOnTimeout,
+  delayedExecutor, copy and minimal stages) with OpenJDK's exception
+  encoding (CompletionException wrapping, LIFO dependents).
+  ThreadPoolExecutor follows OpenJDK's policy (core threads, then the
+  queue, then extra threads, then rejection; a single-core pool with an
+  unbounded queue runs tasks serially) with core timeouts, prestart,
+  statistics and a throwing task ending its worker. SynchronousQueue is a
+  real handoff queue, so cached thread pools reuse idle threads instead
+  of starting one per task. tests/dex CompletableFutureTest and
+  ExecutorTest match OpenJDK.

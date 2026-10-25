@@ -42,7 +42,7 @@ duplicating work.
 | WS9 | Native loader: ELF loader, bionic shim, JNI_OnLoad, NativeActivity, libandroid | WS0 | in progress (ELF loader, bionic shim, JNI_OnLoad, System.load/loadLibrary and tests/apps/ndk done on x86-64 and AArch64 Linux; Switch code memory via svcMapProcessCodeMemory done, not run on hardware; NativeActivity, ANativeWindow and native EGL window surfaces done on the host, tests/apps/native; OpenSL ES buffer queue is in the shim and shares the WS7 mixer; ALooper, AInputQueue and AConfiguration done on the host (tests/apps/input); newlib struct translation, ALooper/input on the Switch (no pipe/poll in newlib) and AAudio left; session 25: shim_runtime.c (C++ runtime, locale, wide chars, semaphores, rwlocks, dl_iterate_phdr) done; shim_posix.c, the Switch tables shim_bsd.c/shim_newlib.c/vfd.c (not run on hardware) and in-process executables for ProcessBuilder (spawn.c, tests/apps/procs) done 2026-10-11) | session 25, 2026-10-11 (exec, Switch shim); session 25, 2026-10-09 (corpus shim gaps); session 16, 2026-10-07 |
 | WS10 | Switch platform backend, NRO build, launcher | WS0 (platform.h is stable now) | in progress (NRO boots on hardware; launcher labels and icons landed (tests/apps/labeled); home screen redesign landed on the host (tests/launcher), not yet on hardware; audio, rumble, 1080p docked remain) | session 27, 2026-10-10 (home screen); session 7, 2026-10-02 |
 | WS11 | Networking: java.net sockets, HttpURLConnection, TLS | none | in progress (sockets, DNS, UDP, HttpURLConnection over HTTP/1.1 with transparent gzip, and ConnectivityManager done on the host (tests/dex/NetTest, tests/apps/net); java.util.zip and java.util.jar done (tests/dex/ZipTest); NIO selectors and socket channels done (tests/dex/SelectorTest, session 25); TLS 1.2 client sockets, SSLEngine and https done (tests/tls, X509Test, 2026-10-11); pooling/cookies and a device run left) | 2026-10-11 (TLS); session 23, 2026-10-09 (zip, gzip); session 17, 2026-10-07 |
-| WS12 | VM performance and memory | none | in progress (threaded dispatch, split literal ops and a size-class page allocator, tests/bench about 2x faster on the host; not measured on hardware) | 2026-10-17 |
+| WS12 | VM performance and memory | none | in progress (threaded dispatch, split literal ops and a size-class page allocator, tests/bench about 2x faster on the host; 2026-10-25: renderer bitmap/fill fast paths, NIO buffer and UTF-8 reader natives, direct HashMap iterators, the SWITCHAPK_PROFILE sampler; not measured on hardware) | 2026-10-25 (real-app profiles); 2026-10-17 |
 | WS13 | Test infrastructure and sample apps | WS0 | in progress (Actions workflow uploads switchapk-sd.zip with every tests/apps APK; real-app corpus with static gap scan, smoke run and docs/COMPATIBILITY.md (`tools/corpus.py`), including locally supplied proprietary apps (Old School RuneScape); screenshot runner and VmTest on CI remain) | session 25, 2026-10-10 (local apps, OSRS); session 24, 2026-10-09 (corpus); session 15, 2026-10-02 |
 | WS14 | AndroidX / AppCompat / Material Components compatibility | WS1-WS4 | not started | |
 | WS15 | System services: sensors (IMU), vibration, battery, connectivity, Settings, misc managers | WS0 | in progress (sensors with fused gravity/rotation/orientation, battery broadcasts, rumble waveforms, PowerManager, and location/telephony/camera answering as absent done on the host, tests/apps/sensors; the IMU axis signs, rumble and psm have not been run on a console) | session 18, 2026-10-08 |
@@ -341,6 +341,18 @@ HashMap and boxed lists on switchapk (and on the JVM with -Xint); after
 these two changes switchapk is at or ahead of `java -Xint` on most rows.
 Next by the profile: virtual and interface call cost (vm_find_interface_impl,
 frame setup), then the HashMap and string paths.
+
+Status (2026-10-25): profiles of the corpus apps (perf for C, the new
+`SWITCHAPK_PROFILE` Java sampler) put the time in the software renderer for
+Canvas games (Replica Island about 90%) and, for libgdx games, in our own
+libcore: java.nio buffers moved values a byte at a time in bytecode
+(Mindustry about 30%) and InputStreamReader decoded one character per call
+with string compares (Andor's Trail about 21% of its load). Those have fast
+paths now (ARCHITECTURE 4.3, 5, 6.3). What remains in those profiles is app
+bytecode, HashMap iteration and invoke overhead: per-call-site inline
+caches, quickened field offsets (iget/iput resolve through three dependent
+loads) and a cheaper frame push are next. The renderer work belongs to
+`src/gfx` (WS0/WS1 area) and was done here because it was the bottleneck.
 
 ## WS13: Tests and samples
 

@@ -432,6 +432,15 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
   - [x] threaded dispatch (computed goto), one handler per literal op,
     and a size-class page allocator; tests/bench/run_bench.sh about 2x
     faster on the host (about 1850 to 910 ms; allocation 3x, HashMap 3x)
+  - [x] profile real apps: `SWITCHAPK_PROFILE` Java sampler, the headless
+    `frames` script command and tests/c/gfx_bench.c (DEV_SETUP
+    "Performance")
+  - [x] renderer fast paths for axis-aligned bitmap draws, filtered
+    upscales and translucent fills (gfx_bench 256 to 81 ms; Replica Island
+    5.4 to 15.6 fps in play on the host)
+  - [x] java.nio buffer access and bulk copies as natives, bulk UTF-8 in
+    InputStreamReader, direct HashMap iterators (tests/dex/BufferTest,
+    ReaderTest; Mindustry's menu 18 to 25 fps and loads about 5 s sooner)
   - [ ] measure on hardware (the A57's branch predictor should gain more
     from threading than x86 does)
   - [ ] inline caches for virtual and interface calls, quickening, a
@@ -602,6 +611,17 @@ Summary per workstream; the detailed scope lives in WORKSTREAMS.md.
 Record any change to a cross-workstream contract here (date, what, why),
 and update ARCHITECTURE.md in the same commit.
 
+- 2026-10-25 (WS12, touches WS16): package-private natives on
+  `java.nio.Buffer` (`peekShort/Int/Long/Float/Double`,
+  `pokeShort/Int/Long/Float/Double`, `copyMemory`) in the new
+  `src/native/java_nio.c`, used by ByteBuffer's multi-byte access, the
+  byte-backed views and every typed bulk get/put; they address
+  `Buffer.backing` at `Buffer.byteOffset` as before. New native
+  `InputStreamReader.decodeUtf8` (java_io.c). HashMap's iterators come from
+  package-private `keyIterator()`/`valueIterator()`/`entryIterator()`,
+  which LinkedHashMap overrides. VM: `g_vm.profile_pending` and
+  `vm_profile_init/vm_profile_sample` (src/vm/profile.c, enabled by
+  `SWITCHAPK_PROFILE`).
 - 2026-10-19 (WS4): portrait windows. New native
   `android.view.Display.nSetPortrait(boolean)` behind the public static
   `Display.setPortraitWindow`, and C `android_get_display(PlatformDisplay*)`

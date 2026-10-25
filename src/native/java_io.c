@@ -426,7 +426,54 @@ NATIVE(Os_freeSpace) {
     R_LONG(v);
 }
 
+/* InputStreamReader.decodeUtf8(byte[] src, int pos, int end, char[] dst, int off, int len): decodes the complete
+ * UTF-8 sequences in src[pos, end) into dst[off, off + len) with InputStreamReader.decodeOne's rules, stopping at a
+ * sequence cut off by end or a supplementary character that no longer fits. Returns bytes consumed << 32 | chars
+ * written. */
+NATIVE(InputStreamReader_decodeUtf8) {
+    SA_UNUSED(ret);
+    ArrayObject *src = A_ARR(0), *dst = A_ARR(3);
+    int32_t pos = A_INT(1), end = A_INT(2), off = A_INT(4), len = A_INT(5);
+    if (!src || !dst) {
+        vm_throw_npe(t, "decodeUtf8");
+        return;
+    }
+    if (pos < 0 || end > src->length || pos > end || off < 0 || len < 0 || off > dst->length - len) {
+        vm_throw_new(t, "Ljava/lang/IndexOutOfBoundsException;", "decodeUtf8");
+        return;
+    }
+    const uint8_t *b = ARRAY_DATA(src, uint8_t);
+    uint16_t *out = ARRAY_DATA(dst, uint16_t) + off;
+    int32_t p = pos, n = 0;
+    while (n < len && p < end) {
+        uint32_t b0 = b[p];
+        if (b0 < 0x80) {
+            out[n++] = (uint16_t)b0;
+            p++;
+            continue;
+        }
+        int need = b0 >= 0xf0 ? 4 : b0 >= 0xe0 ? 3 : b0 >= 0xc0 ? 2 : 1;
+        if (end - p < need) break;
+        uint32_t c;
+        if (need == 1) c = 0xfffd;
+        else if (need == 2) c = ((b0 & 0x1f) << 6) | (b[p + 1] & 0x3f);
+        else if (need == 3) c = ((b0 & 0x0f) << 12) | ((b[p + 1] & 0x3f) << 6) | (b[p + 2] & 0x3f);
+        else
+            c = ((b0 & 0x07) << 18) | ((b[p + 1] & 0x3f) << 12) | ((b[p + 2] & 0x3f) << 6) | (b[p + 3] & 0x3f);
+        if (c >= 0x10000) {
+            if (len - n < 2) break; /* the Java side keeps the low surrogate pending */
+            out[n++] = (uint16_t)((c >> 10) + (0xd800 - (0x10000 >> 10)));
+            out[n++] = (uint16_t)((c & 0x3ff) + 0xdc00);
+        } else {
+            out[n++] = (uint16_t)c;
+        }
+        p += need;
+    }
+    ret->j = ((int64_t)(p - pos) << 32) | (uint32_t)n;
+}
+
 static const NativeMethodReg g_regs[] = {
+    {"Ljava/io/InputStreamReader;", "decodeUtf8", "([BII[CII)J", InputStreamReader_decodeUtf8},
     {"Llibcore/io/Os;", "open", "(Ljava/lang/String;II)I", Os_open},
     {"Llibcore/io/Os;", "read", "(I[BII)I", Os_read},
     {"Llibcore/io/Os;", "write", "(I[BII)V", Os_write},

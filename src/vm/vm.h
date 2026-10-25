@@ -232,6 +232,7 @@ typedef struct {
     uint64_t gil_next_ticket, gil_serving;
     int gil_waiters;
     volatile bool safepoint_requested;
+    volatile bool profile_pending; /* SWITCHAPK_PROFILE: the next safepoint records a sample */
     /* heap */
     SaPtrMap objects; /* set of live objects -> size */
     size_t heap_bytes, heap_threshold, heap_live_after_gc;
@@ -376,6 +377,9 @@ void vm_thread_unregister(VMThread *t);
 void vm_gil_acquire(VMThread *t);
 void vm_gil_release(VMThread *t);
 void vm_safepoint(VMThread *t);
+/* Sampling profiler (profile.c), started by vm_init when SWITCHAPK_PROFILE names a report file. */
+void vm_profile_init(void);
+void vm_profile_sample(VMThread *t);
 void vm_yield(VMThread *t);
 /* Release the GIL around a blocking region. */
 #define VM_BLOCKING_BEGIN(t) vm_gil_release(t)

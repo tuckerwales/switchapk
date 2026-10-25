@@ -21,12 +21,11 @@ final class ByteBackedDoubleBuffer extends DoubleBuffer {
     }
 
     double getAbs(int i) {
-        long v = bb.rawGet((byteOffset - bb.byteOffset) + (i << 3), 8);
-        return Double.longBitsToDouble(v);
+        return peekDouble(backing, byteOffset + (i << 3), bb.bigEndian);
     }
 
     void putAbs(int i, double v) {
-        bb.rawPut((byteOffset - bb.byteOffset) + (i << 3), 8, Double.doubleToRawLongBits(v));
+        pokeDouble(backing, byteOffset + (i << 3), v, bb.bigEndian);
     }
 
     public DoubleBuffer slice() {

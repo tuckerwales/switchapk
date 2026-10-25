@@ -21,12 +21,11 @@ final class ByteBackedLongBuffer extends LongBuffer {
     }
 
     long getAbs(int i) {
-        long v = bb.rawGet((byteOffset - bb.byteOffset) + (i << 3), 8);
-        return v;
+        return peekLong(backing, byteOffset + (i << 3), bb.bigEndian);
     }
 
     void putAbs(int i, long v) {
-        bb.rawPut((byteOffset - bb.byteOffset) + (i << 3), 8, v);
+        pokeLong(backing, byteOffset + (i << 3), v, bb.bigEndian);
     }
 
     public LongBuffer slice() {

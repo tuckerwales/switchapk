@@ -24,6 +24,11 @@ public abstract class FloatBuffer extends Buffer implements Comparable<FloatBuff
 
     abstract void putAbs(int i, float v);
 
+    /* bytes per element when this buffer's order is not the platform's (a byte-backed view), else 0 */
+    final int nativeSwap() {
+        return order() == ByteOrder.nativeOrder() ? 0 : 4;
+    }
+
     public abstract FloatBuffer slice();
 
     public abstract FloatBuffer duplicate();
@@ -32,33 +37,53 @@ public abstract class FloatBuffer extends Buffer implements Comparable<FloatBuff
 
     public abstract ByteOrder order();
 
+    /* the index checks are written out: a call costs about as much as the access itself */
     public float get() {
-        return getAbs(nextGetIndex());
+        int p = position;
+        if (p >= limit) {
+            throw new BufferUnderflowException();
+        }
+        position = p + 1;
+        return getAbs(p);
     }
 
     public FloatBuffer put(float v) {
-        checkWritable();
-        putAbs(nextPutIndex(), v);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        int p = position;
+        if (p >= limit) {
+            throw new BufferOverflowException();
+        }
+        position = p + 1;
+        putAbs(p, v);
         return this;
     }
 
     public float get(int index) {
-        return getAbs(checkIndex(index));
+        if (index < 0 || index >= limit) {
+            checkIndex(index);
+        }
+        return getAbs(index);
     }
 
     public FloatBuffer put(int index, float v) {
-        checkWritable();
-        putAbs(checkIndex(index), v);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        if (index < 0 || index >= limit) {
+            checkIndex(index);
+        }
+        putAbs(index, v);
         return this;
     }
 
     public FloatBuffer get(float[] dst, int offset, int length) {
+        checkBounds(offset, length, dst.length);
         if (length > remaining()) {
             throw new BufferUnderflowException();
         }
-        for (int i = 0; i < length; i++) {
-            dst[offset + i] = getAbs(position + i);
-        }
+        copyMemory(backing, byteOffset + (position << 2), dst, offset << 2, length << 2, nativeSwap());
         position += length;
         return this;
     }
@@ -75,20 +100,21 @@ public abstract class FloatBuffer extends Buffer implements Comparable<FloatBuff
         if (n > remaining()) {
             throw new BufferOverflowException();
         }
-        for (int i = 0; i < n; i++) {
-            put(src.get());
-        }
+        checkWritable();
+        copyMemory(src.backing, src.byteOffset + (src.position << 2), backing, byteOffset + (position << 2), n << 2,
+                src.order() == order() ? 0 : 4);
+        src.position += n;
+        position += n;
         return this;
     }
 
     public FloatBuffer put(float[] src, int offset, int length) {
         checkWritable();
+        checkBounds(offset, length, src.length);
         if (length > remaining()) {
             throw new BufferOverflowException();
         }
-        for (int i = 0; i < length; i++) {
-            putAbs(position + i, src[offset + i]);
-        }
+        copyMemory(src, offset << 2, backing, byteOffset + (position << 2), length << 2, nativeSwap());
         position += length;
         return this;
     }
@@ -100,9 +126,7 @@ public abstract class FloatBuffer extends Buffer implements Comparable<FloatBuff
     public FloatBuffer compact() {
         checkWritable();
         int rem = remaining();
-        for (int i = 0; i < rem; i++) {
-            putAbs(i, getAbs(position + i));
-        }
+        copyMemory(backing, byteOffset + (position << 2), backing, byteOffset, rem << 2, 0);
         position(rem);
         limit(capacity());
         discardMark();

@@ -21,12 +21,11 @@ final class ByteBackedShortBuffer extends ShortBuffer {
     }
 
     short getAbs(int i) {
-        long v = bb.rawGet((byteOffset - bb.byteOffset) + (i << 1), 2);
-        return (short) v;
+        return peekShort(backing, byteOffset + (i << 1), bb.bigEndian);
     }
 
     void putAbs(int i, short v) {
-        bb.rawPut((byteOffset - bb.byteOffset) + (i << 1), 2, v);
+        pokeShort(backing, byteOffset + (i << 1), v, bb.bigEndian);
     }
 
     public ShortBuffer slice() {

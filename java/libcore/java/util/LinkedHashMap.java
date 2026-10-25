@@ -119,6 +119,57 @@ public class LinkedHashMap<K, V> extends HashMap<K, V> implements Map<K, V> {
         return false;
     }
 
+    Iterator<K> keyIterator() {
+        final Iterator<Node<K, V>> it = nodeIterator();
+        return new Iterator<K>() {
+            public boolean hasNext() {
+                return it.hasNext();
+            }
+
+            public K next() {
+                return it.next().key;
+            }
+
+            public void remove() {
+                it.remove();
+            }
+        };
+    }
+
+    Iterator<V> valueIterator() {
+        final Iterator<Node<K, V>> it = nodeIterator();
+        return new Iterator<V>() {
+            public boolean hasNext() {
+                return it.hasNext();
+            }
+
+            public V next() {
+                return it.next().value;
+            }
+
+            public void remove() {
+                it.remove();
+            }
+        };
+    }
+
+    Iterator<Map.Entry<K, V>> entryIterator() {
+        final Iterator<Node<K, V>> it = nodeIterator();
+        return new Iterator<Map.Entry<K, V>>() {
+            public boolean hasNext() {
+                return it.hasNext();
+            }
+
+            public Map.Entry<K, V> next() {
+                return it.next();
+            }
+
+            public void remove() {
+                it.remove();
+            }
+        };
+    }
+
     Iterator<Node<K, V>> nodeIterator() {
         return new Iterator<Node<K, V>>() {
             Entry<K, V> next = head;

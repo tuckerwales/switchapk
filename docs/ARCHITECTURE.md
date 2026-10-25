@@ -150,6 +150,12 @@ libcore as bootclasspath (never against the JDK), then dexed with d8
   natives and back into Java (`vm_call*`) recurse on the C stack.
 - Safepoints at backward branches and invokes: GC and GIL yield happen only
   there (and on allocation failure).
+- Profiling (`src/vm/profile.c`): with `SWITCHAPK_PROFILE=<file>` a timer
+  thread sets `g_vm.profile_pending` and `safepoint_requested` every
+  millisecond; the GIL holder records its own frame chain in
+  `vm_safepoint` (self count for the top method, inclusive count once per
+  method on the stack), and an `atexit` handler writes the two tables. No
+  thread reads another thread's frames.
 - StackOverflowError: a reserve zone on the register stack lets the error
   be constructed without overflowing again (`handling_soe`).
 
@@ -262,6 +268,24 @@ over spawn.c, section 6.7): an app's own engine or helper binary works; a bare p
 Exec format error", as on a device without them. File and INHERIT redirects run through pump
 threads. `File.canExecute` reads the execute bit on the host (any regular file on the Switch,
 which has none), `setExecutable` sets it.
+Buffers (`java.nio`) keep their data in a primitive array (`Buffer.backing`)
+at a byte offset (`Buffer.byteOffset`). Multi-byte `ByteBuffer` access and
+the element access of its views (`asFloatBuffer()` and the rest) are single
+calls to package-private natives of `java.nio.Buffer` (`peekInt`,
+`pokeFloat`, ... in `src/native/java_nio.c`) taking the array, the byte
+offset and whether the bytes are big-endian; bulk `get`/`put` of arrays and
+buffers, and `compact`, are one `Buffer.copyMemory(src, srcOff, dst, dstOff,
+bytes, swapSize)`, which reverses each element when the two sides' byte
+orders differ. The Java side checks positions, limits and read-only state
+inline before calling them (libgdx-style games put vertex data through
+these every frame). `InputStreamReader` decodes UTF-8 a buffer at a time
+through the native `decodeUtf8` (java_io.c), leaving sequences cut off by
+the end of its byte buffer and a supplementary pair that does not fit to
+the per-character Java path. `HashMap` key, value and entry iterators step
+the table themselves (`KeyIterator` and the others extend `HashIter`);
+`LinkedHashMap` overrides the `keyIterator()`/`valueIterator()`/
+`entryIterator()` factories to wrap its own `nodeIterator()`.
+
 Natives in `src/native`. File paths from Java are translated by
 `platform_map_path()` (src/native/java_io.c):
 
@@ -686,6 +710,18 @@ round. `tests/dex/SerialTest.java` compares the bytes with the host JVM.
   for axis-aligned text and outline rendering for any other transform.
 - Pixels are `uint32` ARGB (0xAARRGGBB), **not premultiplied**, identical
   to `Bitmap.getPixel`. The Switch backend swizzles to RGBA on present.
+- Fast paths (`raster.c`), since the renderer bounds Canvas games: an
+  axis-aligned `gfx_draw_bitmap_matrix` works out each column's source
+  texels and 8-bit weights once per draw and runs a row loop specialised
+  for filtered or not and for the plain case (opaque paint, source-over, no
+  color filter or clip mask). Bilinear filtering is fixed point and
+  interpolates premultiplied unless all four texels are opaque; when both
+  source rows are opaque over the drawn columns (a game frame scaled to the
+  screen) the vertical lerp runs once per output row and each pixel is one
+  horizontal lerp. Source-over onto an opaque pixel blends red and blue in
+  one multiply (`over_opaque`), and translucent `gfx_draw_color` fills
+  (scrims, fades) work the source terms out once. Rotated and skewed draws
+  take the general per-pixel path. `tests/c/gfx_bench.c` times the cases.
 - Java `Canvas` keeps the save stack (matrix, clip rect, clip mask, layers).
   `saveLayer` allocates an offscreen buffer the size of the clipped bounds
   and composites it on `restore`. Non-rectangular clips (clipPath, rotated

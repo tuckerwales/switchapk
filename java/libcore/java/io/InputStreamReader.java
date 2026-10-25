@@ -9,6 +9,13 @@ public class InputStreamReader extends Reader {
     private int bytePos, byteLen;
     private boolean eof;
     private int pendingLow = -1;
+    private int kind = -1; /* KIND_*, from cs.name() on first use */
+
+    private static final int KIND_UTF8 = 0, KIND_UTF16LE = 1, KIND_UTF16 = 2, KIND_ASCII = 3, KIND_BYTE = 4;
+
+    /* Decodes the complete UTF-8 sequences in src[pos, end) into dst as decodeOne would, stopping before a cut-off
+     * sequence or a supplementary character that does not fit; returns bytes consumed << 32 | chars written. */
+    private static native long decodeUtf8(byte[] src, int pos, int end, char[] dst, int off, int len);
 
     public InputStreamReader(InputStream in) {
         this(in, Charset.defaultCharset());
@@ -72,9 +79,13 @@ public class InputStreamReader extends Reader {
         if (!ensure(1)) {
             return -1;
         }
-        String name = cs.name();
+        if (kind < 0) {
+            String name = cs.name();
+            kind = name.equals("UTF-8") ? KIND_UTF8 : name.equals("UTF-16LE") ? KIND_UTF16LE
+                    : name.startsWith("UTF-16") ? KIND_UTF16 : name.equals("US-ASCII") ? KIND_ASCII : KIND_BYTE;
+        }
         int b0 = bytes[bytePos] & 0xff;
-        if (name.equals("UTF-8")) {
+        if (kind == KIND_UTF8) {
             int need = b0 < 0x80 ? 1 : b0 >= 0xf0 ? 4 : b0 >= 0xe0 ? 3 : b0 >= 0xc0 ? 2 : 1;
             if (!ensure(need)) {
                 bytePos = byteLen;
@@ -94,17 +105,17 @@ public class InputStreamReader extends Reader {
             bytePos += need;
             return c;
         }
-        if (name.startsWith("UTF-16")) {
+        if (kind == KIND_UTF16LE || kind == KIND_UTF16) {
             if (!ensure(2)) {
                 bytePos = byteLen;
                 return 0xfffd;
             }
             int b1 = bytes[bytePos + 1] & 0xff;
             bytePos += 2;
-            return name.equals("UTF-16LE") ? (b1 << 8) | b0 : (b0 << 8) | b1;
+            return kind == KIND_UTF16LE ? (b1 << 8) | b0 : (b0 << 8) | b1;
         }
         bytePos++;
-        if (name.equals("US-ASCII")) {
+        if (kind == KIND_ASCII) {
             return b0 < 0x80 ? b0 : 0xfffd;
         }
         return b0;
@@ -126,6 +137,15 @@ public class InputStreamReader extends Reader {
             while (n < len) {
                 if (n > 0 && byteLen - bytePos == 0 && (eof || in.available() <= 0)) {
                     break;
+                }
+                if (kind == KIND_UTF8 && byteLen - bytePos >= 4 && len - n >= 2) {
+                    /* the bulk of the buffer in one call; decodeOne takes the sequence it stops at */
+                    long r = decodeUtf8(bytes, bytePos, byteLen, cbuf, off + n, len - n);
+                    bytePos += (int) (r >>> 32);
+                    n += (int) r;
+                    if (n >= len || byteLen - bytePos == 0) {
+                        continue;
+                    }
                 }
                 int c = decodeOne();
                 if (c < 0) {

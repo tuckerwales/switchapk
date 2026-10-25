@@ -403,13 +403,16 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements Map<K, V>, Clone
         return new HashIterator();
     }
 
-    class HashIterator implements Iterator<Node<K, V>> {
+    /* Table-order iteration state. The node, key, value and entry iterators each step inline in next() so a
+     * loop over a plain HashMap costs one call per hasNext() and next(); LinkedHashMap overrides nodeIterator()
+     * and the keyIterator()/valueIterator()/entryIterator() factories below. */
+    abstract class HashIter {
         Node<K, V> next;
         Node<K, V> current;
         int expectedModCount;
         int index;
 
-        HashIterator() {
+        HashIter() {
             expectedModCount = modCount;
             Node<K, V>[] t = table;
             current = next = null;
@@ -422,22 +425,6 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements Map<K, V>, Clone
 
         public final boolean hasNext() {
             return next != null;
-        }
-
-        public final Node<K, V> next() {
-            Node<K, V>[] t;
-            Node<K, V> e = next;
-            if (modCount != expectedModCount) {
-                throw new ConcurrentModificationException();
-            }
-            if (e == null) {
-                throw new NoSuchElementException();
-            }
-            if ((next = (current = e).next) == null && (t = table) != null) {
-                do {
-                } while (index < t.length && (next = t[index++]) == null);
-            }
-            return e;
         }
 
         public final void remove() {
@@ -454,6 +441,90 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements Map<K, V>, Clone
         }
     }
 
+    final class HashIterator extends HashIter implements Iterator<Node<K, V>> {
+        public Node<K, V> next() {
+            Node<K, V>[] t;
+            Node<K, V> e = next;
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            if (e == null) {
+                throw new NoSuchElementException();
+            }
+            if ((next = (current = e).next) == null && (t = table) != null) {
+                do {
+                } while (index < t.length && (next = t[index++]) == null);
+            }
+            return e;
+        }
+    }
+
+    final class KeyIterator extends HashIter implements Iterator<K> {
+        public K next() {
+            Node<K, V>[] t;
+            Node<K, V> e = next;
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            if (e == null) {
+                throw new NoSuchElementException();
+            }
+            if ((next = (current = e).next) == null && (t = table) != null) {
+                do {
+                } while (index < t.length && (next = t[index++]) == null);
+            }
+            return e.key;
+        }
+    }
+
+    final class ValueIterator extends HashIter implements Iterator<V> {
+        public V next() {
+            Node<K, V>[] t;
+            Node<K, V> e = next;
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            if (e == null) {
+                throw new NoSuchElementException();
+            }
+            if ((next = (current = e).next) == null && (t = table) != null) {
+                do {
+                } while (index < t.length && (next = t[index++]) == null);
+            }
+            return e.value;
+        }
+    }
+
+    final class EntryIterator extends HashIter implements Iterator<Map.Entry<K, V>> {
+        public Map.Entry<K, V> next() {
+            Node<K, V>[] t;
+            Node<K, V> e = next;
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            if (e == null) {
+                throw new NoSuchElementException();
+            }
+            if ((next = (current = e).next) == null && (t = table) != null) {
+                do {
+                } while (index < t.length && (next = t[index++]) == null);
+            }
+            return e;
+        }
+    }
+
+    Iterator<K> keyIterator() {
+        return new KeyIterator();
+    }
+
+    Iterator<V> valueIterator() {
+        return new ValueIterator();
+    }
+
+    Iterator<Map.Entry<K, V>> entryIterator() {
+        return new EntryIterator();
+    }
+
     public Set<K> keySet() {
         Set<K> ks = keySet;
         if (ks == null) {
@@ -467,20 +538,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements Map<K, V>, Clone
                 }
 
                 public Iterator<K> iterator() {
-                    final Iterator<Node<K, V>> it = nodeIterator();
-                    return new Iterator<K>() {
-                        public boolean hasNext() {
-                            return it.hasNext();
-                        }
-
-                        public K next() {
-                            return it.next().key;
-                        }
-
-                        public void remove() {
-                            it.remove();
-                        }
-                    };
+                    return keyIterator();
                 }
 
                 public boolean contains(Object o) {
@@ -509,20 +567,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements Map<K, V>, Clone
                 }
 
                 public Iterator<V> iterator() {
-                    final Iterator<Node<K, V>> it = nodeIterator();
-                    return new Iterator<V>() {
-                        public boolean hasNext() {
-                            return it.hasNext();
-                        }
-
-                        public V next() {
-                            return it.next().value;
-                        }
-
-                        public void remove() {
-                            it.remove();
-                        }
-                    };
+                    return valueIterator();
                 }
 
                 public boolean contains(Object o) {
@@ -547,20 +592,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements Map<K, V>, Clone
                 }
 
                 public Iterator<Map.Entry<K, V>> iterator() {
-                    final Iterator<Node<K, V>> it = nodeIterator();
-                    return new Iterator<Map.Entry<K, V>>() {
-                        public boolean hasNext() {
-                            return it.hasNext();
-                        }
-
-                        public Map.Entry<K, V> next() {
-                            return it.next();
-                        }
-
-                        public void remove() {
-                            it.remove();
-                        }
-                    };
+                    return entryIterator();
                 }
 
                 public boolean contains(Object o) {

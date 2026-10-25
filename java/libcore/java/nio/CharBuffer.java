@@ -24,6 +24,11 @@ public abstract class CharBuffer extends Buffer implements Comparable<CharBuffer
 
     abstract void putAbs(int i, char v);
 
+    /* bytes per element when this buffer's order is not the platform's (a byte-backed view), else 0 */
+    final int nativeSwap() {
+        return order() == ByteOrder.nativeOrder() ? 0 : 2;
+    }
+
     public abstract CharBuffer slice();
 
     public abstract CharBuffer duplicate();
@@ -32,33 +37,53 @@ public abstract class CharBuffer extends Buffer implements Comparable<CharBuffer
 
     public abstract ByteOrder order();
 
+    /* the index checks are written out: a call costs about as much as the access itself */
     public char get() {
-        return getAbs(nextGetIndex());
+        int p = position;
+        if (p >= limit) {
+            throw new BufferUnderflowException();
+        }
+        position = p + 1;
+        return getAbs(p);
     }
 
     public CharBuffer put(char v) {
-        checkWritable();
-        putAbs(nextPutIndex(), v);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        int p = position;
+        if (p >= limit) {
+            throw new BufferOverflowException();
+        }
+        position = p + 1;
+        putAbs(p, v);
         return this;
     }
 
     public char get(int index) {
-        return getAbs(checkIndex(index));
+        if (index < 0 || index >= limit) {
+            checkIndex(index);
+        }
+        return getAbs(index);
     }
 
     public CharBuffer put(int index, char v) {
-        checkWritable();
-        putAbs(checkIndex(index), v);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        if (index < 0 || index >= limit) {
+            checkIndex(index);
+        }
+        putAbs(index, v);
         return this;
     }
 
     public CharBuffer get(char[] dst, int offset, int length) {
+        checkBounds(offset, length, dst.length);
         if (length > remaining()) {
             throw new BufferUnderflowException();
         }
-        for (int i = 0; i < length; i++) {
-            dst[offset + i] = getAbs(position + i);
-        }
+        copyMemory(backing, byteOffset + (position << 1), dst, offset << 1, length << 1, nativeSwap());
         position += length;
         return this;
     }
@@ -75,20 +100,21 @@ public abstract class CharBuffer extends Buffer implements Comparable<CharBuffer
         if (n > remaining()) {
             throw new BufferOverflowException();
         }
-        for (int i = 0; i < n; i++) {
-            put(src.get());
-        }
+        checkWritable();
+        copyMemory(src.backing, src.byteOffset + (src.position << 1), backing, byteOffset + (position << 1), n << 1,
+                src.order() == order() ? 0 : 2);
+        src.position += n;
+        position += n;
         return this;
     }
 
     public CharBuffer put(char[] src, int offset, int length) {
         checkWritable();
+        checkBounds(offset, length, src.length);
         if (length > remaining()) {
             throw new BufferOverflowException();
         }
-        for (int i = 0; i < length; i++) {
-            putAbs(position + i, src[offset + i]);
-        }
+        copyMemory(src, offset << 1, backing, byteOffset + (position << 1), length << 1, nativeSwap());
         position += length;
         return this;
     }
@@ -100,9 +126,7 @@ public abstract class CharBuffer extends Buffer implements Comparable<CharBuffer
     public CharBuffer compact() {
         checkWritable();
         int rem = remaining();
-        for (int i = 0; i < rem; i++) {
-            putAbs(i, getAbs(position + i));
-        }
+        copyMemory(backing, byteOffset + (position << 1), backing, byteOffset, rem << 1, 0);
         position(rem);
         limit(capacity());
         discardMark();

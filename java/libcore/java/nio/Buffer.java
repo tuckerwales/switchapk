@@ -194,11 +194,43 @@ public abstract class Buffer {
         return i;
     }
 
+    /* bulk get/put: the array range is checked before the buffer's room, as OpenJDK does */
+    static void checkBounds(int off, int len, int size) {
+        if ((off | len | (off + len) | (size - (off + len))) < 0) {
+            throw new IndexOutOfBoundsException("off=" + off + ", len=" + len + " out of bounds (size=" + size + ")");
+        }
+    }
+
     final void checkWritable() {
         if (readOnly) {
             throw new ReadOnlyBufferException();
         }
     }
+
+    /* Package-private natives (java_nio.c): read or write one value at byte offset off of the primitive array a,
+     * stored big-endian when big is set; copy bytes between arrays, reversing each element of swapSize bytes
+     * (0: plain copy). */
+    static native short peekShort(Object a, int off, boolean big);
+
+    static native int peekInt(Object a, int off, boolean big);
+
+    static native long peekLong(Object a, int off, boolean big);
+
+    static native float peekFloat(Object a, int off, boolean big);
+
+    static native double peekDouble(Object a, int off, boolean big);
+
+    static native void pokeShort(Object a, int off, short v, boolean big);
+
+    static native void pokeInt(Object a, int off, int v, boolean big);
+
+    static native void pokeLong(Object a, int off, long v, boolean big);
+
+    static native void pokeFloat(Object a, int off, float v, boolean big);
+
+    static native void pokeDouble(Object a, int off, double v, boolean big);
+
+    static native void copyMemory(Object src, int srcOff, Object dst, int dstOff, int bytes, int swapSize);
 
     final int markValue() {
         return mark;

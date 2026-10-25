@@ -21,12 +21,11 @@ final class ByteBackedIntBuffer extends IntBuffer {
     }
 
     int getAbs(int i) {
-        long v = bb.rawGet((byteOffset - bb.byteOffset) + (i << 2), 4);
-        return (int) v;
+        return peekInt(backing, byteOffset + (i << 2), bb.bigEndian);
     }
 
     void putAbs(int i, int v) {
-        bb.rawPut((byteOffset - bb.byteOffset) + (i << 2), 4, v);
+        pokeInt(backing, byteOffset + (i << 2), v, bb.bigEndian);
     }
 
     public IntBuffer slice() {

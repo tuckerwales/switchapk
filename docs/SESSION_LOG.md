@@ -1406,3 +1406,31 @@ what is left in flight.
   and relaunched forever). Vector Pinball draws correctly in portrait;
   Pixel Dungeon starts portrait and its landscape setting switches to a
   correct landscape title screen, including after docking.
+- 2026-10-25, performance on real apps (WS12): "apps run very slow". perf
+  and a new Java sampling profiler (`SWITCHAPK_PROFILE=<file>`, samples
+  taken by the GIL holder at safepoints) over the corpus showed the time
+  outside the interpreter proper. Canvas games were bound by the software
+  renderer (Replica Island about 90% in bitmap drawing and blending): every
+  pixel went through a float inverse map, a float bilinear filter with four
+  divides and a divide-based blend. Axis-aligned draws now precompute their
+  column taps, filter in fixed point (separably for opaque rows), blend red
+  and blue in one multiply, and translucent fills precompute the source
+  (tests/c/gfx_bench.c: 256 to 81 ms; filtered full-screen upscale 38 to
+  4 ms). libgdx games spent about 30% in java.nio (ByteBuffer moved values
+  a byte at a time in bytecode; FloatBuffer.put(float[]) looped per
+  element): peek/poke and copyMemory natives on Buffer, inline index checks
+  (bulk put 500x, getInt/putInt about 2.5x). Andor's Trail spent 21% of its
+  load in InputStreamReader, which compared the charset name per character;
+  UTF-8 is decoded a buffer at a time now. HashMap's key/value/entry
+  iterators step the table directly (one call per hasNext/next instead of
+  two). Host frame rates, before and after: Replica Island 12.4 to 38.7 fps
+  on its title and 5.4 to 15.6 in play, Shattered Pixel Dungeon 15.9 to
+  24.2, Frozen Bubble 8.7 to 14.0, Mindustry's menu 18 to 25 and reached
+  about 5 s sooner; Pixel Dungeon stays at 60. New tests/dex/BufferTest and
+  ReaderTest match OpenJDK; all dex tests (TlsTest through its script), 46
+  of 47 samples (curves' mid-animation check is timing-flaky, and fails 4
+  of 6 runs on the previous commit too) and all 13 fetched corpus apps
+  draw. Found, not changed: our ByteBuffer.duplicate/asReadOnlyBuffer keep
+  the byte order, where OpenJDK and Android's documentation reset it to
+  BIG_ENDIAN. Not run on hardware. Next: inline caches, quickened field
+  offsets, a cheaper frame push.

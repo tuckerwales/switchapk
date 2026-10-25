@@ -38,6 +38,7 @@ bool vm_init(void) {
     g_vm.heap_threshold = 24u * 1024u * 1024u;
     g_vm.stub_missing_framework = true;
     vm_natives_init();
+    vm_profile_init();
     return true;
 }
 

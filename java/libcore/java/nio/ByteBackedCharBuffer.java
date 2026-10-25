@@ -21,12 +21,11 @@ final class ByteBackedCharBuffer extends CharBuffer {
     }
 
     char getAbs(int i) {
-        long v = bb.rawGet((byteOffset - bb.byteOffset) + (i << 1), 2);
-        return (char) v;
+        return (char) peekShort(backing, byteOffset + (i << 1), bb.bigEndian);
     }
 
     void putAbs(int i, char v) {
-        bb.rawPut((byteOffset - bb.byteOffset) + (i << 1), 2, v);
+        pokeShort(backing, byteOffset + (i << 1), (short) v, bb.bigEndian);
     }
 
     public CharBuffer slice() {

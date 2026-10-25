@@ -219,6 +219,26 @@ SWITCHAPK_NETWORK=none build/host/switchapk-host --data build/data app.apk
   `build/host/src/nativeloader/vfd.o` or `shim_newlib.o`, add `-pthread`).
 - `tests/c/gfx_test.c` builds a standalone renderer test:
   `cc -Isrc -Ithird_party tests/c/gfx_test.c build/host/src/gfx/*.o build/host/src/core/util.o -lz -lm -lpthread -o gfx_test && ./gfx_test out.png`
+- `tests/c/gfx_bench.c` times the bitmap and fill cases games hit (filtered
+  full-screen upscale, sprites, translucent fills), in ms per 1280x720 frame:
+  `cc -O2 -Isrc -Ithird_party tests/c/gfx_bench.c build/host/src/gfx/*.o build/host/src/core/util.o -lz -lm -lpthread -o gfx_bench && ./gfx_bench [out-prefix]`;
+  with a prefix it writes each case's result as `<prefix>.<case>.png`, so two
+  renderers can be compared pixel for pixel.
+
+## Performance
+
+- `tests/bench/run_bench.sh [--jvm]` times interpreter basics (calls,
+  fields, allocation, strings, HashMap) against `java -Xint`.
+- `SWITCHAPK_PROFILE=<file>` samples the Java stack about 1000 times a
+  second and writes, at exit, the methods by self and by inclusive samples
+  (`src/vm/profile.c`). A sample is taken by the thread holding the GIL at
+  its next safepoint, so time in a native that keeps the GIL counts for its
+  Java caller. Works on the Switch too (`sdmc:/...` path). For C code use
+  `perf record -g build/host/switchapk-host ...` on the host.
+- The headless `frames [label]` script command logs the frames presented
+  since the previous `frames` (or the start) and the rate, for comparing
+  builds on the same app:
+  `wait 8000`, `frames start`, some input, `wait 6000`, `frames play`.
 
 ## Regenerating generated sources
 

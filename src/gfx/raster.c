@@ -215,6 +215,67 @@ static uint32_t gradient_at(const GfxShader *s, float t) {
     return s->colors[n - 1];
 }
 
+/* Rounded x / 255 for x in 0..255*255. */
+static inline int div255(int x) {
+    x += 128;
+    return (x + (x >> 8)) >> 8;
+}
+
+/* Rounded a + (b - a) * w / 256 on the color channels of two opaque pixels (alpha is dropped). */
+static inline uint32_t lerp_opaque(uint32_t a, uint32_t b, uint32_t w) {
+    uint32_t iw = 256 - w;
+    uint32_t rb = ((a & 0xff00ffu) * iw + (b & 0xff00ffu) * w + 0x800080u) >> 8;
+    uint32_t g = ((a & 0xff00u) * iw + (b & 0xff00u) * w + 0x8000u) >> 8;
+    return (rb & 0xff00ffu) | (g & 0xff00u);
+}
+
+/* Bilinear blend of four pixels with 8-bit weights (wx, wy in 0..256), interpolating in premultiplied space to avoid
+ * dark fringes. Returns a non-premultiplied color like the source. */
+static inline __attribute__((always_inline)) uint32_t bilerp(uint32_t c00, uint32_t c10, uint32_t c01, uint32_t c11, int wx, int wy) {
+    if (c00 == c10 && c00 == c01 && c00 == c11) return (c00 >> 24) ? c00 : 0;
+    if ((c00 & c10 & c01 & c11) >> 24 == 255) {
+        /* all opaque: lerp across then down, red and blue sharing one multiply */
+        uint32_t h0 = lerp_opaque(c00, c10, (uint32_t)wx), h1 = lerp_opaque(c01, c11, (uint32_t)wx);
+        return 0xff000000u | lerp_opaque(h0, h1, (uint32_t)wy);
+    }
+    uint32_t w00 = (uint32_t)((256 - wx) * (256 - wy)), w10 = (uint32_t)(wx * (256 - wy));
+    uint32_t w01 = (uint32_t)((256 - wx) * wy), w11 = (uint32_t)(wx * wy);
+    /* alpha-weighted sums; 255 * 255 * 65536 fits in 32 bits */
+    uint32_t a00 = (c00 >> 24) * w00, a10 = (c10 >> 24) * w10, a01 = (c01 >> 24) * w01, a11 = (c11 >> 24) * w11;
+    uint32_t a = a00 + a10 + a01 + a11;
+    if (a < 32768) return 0;
+    uint32_t r = ((c00 >> 16) & 255) * a00 + ((c10 >> 16) & 255) * a10 + ((c01 >> 16) & 255) * a01 +
+                 ((c11 >> 16) & 255) * a11;
+    uint32_t g = ((c00 >> 8) & 255) * a00 + ((c10 >> 8) & 255) * a10 + ((c01 >> 8) & 255) * a01 +
+                 ((c11 >> 8) & 255) * a11;
+    uint32_t b = (c00 & 255) * a00 + (c10 & 255) * a10 + (c01 & 255) * a01 + (c11 & 255) * a11;
+    uint32_t half = a >> 1;
+    return gfx_argb((int)((a + 32768) >> 16), (int)((r + half) / a), (int)((g + half) / a), (int)((b + half) / a));
+}
+
+/* Splits a sample coordinate into the two texel indices and the 8-bit weight of the second. */
+static inline void bilerp_axis(float t, int n, int tile, int *i0, int *i1, int *w) {
+    float f = t - 0.5f;
+    float fl = floorf(f);
+    int i = (int)fl;
+    int wt = (int)((f - fl) * 256.0f + 0.5f);
+    if (wt >= 256) {
+        wt = 0;
+        i++;
+    }
+    int j = i + 1;
+    if (tile == GFX_TILE_REPEAT) {
+        i = ((i % n) + n) % n;
+        j = ((j % n) + n) % n;
+    } else {
+        i = i < 0 ? 0 : (i >= n ? n - 1 : i);
+        j = j < 0 ? 0 : (j >= n ? n - 1 : j);
+    }
+    *i0 = i;
+    *i1 = j;
+    *w = wt;
+}
+
 static uint32_t sample_bitmap(const GfxTarget *b, float x, float y, bool filter, int tx, int ty) {
     if (b->w <= 0 || b->h <= 0) return 0;
     if (!filter) {
@@ -227,32 +288,11 @@ static uint32_t sample_bitmap(const GfxTarget *b, float x, float y, bool filter,
         if (iy < 0) iy = 0;
         return b->px[iy * b->stride + ix];
     }
-    float fx = x - 0.5f, fy = y - 0.5f;
-    int x0 = (int)floorf(fx), y0 = (int)floorf(fy);
-    float ax = fx - (float)x0, ay = fy - (float)y0;
-    int xs[2] = {x0, x0 + 1}, ys[2] = {y0, y0 + 1};
-    for (int i = 0; i < 2; i++) {
-        if (tx == GFX_TILE_REPEAT) xs[i] = ((xs[i] % b->w) + b->w) % b->w;
-        else xs[i] = xs[i] < 0 ? 0 : (xs[i] >= b->w ? b->w - 1 : xs[i]);
-        if (ty == GFX_TILE_REPEAT) ys[i] = ((ys[i] % b->h) + b->h) % b->h;
-        else ys[i] = ys[i] < 0 ? 0 : (ys[i] >= b->h ? b->h - 1 : ys[i]);
-    }
-    uint32_t c00 = b->px[ys[0] * b->stride + xs[0]], c10 = b->px[ys[0] * b->stride + xs[1]];
-    uint32_t c01 = b->px[ys[1] * b->stride + xs[0]], c11 = b->px[ys[1] * b->stride + xs[1]];
-    /* interpolate in premultiplied space to avoid dark fringes */
-    float acc[4] = {0, 0, 0, 0};
-    uint32_t cs[4] = {c00, c10, c01, c11};
-    float ws[4] = {(1 - ax) * (1 - ay), ax * (1 - ay), (1 - ax) * ay, ax * ay};
-    for (int i = 0; i < 4; i++) {
-        float a = (float)(cs[i] >> 24) * ws[i];
-        acc[0] += a;
-        acc[1] += (float)((cs[i] >> 16) & 255) * a;
-        acc[2] += (float)((cs[i] >> 8) & 255) * a;
-        acc[3] += (float)(cs[i] & 255) * a;
-    }
-    if (acc[0] < 0.5f) return 0;
-    return gfx_argb((int)(acc[0] + 0.5f), (int)(acc[1] / acc[0] + 0.5f), (int)(acc[2] / acc[0] + 0.5f),
-                    (int)(acc[3] / acc[0] + 0.5f));
+    int x0, x1, y0, y1, wx, wy;
+    bilerp_axis(x, b->w, tx, &x0, &x1, &wx);
+    bilerp_axis(y, b->h, ty, &y0, &y1, &wy);
+    const uint32_t *r0 = b->px + (size_t)y0 * (size_t)b->stride, *r1 = b->px + (size_t)y1 * (size_t)b->stride;
+    return bilerp(r0[x0], r0[x1], r1[x0], r1[x1], wx, wy);
 }
 
 static uint32_t shader_color(const Shade *sh, int x, int y) {
@@ -293,25 +333,45 @@ static uint32_t shader_color(const Shade *sh, int x, int y) {
     return apply_color_filter(sh->paint, c);
 }
 
-/* Composites source color s with coverage cov (0..256) onto *d using xfer mode. */
-static inline void blend(uint32_t *d, uint32_t s, int cov, int xfer) {
+/* s over an opaque d with source alpha sa (1..254): red and blue share one multiply, green another. */
+static inline uint32_t over_opaque(uint32_t s, uint32_t d, int sa) {
+    uint32_t inv = (uint32_t)(255 - sa);
+    uint32_t rb = (s & 0xff00ffu) * (uint32_t)sa + (d & 0xff00ffu) * inv + 0x800080u;
+    uint32_t g = (s & 0xff00u) * (uint32_t)sa + (d & 0xff00u) * inv + 0x8000u;
+    rb = ((rb + ((rb >> 8) & 0xff00ffu)) >> 8) & 0xff00ffu;
+    g = ((g + ((g >> 8) & 0xff00u)) >> 8) & 0xff00u;
+    return 0xff000000u | rb | g;
+}
+
+static void blend_slow(uint32_t *d, uint32_t s, int cov, int xfer);
+
+/* Composites source color s with coverage cov (0..256) onto *d using xfer mode. The common cases are inline; the
+ * rest is blend_slow. */
+static inline __attribute__((always_inline)) void blend(uint32_t *d, uint32_t s, int cov, int xfer) {
     if (xfer == GFX_XFER_SRC_OVER) {
         int sa = (int)(s >> 24) * cov >> 8;
         if (sa <= 0) return;
-        uint32_t dc = *d;
-        int da = (int)(dc >> 24);
         if (sa >= 255) {
             *d = s | 0xff000000u;
             return;
         }
-        if (da == 255) {
-            int inv = 255 - sa;
-            int r = (int)(((s >> 16) & 255) * sa + ((dc >> 16) & 255) * inv) / 255;
-            int g = (int)(((s >> 8) & 255) * sa + ((dc >> 8) & 255) * inv) / 255;
-            int b = (int)((s & 255) * sa + (dc & 255) * inv) / 255;
-            *d = 0xff000000u | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
+        uint32_t dc = *d;
+        if (dc >= 0xff000000u) {
+            *d = over_opaque(s, dc, sa);
             return;
         }
+    } else if (cov >= 256 && xfer == GFX_XFER_SRC) {
+        *d = (s >> 24) ? s : 0;
+        return;
+    }
+    blend_slow(d, s, cov, xfer);
+}
+
+static void blend_slow(uint32_t *d, uint32_t s, int cov, int xfer) {
+    if (xfer == GFX_XFER_SRC_OVER) {
+        int sa = (int)(s >> 24) * cov >> 8;
+        uint32_t dc = *d;
+        int da = (int)(dc >> 24);
         /* general non-premultiplied source-over */
         int oa = sa + da * (255 - sa) / 255;
         if (oa <= 0) {
@@ -893,6 +953,27 @@ void gfx_draw_color(GfxTarget *t, const GfxClip *clip, uint32_t color, int xfer)
         }
         return;
     }
+    if (!clip->mask && xfer == GFX_XFER_SRC_OVER) {
+        /* translucent fill (scrims, fades): over_opaque with the source terms worked out once */
+        uint32_t sa = color >> 24, inv = 255 - sa;
+        if (!sa) return;
+        uint32_t srb = (color & 0xff00ffu) * sa + 0x800080u, sg = (color & 0xff00u) * sa + 0x8000u;
+        for (int y = tp; y < b; y++) {
+            uint32_t *row = t->px + (size_t)y * (size_t)t->stride;
+            for (int x = l; x < r; x++) {
+                uint32_t d = row[x];
+                if (d < 0xff000000u) {
+                    blend(&row[x], color, 256, xfer);
+                    continue;
+                }
+                uint32_t rb = srb + (d & 0xff00ffu) * inv, g = sg + (d & 0xff00u) * inv;
+                rb = ((rb + ((rb >> 8) & 0xff00ffu)) >> 8) & 0xff00ffu;
+                g = ((g + ((g >> 8) & 0xff00u)) >> 8) & 0xff00u;
+                row[x] = 0xff000000u | rb | g;
+            }
+        }
+        return;
+    }
     for (int y = tp; y < b; y++) {
         uint32_t *row = t->px + (size_t)y * (size_t)t->stride;
         for (int x = l; x < r; x++) {
@@ -1064,6 +1145,42 @@ void gfx_draw_points(GfxTarget *t, const GfxMatrix *m, const GfxClip *clip, cons
 
 /* ---- bitmaps --------------------------------------------------------------------------------------- */
 
+/* True when source rows y0 and y1 are opaque over columns [c0, c1]. known[] holds two rows already found opaque. */
+static bool rows_opaque(const GfxTarget *src, int y0, int y1, int c0, int c1, int known[2]) {
+    int ys[2] = {y0, y1};
+    for (int k = 0; k < 2; k++) {
+        int y = ys[k];
+        if (y == known[0] || y == known[1]) continue;
+        const uint32_t *r = src->px + (size_t)y * (size_t)src->stride;
+        uint32_t all = 0xffffffffu;
+        for (int x = c0; x <= c1; x++) all &= r[x];
+        if (all < 0xff000000u) return false;
+        known[0] = known[1];
+        known[1] = y;
+    }
+    return true;
+}
+
+/* One row of an axis-aligned bitmap draw; filter and plain are constants at each call so each gets its own loop. */
+static inline __attribute__((always_inline)) void axis_row(uint32_t *row, const uint32_t *r0, const uint32_t *r1,
+                                                           const int *cols, int wy, int first, int last, bool filter,
+                                                           bool plain, const GfxPaint *p, const GfxClip *clip, int x0,
+                                                           int y, int alpha) {
+    for (int i = first; i <= last; i++) {
+        const int *cl = &cols[3 * i];
+        uint32_t c = filter ? bilerp(r0[cl[0]], r0[cl[1]], r1[cl[0]], r1[cl[1]], cl[2], wy) : r0[cl[0]];
+        if (plain) {
+            if (c >= 0xff000000u) row[i] = c;
+            else if (c >> 24) blend(&row[i], c, 256, GFX_XFER_SRC_OVER);
+            continue;
+        }
+        if (alpha != 255) c = (c & 0xffffff) | ((uint32_t)((int)(c >> 24) * alpha / 255) << 24);
+        if (p->has_color_filter) c = apply_color_filter(p, c);
+        int cov = gfx_clip_cov(clip, x0 + i, y, 256);
+        if (cov) blend(&row[i], c, cov, p->xfer);
+    }
+}
+
 void gfx_draw_bitmap_matrix(GfxTarget *t, const GfxMatrix *m, const GfxClip *clip, const GfxTarget *src,
                             const GfxMatrix *bm, const GfxPaint *p) {
     GfxMatrix full, inv;
@@ -1094,6 +1211,66 @@ void gfx_draw_bitmap_matrix(GfxTarget *t, const GfxMatrix *m, const GfxClip *cli
     bool axis = full.b == 0 && full.c == 0;
     bool filter = p->filter && !(axis && fabsf(full.a - 1) < 1e-4f && fabsf(full.d - 1) < 1e-4f);
     int xfer = p->xfer;
+    /* the common case: plain source-over at full paint alpha, no color filter, rectangular clip */
+    bool plain = alpha == 255 && !p->has_color_filter && !clip->mask && xfer == GFX_XFER_SRC_OVER;
+    if (axis && inv.b == 0 && inv.c == 0) {
+        /* u depends only on x and v only on y: work out each column's texels once for the whole draw */
+        int n = x1 - x0;
+        int stack_cols[3 * 1024];
+        int *cols = n <= 1024 ? stack_cols : malloc((size_t)n * 3 * sizeof(int));
+        if (!cols) return;
+        int first = n, last = -1;
+        for (int i = 0; i < n; i++) {
+            float u = inv.a * ((float)(x0 + i) + 0.5f) + inv.e;
+            if (u < 0 || u >= (float)src->w) continue;
+            if (i < first) first = i;
+            last = i;
+            if (filter) bilerp_axis(u, src->w, GFX_TILE_CLAMP, &cols[3 * i], &cols[3 * i + 1], &cols[3 * i + 2]);
+            else cols[3 * i] = (int)u;
+        }
+        /* filtered opaque rows: lerp the two source rows once per output row (into vrow), then each output pixel is
+         * one horizontal lerp. Covers scaled-up game frames, which are drawn every frame. */
+        int cmin = src->w, cmax = -1;
+        uint32_t stack_vrow[1024], *vrow = NULL;
+        int opaque_row[2] = {-1, -1}; /* source row indices known to be opaque over [cmin, cmax] */
+        if (filter && plain && first <= last) {
+            for (int i = first; i <= last; i++) {
+                if (cols[3 * i] < cmin) cmin = cols[3 * i];
+                if (cols[3 * i + 1] > cmax) cmax = cols[3 * i + 1];
+            }
+            vrow = cmax - cmin < 1024 ? stack_vrow : malloc((size_t)(cmax - cmin + 1) * sizeof(uint32_t));
+        }
+        for (int y = y0; y < y1 && first <= last; y++) {
+            float v = inv.d * ((float)y + 0.5f) + inv.f;
+            if (v < 0 || v >= (float)src->h) continue;
+            uint32_t *row = t->px + (size_t)y * (size_t)t->stride + x0;
+            const uint32_t *r0, *r1 = NULL;
+            int wy = 0;
+            if (filter) {
+                int iy0, iy1;
+                bilerp_axis(v, src->h, GFX_TILE_CLAMP, &iy0, &iy1, &wy);
+                r0 = src->px + (size_t)iy0 * (size_t)src->stride;
+                r1 = src->px + (size_t)iy1 * (size_t)src->stride;
+                if (vrow && rows_opaque(src, iy0, iy1, cmin, cmax, opaque_row)) {
+                    for (int k = cmin; k <= cmax; k++) vrow[k - cmin] = lerp_opaque(r0[k], r1[k], (uint32_t)wy);
+                    for (int i = first; i <= last; i++) {
+                        const int *cl = &cols[3 * i];
+                        row[i] = 0xff000000u | lerp_opaque(vrow[cl[0] - cmin], vrow[cl[1] - cmin], (uint32_t)cl[2]);
+                    }
+                    continue;
+                }
+            } else {
+                r0 = src->px + (size_t)(int)v * (size_t)src->stride;
+            }
+            if (filter && plain) axis_row(row, r0, r1, cols, wy, first, last, true, true, p, clip, x0, y, alpha);
+            else if (filter) axis_row(row, r0, r1, cols, wy, first, last, true, false, p, clip, x0, y, alpha);
+            else if (plain) axis_row(row, r0, r1, cols, wy, first, last, false, true, p, clip, x0, y, alpha);
+            else axis_row(row, r0, r1, cols, wy, first, last, false, false, p, clip, x0, y, alpha);
+        }
+        if (cols != stack_cols) free(cols);
+        if (vrow && vrow != stack_vrow) free(vrow);
+        return;
+    }
     for (int y = y0; y < y1; y++) {
         uint32_t *row = t->px + (size_t)y * (size_t)t->stride;
         float py = (float)y + 0.5f;
@@ -1107,6 +1284,11 @@ void gfx_draw_bitmap_matrix(GfxTarget *t, const GfxMatrix *m, const GfxClip *cli
                 c = sample_bitmap(src, u, v, true, GFX_TILE_CLAMP, GFX_TILE_CLAMP);
             } else {
                 c = src->px[(int)v * src->stride + (int)u];
+            }
+            if (plain) {
+                if (c >= 0xff000000u) row[x] = c;
+                else if (c >> 24) blend(&row[x], c, 256, GFX_XFER_SRC_OVER);
+                continue;
             }
             if (alpha != 255) c = (c & 0xffffff) | ((uint32_t)((int)(c >> 24) * alpha / 255) << 24);
             if (p->has_color_filter) c = apply_color_filter(p, c);

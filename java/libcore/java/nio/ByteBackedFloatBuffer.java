@@ -21,12 +21,11 @@ final class ByteBackedFloatBuffer extends FloatBuffer {
     }
 
     float getAbs(int i) {
-        long v = bb.rawGet((byteOffset - bb.byteOffset) + (i << 2), 4);
-        return Float.intBitsToFloat((int) v);
+        return peekFloat(backing, byteOffset + (i << 2), bb.bigEndian);
     }
 
     void putAbs(int i, float v) {
-        bb.rawPut((byteOffset - bb.byteOffset) + (i << 2), 4, Float.floatToRawIntBits(v));
+        pokeFloat(backing, byteOffset + (i << 2), v, bb.bigEndian);
     }
 
     public FloatBuffer slice() {

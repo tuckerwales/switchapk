@@ -225,143 +225,247 @@ public abstract class ByteBuffer extends Buffer implements Comparable<ByteBuffer
         return this.remaining() - that.remaining();
     }
 
-    /* ---- multi-byte access ---- */
-
-    final long rawGet(int abs, int n) {
-        byte[] a = hb();
-        int base = byteOffset + abs;
-        long v = 0;
-        if (bigEndian) {
-            for (int i = 0; i < n; i++) {
-                v = (v << 8) | (a[base + i] & 0xff);
-            }
-        } else {
-            for (int i = n - 1; i >= 0; i--) {
-                v = (v << 8) | (a[base + i] & 0xff);
-            }
-        }
-        return v;
-    }
-
-    final void rawPut(int abs, int n, long v) {
-        checkWritable();
-        byte[] a = hb();
-        int base = byteOffset + abs;
-        if (bigEndian) {
-            for (int i = n - 1; i >= 0; i--) {
-                a[base + i] = (byte) v;
-                v >>= 8;
-            }
-        } else {
-            for (int i = 0; i < n; i++) {
-                a[base + i] = (byte) v;
-                v >>= 8;
-            }
-        }
-    }
+    /* ---- multi-byte access: one native call each (the Buffer peek and poke natives). The checks are written out
+     * rather than calling nextGetIndex/checkIndex/checkWritable, since each call costs as much as the native. */
 
     public char getChar() {
-        return (char) rawGet(nextGetIndex(2), 2);
+        int p = position;
+        if (limit - p < 2) {
+            throw new BufferUnderflowException();
+        }
+        position = p + 2;
+        return (char) peekShort(backing, byteOffset + p, bigEndian);
     }
 
     public ByteBuffer putChar(char value) {
-        rawPut(nextPutIndex(2), 2, value);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        int p = position;
+        if (limit - p < 2) {
+            throw new BufferOverflowException();
+        }
+        position = p + 2;
+        pokeShort(backing, byteOffset + p, (short) value, bigEndian);
         return this;
     }
 
     public char getChar(int index) {
-        return (char) rawGet(checkIndex(index, 2), 2);
+        if (index < 0 || 2 > limit - index) {
+            checkIndex(index, 2);
+        }
+        return (char) peekShort(backing, byteOffset + index, bigEndian);
     }
 
     public ByteBuffer putChar(int index, char value) {
-        rawPut(checkIndex(index, 2), 2, value);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        if (index < 0 || 2 > limit - index) {
+            checkIndex(index, 2);
+        }
+        pokeShort(backing, byteOffset + index, (short) value, bigEndian);
         return this;
     }
 
     public short getShort() {
-        return (short) rawGet(nextGetIndex(2), 2);
+        int p = position;
+        if (limit - p < 2) {
+            throw new BufferUnderflowException();
+        }
+        position = p + 2;
+        return peekShort(backing, byteOffset + p, bigEndian);
     }
 
     public ByteBuffer putShort(short value) {
-        rawPut(nextPutIndex(2), 2, value);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        int p = position;
+        if (limit - p < 2) {
+            throw new BufferOverflowException();
+        }
+        position = p + 2;
+        pokeShort(backing, byteOffset + p, value, bigEndian);
         return this;
     }
 
     public short getShort(int index) {
-        return (short) rawGet(checkIndex(index, 2), 2);
+        if (index < 0 || 2 > limit - index) {
+            checkIndex(index, 2);
+        }
+        return peekShort(backing, byteOffset + index, bigEndian);
     }
 
     public ByteBuffer putShort(int index, short value) {
-        rawPut(checkIndex(index, 2), 2, value);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        if (index < 0 || 2 > limit - index) {
+            checkIndex(index, 2);
+        }
+        pokeShort(backing, byteOffset + index, value, bigEndian);
         return this;
     }
 
     public int getInt() {
-        return (int) rawGet(nextGetIndex(4), 4);
+        int p = position;
+        if (limit - p < 4) {
+            throw new BufferUnderflowException();
+        }
+        position = p + 4;
+        return peekInt(backing, byteOffset + p, bigEndian);
     }
 
     public ByteBuffer putInt(int value) {
-        rawPut(nextPutIndex(4), 4, value);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        int p = position;
+        if (limit - p < 4) {
+            throw new BufferOverflowException();
+        }
+        position = p + 4;
+        pokeInt(backing, byteOffset + p, value, bigEndian);
         return this;
     }
 
     public int getInt(int index) {
-        return (int) rawGet(checkIndex(index, 4), 4);
+        if (index < 0 || 4 > limit - index) {
+            checkIndex(index, 4);
+        }
+        return peekInt(backing, byteOffset + index, bigEndian);
     }
 
     public ByteBuffer putInt(int index, int value) {
-        rawPut(checkIndex(index, 4), 4, value);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        if (index < 0 || 4 > limit - index) {
+            checkIndex(index, 4);
+        }
+        pokeInt(backing, byteOffset + index, value, bigEndian);
         return this;
     }
 
     public long getLong() {
-        return rawGet(nextGetIndex(8), 8);
+        int p = position;
+        if (limit - p < 8) {
+            throw new BufferUnderflowException();
+        }
+        position = p + 8;
+        return peekLong(backing, byteOffset + p, bigEndian);
     }
 
     public ByteBuffer putLong(long value) {
-        rawPut(nextPutIndex(8), 8, value);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        int p = position;
+        if (limit - p < 8) {
+            throw new BufferOverflowException();
+        }
+        position = p + 8;
+        pokeLong(backing, byteOffset + p, value, bigEndian);
         return this;
     }
 
     public long getLong(int index) {
-        return rawGet(checkIndex(index, 8), 8);
+        if (index < 0 || 8 > limit - index) {
+            checkIndex(index, 8);
+        }
+        return peekLong(backing, byteOffset + index, bigEndian);
     }
 
     public ByteBuffer putLong(int index, long value) {
-        rawPut(checkIndex(index, 8), 8, value);
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        if (index < 0 || 8 > limit - index) {
+            checkIndex(index, 8);
+        }
+        pokeLong(backing, byteOffset + index, value, bigEndian);
         return this;
     }
 
     public float getFloat() {
-        return Float.intBitsToFloat(getInt());
+        int p = position;
+        if (limit - p < 4) {
+            throw new BufferUnderflowException();
+        }
+        position = p + 4;
+        return peekFloat(backing, byteOffset + p, bigEndian);
     }
 
     public ByteBuffer putFloat(float value) {
-        return putInt(Float.floatToRawIntBits(value));
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        int p = position;
+        if (limit - p < 4) {
+            throw new BufferOverflowException();
+        }
+        position = p + 4;
+        pokeFloat(backing, byteOffset + p, value, bigEndian);
+        return this;
     }
 
     public float getFloat(int index) {
-        return Float.intBitsToFloat(getInt(index));
+        if (index < 0 || 4 > limit - index) {
+            checkIndex(index, 4);
+        }
+        return peekFloat(backing, byteOffset + index, bigEndian);
     }
 
     public ByteBuffer putFloat(int index, float value) {
-        return putInt(index, Float.floatToRawIntBits(value));
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        if (index < 0 || 4 > limit - index) {
+            checkIndex(index, 4);
+        }
+        pokeFloat(backing, byteOffset + index, value, bigEndian);
+        return this;
     }
 
     public double getDouble() {
-        return Double.longBitsToDouble(getLong());
+        int p = position;
+        if (limit - p < 8) {
+            throw new BufferUnderflowException();
+        }
+        position = p + 8;
+        return peekDouble(backing, byteOffset + p, bigEndian);
     }
 
     public ByteBuffer putDouble(double value) {
-        return putLong(Double.doubleToRawLongBits(value));
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        int p = position;
+        if (limit - p < 8) {
+            throw new BufferOverflowException();
+        }
+        position = p + 8;
+        pokeDouble(backing, byteOffset + p, value, bigEndian);
+        return this;
     }
 
     public double getDouble(int index) {
-        return Double.longBitsToDouble(getLong(index));
+        if (index < 0 || 8 > limit - index) {
+            checkIndex(index, 8);
+        }
+        return peekDouble(backing, byteOffset + index, bigEndian);
     }
 
     public ByteBuffer putDouble(int index, double value) {
-        return putLong(index, Double.doubleToRawLongBits(value));
+        if (readOnly) {
+            throw new ReadOnlyBufferException();
+        }
+        if (index < 0 || 8 > limit - index) {
+            checkIndex(index, 8);
+        }
+        pokeDouble(backing, byteOffset + index, value, bigEndian);
+        return this;
     }
 
     public CharBuffer asCharBuffer() {

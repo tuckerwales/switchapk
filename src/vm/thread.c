@@ -103,6 +103,7 @@ void vm_yield(VMThread *t) {
 }
 
 void vm_safepoint(VMThread *t) {
+    if (g_vm.profile_pending) vm_profile_sample(t);
     if (g_vm.heap_bytes > g_vm.heap_threshold) vm_gc(t);
     if (g_vm.gil_waiters > 0) {
         if (sa_time_ns() - t->gil_acquired_ns >= TIME_SLICE_NS) vm_yield(t);

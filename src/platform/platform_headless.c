@@ -47,6 +47,7 @@ static int g_frame_w, g_frame_h;
 static int g_win_x, g_win_y; /* where the last window frame was placed */
 static int64_t g_last_present_ns;
 static uint64_t g_frames;
+static int64_t g_start_ns; /* platform_init */
 
 static char *g_script_path;
 static char *g_shot_dir;
@@ -495,6 +496,19 @@ static void *script_thread(void *arg) {
                 free(path);
             } else if (!strcmp(cmd, "log")) {
                 LOGI("script: %s", rest);
+            } else if (!strcmp(cmd, "frames")) {
+                /* frame rate since the previous frames command (or the start), for performance comparisons */
+                static uint64_t last_frames;
+                static int64_t last_ns;
+                int64_t now = (int64_t)sa_time_ns();
+                pthread_mutex_lock(&g_lock);
+                uint64_t n = g_frames - last_frames;
+                last_frames = g_frames;
+                pthread_mutex_unlock(&g_lock);
+                double ms = last_ns ? (double)(now - last_ns) / 1e6 : (double)(now - g_start_ns) / 1e6;
+                last_ns = now;
+                LOGI("script: frames %s%s%llu in %.0f ms (%.1f per second)", rest, rest[0] ? ": " : "",
+                     (unsigned long long)n, ms, ms > 0 ? (double)n * 1000.0 / ms : 0.0);
             } else if (!strcmp(cmd, "quit")) {
                 break;
             } else {
@@ -510,6 +524,7 @@ static void *script_thread(void *arg) {
 }
 
 bool platform_init(int argc, char **argv) {
+    g_start_ns = (int64_t)sa_time_ns();
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--screen") && i + 1 < argc) {
             sscanf(argv[i + 1], "%dx%d@%d", &g_width, &g_height, &g_dpi);
